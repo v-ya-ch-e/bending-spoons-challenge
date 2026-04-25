@@ -141,3 +141,36 @@
     @apply cursor-not-allowed;
   }
 }
+
+@keyframes morph-square {
+  0% {
+    border-radius: 0.75rem;
+    transform: rotate(0deg) scale(1);
+  }
+  22% {
+    border-radius: 45%;
+    transform: rotate(45deg) scale(0.92);
+  }
+  44% {
+    border-radius: 0.35rem;
+    transform: rotate(90deg) scale(1.04);
+  }
+  66% {
+    border-radius: 50%;
+    transform: rotate(180deg) scale(0.9);
+  }
+  88% {
+    border-radius: 0.65rem;
+    transform: rotate(270deg) scale(1);
+  }
+  100% {
+    border-radius: 0.75rem;
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+.morph-square-core {
+  display: block;
+  animation: morph-square 2.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  will-change: transform, border-radius;
+}

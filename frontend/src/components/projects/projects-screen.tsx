@@ -7,6 +7,7 @@ import {
   Cancel01Icon,
   Edit02Icon,
   GridViewIcon,
+  InformationCircleIcon,
   ListViewIcon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -65,6 +66,11 @@ import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   Table,
   TableBody,
   TableCell,
@@ -94,6 +100,24 @@ const skillLabels: Record<SkillKey, string> = {
 
 const skillRequirementLevels = [1, 2, 3] as const
 type SkillRequirementLevel = (typeof skillRequirementLevels)[number]
+
+const tooltipPlannedHeadcount =
+  "Planned headcount is the minimum number of distinct people implied by staffing roles (from extraction or your edits). It is not the sum of every per-skill line below: one engineer can satisfy several skill dimensions, so overlap is normal."
+
+const tooltipCurrentTeam =
+  "People currently assigned to this project in internal records. Coverage compares this count to planned headcount."
+
+const tooltipCoverage =
+  "Coverage is current team size divided by planned headcount. It does not check each per-skill row separately — only how many assigned people you have versus the planned minimum team."
+
+const tooltipSkillDimensionsBadge =
+  "Counts how many skill columns (Android, iOS, Web, Backend, Infra, AI) have at least one non-zero requirement. That is breadth across skills, not how many people you need."
+
+const tooltipSkillDistributionTitle =
+  "Each row is a per-skill staffing profile: how many engineers need at least L1, L2, or L3 in that area. The same hire can contribute to multiple rows."
+
+const tooltipSlotVsHeadcountSubnote =
+  "Per-skill totals are coverage slots per dimension. One hire can cover several skills at once, so row totals often exceed planned headcount while headcount stays the distinct minimum team."
 
 const filterItems: Array<{
   value: FilterKey
@@ -764,15 +788,30 @@ function ProjectDetailPanel({
                 <MiniStat
                   label="Current team"
                   value={`${project.current_team_members.length} people`}
+                  labelTooltip={tooltipCurrentTeam}
                 />
                 <MiniStat
-                  label="Required team"
+                  label="Planned headcount"
                   value={`${project.required_people_amount} people`}
+                  labelTooltip={tooltipPlannedHeadcount}
                 />
               </div>
+              {getTotalSkillSlotCount(project.required_skills) >
+                project.required_people_amount && (
+                <div className="flex items-start gap-1.5 text-xs leading-snug text-muted-foreground">
+                  <span className="min-w-0">
+                    <span className="font-medium text-foreground/80">Note</span>
+                    {": Per-skill totals can exceed headcount when roles overlap."}{" "}
+                    <InfoTooltip content={tooltipSlotVsHeadcountSubnote} side="right" />
+                  </span>
+                </div>
+              )}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-muted-foreground">Coverage</span>
+                  <span className="inline-flex items-center gap-1 text-muted-foreground">
+                    Coverage
+                    <InfoTooltip content={tooltipCoverage} side="top" />
+                  </span>
                   <span className="font-medium">
                     {getCoveragePercent(project)}%
                   </span>
@@ -1083,8 +1122,20 @@ function RequiredSkillsDistribution({
           <AccordionTrigger>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span>Skill distribution</span>
-                <Badge variant="outline">{requiredSkillsCount} required</Badge>
+                <span
+                  className="cursor-help border-b border-dotted border-muted-foreground/40 decoration-muted-foreground/50"
+                  title={tooltipSkillDistributionTitle}
+                >
+                  Skill distribution
+                </span>
+                <Badge
+                  variant="outline"
+                  title={tooltipSkillDimensionsBadge}
+                  className="cursor-help"
+                >
+                  {requiredSkillsCount}{" "}
+                  {requiredSkillsCount === 1 ? "skill" : "skills"}
+                </Badge>
               </div>
               <div className="mt-2">
                 <SkillBadges skills={skills} compact />
@@ -1092,6 +1143,13 @@ function RequiredSkillsDistribution({
             </div>
           </AccordionTrigger>
           <AccordionContent>
+            <div className="mb-3 flex items-start gap-1.5 text-xs leading-snug text-muted-foreground">
+              <span className="min-w-0">
+                <span className="font-medium text-foreground/80">Note</span>
+                {": Rows are per-skill minimum levels (L1–L3 counts), not additive team size."}{" "}
+                <InfoTooltip content={tooltipSlotVsHeadcountSubnote} side="right" />
+              </span>
+            </div>
             <div className="flex flex-col gap-3">
               {skillEntries(skills).map(([skill, requirement]) => (
                 <SkillLevel key={skill} skill={skill} requirement={requirement} />
@@ -1101,6 +1159,39 @@ function RequiredSkillsDistribution({
         </AccordionItem>
       </Accordion>
     </DetailSection>
+  )
+}
+
+function InfoTooltip({
+  content,
+  side = "top",
+}: {
+  content: string
+  side?: "top" | "right" | "bottom" | "left"
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          aria-label="More information"
+        >
+          <HugeiconsIcon
+            icon={InformationCircleIcon}
+            strokeWidth={2}
+            className="size-3.5"
+          />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent
+        side={side}
+        sideOffset={6}
+        className="max-w-sm text-pretty font-normal leading-snug"
+      >
+        {content}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -1119,10 +1210,23 @@ function DetailSection({
   )
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
+function MiniStat({
+  label,
+  value,
+  labelTooltip,
+}: {
+  label: string
+  value: string
+  labelTooltip?: string
+}) {
   return (
     <div className="rounded-2xl bg-muted px-3 py-2">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+        <span className="min-w-0 shrink">{label}</span>
+        {labelTooltip ? (
+          <InfoTooltip content={labelTooltip} side="top" />
+        ) : null}
+      </p>
       <p className="mt-1 text-sm font-medium">{value}</p>
     </div>
   )
@@ -1324,6 +1428,13 @@ function getRequirementLevelField(level: SkillRequirementLevel) {
 
 function getRequirementTotal(requirement: ProjectSkillRequirement) {
   return requirement.level_1 + requirement.level_2 + requirement.level_3
+}
+
+function getTotalSkillSlotCount(skills: ProjectSkillRequirements) {
+  return (Object.keys(skillLabels) as SkillKey[]).reduce(
+    (sum, skill) => sum + getRequirementTotal(skills[skill]),
+    0
+  )
 }
 
 function getHighestRequirementLevel(requirement: ProjectSkillRequirement) {

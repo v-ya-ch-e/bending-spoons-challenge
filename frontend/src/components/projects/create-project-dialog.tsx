@@ -1,17 +1,21 @@
 "use client"
 
-import { useMemo, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Image from "next/image"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
+  AiBrainIcon,
+  AndroidIcon,
+  ApiIcon,
+  AppleIcon,
   Briefcase01Icon,
   ChartRelationshipIcon,
   CheckListIcon,
-  DashboardSquare01Icon,
+  CloudServerIcon,
   DocumentValidationIcon,
   Folder01Icon,
-  Notification03Icon,
   Tick02Icon,
+  WebProgrammingIcon,
 } from "@hugeicons/core-free-icons"
 
 import {
@@ -33,6 +37,12 @@ import {
   type ProjectUpdateInput,
   type SkillKey,
 } from "@/lib/db-api"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -56,6 +66,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { MorphingSquare } from "@/components/molecule-ui/morphing-square"
 import { cn } from "@/lib/utils"
 
 type CreateProjectDialogProps = {
@@ -102,12 +113,12 @@ const skillDescriptions: Record<SkillKey, string> = {
 }
 
 const skillIconMap = {
-  android: DashboardSquare01Icon,
-  ios: Briefcase01Icon,
-  web: Folder01Icon,
-  backend: ChartRelationshipIcon,
-  infrastructure: DocumentValidationIcon,
-  ai: Notification03Icon,
+  android: AndroidIcon,
+  ios: AppleIcon,
+  web: WebProgrammingIcon,
+  backend: ApiIcon,
+  infrastructure: CloudServerIcon,
+  ai: AiBrainIcon,
 }
 
 const skillRequirementLevels = [1, 2, 3] as const
@@ -151,6 +162,16 @@ const steps: Array<{
     icon: DocumentValidationIcon,
   },
 ]
+
+const extractionStepLabels = [
+  "Reading repository structure",
+  "Detecting languages and frameworks",
+  "Reading README context",
+  "Estimating required skill levels",
+  "Synthesizing staffing requirements",
+] as const
+
+const minExtractionUiMs = 2200
 
 const emptyProjectSkillRequirements: ProjectSkillRequirements = {
   android: { level_1: 0, level_2: 0, level_3: 0 },
@@ -218,7 +239,10 @@ export function CreateProjectDialog({
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isManualRequirementsEnabled, setIsManualRequirementsEnabled] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
+  const [extractionFinalize, setExtractionFinalize] = useState(false)
+  const [extractionRunId, setExtractionRunId] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const prevGithubReposKeyRef = useRef<string | null>(null)
 
   const currentStep = steps[stepIndex]
   const isFirstStep = stepIndex === 0
@@ -237,6 +261,29 @@ export function CreateProjectDialog({
     () => normalizeGithubUrls(formState.githubRepoUrls),
     [formState.githubRepoUrls]
   )
+
+  const resetExtractionState = useCallback(() => {
+    setSuggestion(null)
+    setRequirements(cloneProjectSkillRequirements(emptyProjectSkillRequirements))
+    setRequiredPeopleAmount(0)
+    setIsManualRequirementsEnabled(false)
+    setSubmitError(null)
+  }, [])
+
+  useEffect(() => {
+    const nextKey = normalizedGithubRepoUrls.join("|")
+    if (isEditMode) {
+      prevGithubReposKeyRef.current = nextKey
+      return
+    }
+    if (
+      prevGithubReposKeyRef.current !== null &&
+      prevGithubReposKeyRef.current !== nextKey
+    ) {
+      resetExtractionState()
+    }
+    prevGithubReposKeyRef.current = nextKey
+  }, [isEditMode, normalizedGithubRepoUrls, resetExtractionState])
 
   function updateFormState(
     nextState:
@@ -312,6 +359,9 @@ export function CreateProjectDialog({
 
     setValidationError(null)
     setSubmitError(null)
+    if (!isEditMode && targetStepIndex === 1 && stepIndex > 1) {
+      resetExtractionState()
+    }
     setStepIndex(targetStepIndex)
   }
 
@@ -335,7 +385,13 @@ export function CreateProjectDialog({
   function handleBack() {
     setValidationError(null)
     setSubmitError(null)
-    setStepIndex((current) => Math.max(current - 1, 0))
+    setStepIndex((current) => {
+      const nextIndex = Math.max(current - 1, 0)
+      if (!isEditMode && nextIndex === 1 && current > 1) {
+        resetExtractionState()
+      }
+      return nextIndex
+    })
   }
 
   async function handleExtractRequirements() {
@@ -348,20 +404,33 @@ export function CreateProjectDialog({
     }
 
     try {
+      setExtractionFinalize(false)
+      setExtractionRunId((id) => id + 1)
       setIsExtracting(true)
       setValidationError(null)
       setSubmitError(null)
       setStepIndex(2)
+      const extractionStartedAt = Date.now()
       const nextSuggestion = await suggestProjectRequirements({
         github_repo_urls: normalizedGithubRepoUrls,
         project_phase: formState.projectPhase,
         task_description: formState.description,
       })
 
+      const elapsedMs = Date.now() - extractionStartedAt
+      const remainingUiMs = Math.max(0, minExtractionUiMs - elapsedMs)
+      if (remainingUiMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, remainingUiMs))
+      }
+
+      setExtractionFinalize(true)
+      await new Promise((resolve) => setTimeout(resolve, 320))
+
       setSuggestion(nextSuggestion)
       setRequirements(nextSuggestion.required_skills)
       setRequiredPeopleAmount(nextSuggestion.total_headcount)
     } catch (error) {
+      setExtractionFinalize(false)
       if (error instanceof BackendApiError && error.status === 501) {
         setSubmitError("Requirement extraction is not available in this backend.")
       } else {
@@ -369,6 +438,7 @@ export function CreateProjectDialog({
       }
       setIsManualRequirementsEnabled(true)
     } finally {
+      setExtractionFinalize(false)
       setIsExtracting(false)
     }
   }
@@ -483,6 +553,8 @@ export function CreateProjectDialog({
                 {currentStep.id === "requirements" && (
                   <RequirementsStep
                     isExtracting={isExtracting}
+                    extractionFinalize={extractionFinalize}
+                    extractionRunId={extractionRunId}
                     hasRequirements={hasRequirements}
                     suggestion={suggestion}
                     requirements={requirements}
@@ -502,7 +574,7 @@ export function CreateProjectDialog({
                     suggestion={suggestion}
                     requirements={requirements}
                     requiredPeopleAmount={requiredPeopleAmount}
-                    onEditStep={setStepIndex}
+                    onEditStep={handleStepChange}
                   />
                 )}
               </div>
@@ -918,6 +990,8 @@ function SourcesStep({
 
 function RequirementsStep({
   isExtracting,
+  extractionFinalize,
+  extractionRunId,
   hasRequirements,
   suggestion,
   requirements,
@@ -928,6 +1002,8 @@ function RequirementsStep({
   onRequirementChange,
 }: {
   isExtracting: boolean
+  extractionFinalize: boolean
+  extractionRunId: number
   hasRequirements: boolean
   suggestion: StaffingSuggestion | null
   requirements: ProjectSkillRequirements
@@ -956,13 +1032,10 @@ function RequirementsStep({
       />
 
       {isExtracting ? (
-        <div className="flex flex-col gap-5 rounded-3xl border border-border p-5">
-          <div className="flex items-center gap-4">
-            <Progress value={72} className="h-2" />
-            <span className="text-sm font-medium">72%</span>
-          </div>
-          <ExtractionChecklist />
-        </div>
+        <ExtractionLoadingPanel
+          key={extractionRunId}
+          finalize={extractionFinalize}
+        />
       ) : hasRequirements ? (
         <>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -1006,18 +1079,11 @@ function RequirementsStep({
                 </Button>
               </div>
             </div>
-            <div className="grid gap-3">
-              {skillKeys.map((skill) => (
-                <SkillRequirementControl
-                  key={skill}
-                  skill={skill}
-                  requirement={requirements[skill]}
-                  onChange={(nextRequirement) =>
-                    onRequirementChange(skill, nextRequirement)
-                  }
-                />
-              ))}
-            </div>
+            <RequirementsStaffingAccordion
+              key={`${extractionRunId}-${suggestion ? "s" : "m"}`}
+              requirements={requirements}
+              onRequirementChange={onRequirementChange}
+            />
           </section>
 
           {suggestion && (
@@ -1052,6 +1118,74 @@ function RequirementsStep({
         </div>
       )}
     </section>
+  )
+}
+
+function RequirementsStaffingAccordion({
+  requirements,
+  onRequirementChange,
+}: {
+  requirements: ProjectSkillRequirements
+  onRequirementChange: (
+    skill: SkillKey,
+    nextRequirement: Partial<ProjectSkillRequirement>
+  ) => void
+}) {
+  const [openSkillPanels, setOpenSkillPanels] = useState<string[]>(() =>
+    skillKeys.filter((skill) => getRequirementTotal(requirements[skill]) > 0)
+  )
+
+  return (
+    <Accordion
+      type="multiple"
+      className="divide-y divide-border rounded-xl border border-border/70 bg-muted/10"
+      value={openSkillPanels}
+      onValueChange={setOpenSkillPanels}
+    >
+      {skillKeys.map((skill) => {
+        const requirement = requirements[skill]
+        const totalCount = getRequirementTotal(requirement)
+
+        return (
+          <AccordionItem
+            key={skill}
+            value={skill}
+            className="border-0 data-[state=closed]:border-0"
+          >
+            <AccordionTrigger className="gap-3 px-3 py-3 hover:no-underline sm:px-4">
+              <span className="flex min-w-0 flex-1 items-start gap-2.5 text-left">
+                <SkillIcon skill={skill} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium leading-tight">
+                    {skillLabels[skill]}
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-snug text-muted-foreground line-clamp-2">
+                    {skillDescriptions[skill]}
+                  </span>
+                </span>
+                <Badge
+                  variant={totalCount > 0 ? "secondary" : "outline"}
+                  className="shrink-0"
+                >
+                  {totalCount} total
+                </Badge>
+              </span>
+            </AccordionTrigger>
+            <AccordionContent className="border-0 px-3 pb-3 pt-0 sm:px-4">
+              <div className="border-t border-border/60 pt-3">
+                <SkillRequirementFields
+                  skill={skill}
+                  requirement={requirement}
+                  onChange={(nextRequirement) =>
+                    onRequirementChange(skill, nextRequirement)
+                  }
+                />
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        )
+      })}
+    </Accordion>
   )
 }
 
@@ -1205,37 +1339,130 @@ function SourceCard({
   )
 }
 
-function ExtractionChecklist() {
-  const items = [
-    "Reading repository structure",
-    "Detecting languages and frameworks",
-    "Reading README context",
-    "Estimating required skill levels",
-    "Estimating needed capacity",
-  ]
+function ExtractionLoadingPanel({ finalize }: { finalize: boolean }) {
+  const [progress, setProgress] = useState(5)
+  const [activeStepIndex, setActiveStepIndex] = useState(0)
+
+  useEffect(() => {
+    if (finalize) {
+      const doneId = window.setTimeout(() => {
+        setProgress(100)
+        setActiveStepIndex(extractionStepLabels.length)
+      }, 0)
+      return () => window.clearTimeout(doneId)
+    }
+
+    const startedAt = Date.now()
+    const totalMs = minExtractionUiMs
+    const stepCount = extractionStepLabels.length
+    const tickMs = 80
+
+    const tick = () => {
+      const elapsed = Date.now() - startedAt
+      const capped = Math.min(elapsed, totalMs)
+      const stepIndex = Math.min(
+        stepCount - 1,
+        Math.floor((capped / totalMs) * stepCount)
+      )
+      setActiveStepIndex(stepIndex)
+      setProgress(Math.min(95, (capped / totalMs) * 95))
+    }
+
+    const startId = window.setTimeout(tick, 0)
+    const id = window.setInterval(tick, tickMs)
+
+    return () => {
+      window.clearTimeout(startId)
+      window.clearInterval(id)
+    }
+  }, [finalize])
+
+  const allStepsComplete = activeStepIndex >= extractionStepLabels.length
 
   return (
-    <div className="flex flex-col divide-y divide-border">
-      {items.map((item, index) => (
-        <div key={item} className="flex items-center gap-3 py-3">
-          <span
-            className={cn(
-              "grid size-6 place-items-center rounded-full border",
-              index < 4
-                ? "border-primary/20 bg-primary/10 text-primary"
-                : "border-border text-muted-foreground"
-            )}
-          >
-            {index < 4 ? <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} /> : index + 1}
-          </span>
-          <span className="text-sm">{item}</span>
+    <div
+      className="animate-in fade-in-0 zoom-in-95 flex flex-col gap-6 rounded-3xl border border-border bg-muted/10 p-6 duration-300 sm:p-7"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:gap-8">
+        <div className="flex flex-col items-center justify-center gap-3 self-center text-center sm:shrink-0 sm:self-stretch sm:py-1">
+          <MorphingSquare />
+          <p className="max-w-[11rem] text-xs leading-snug text-muted-foreground">
+            Pulling context from GitHub and preparing a staffing draft.
+          </p>
         </div>
-      ))}
+
+        <div className="min-w-0 flex-1 space-y-5">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3 text-sm">
+              <span className="font-medium text-foreground">Analysis progress</span>
+              <span className="tabular-nums text-muted-foreground">
+                {Math.round(progress)}%
+              </span>
+            </div>
+            <Progress value={progress} className="h-2" />
+          </div>
+
+          <ol className="flex flex-col divide-y divide-border/80 rounded-2xl border border-border/60 bg-background/60">
+            {extractionStepLabels.map((label, index) => {
+              const isDone = allStepsComplete || index < activeStepIndex
+              const isActive = !allStepsComplete && index === activeStepIndex
+
+              return (
+                <li
+                  key={label}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-3 transition-colors duration-300 sm:px-4",
+                    isActive && "bg-primary/5"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid size-7 shrink-0 place-items-center rounded-full border text-xs font-medium transition-all duration-300",
+                      isDone &&
+                        "border-primary/25 bg-primary/10 text-primary",
+                      isActive &&
+                        "border-primary/35 bg-primary/15 text-primary shadow-sm",
+                      !isDone &&
+                        !isActive &&
+                        "border-border text-muted-foreground"
+                    )}
+                  >
+                    {isDone ? (
+                      <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-3.5" />
+                    ) : isActive ? (
+                      <span className="relative flex size-3.5 items-center justify-center">
+                        <span className="absolute inset-0 animate-pulse rounded-full bg-primary/25" />
+                        <span className="relative size-2 rounded-full bg-primary" />
+                      </span>
+                    ) : (
+                      <span className="text-[0.65rem] tabular-nums opacity-70">
+                        {index + 1}
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    className={cn(
+                      "min-w-0 flex-1 text-sm transition-colors duration-300",
+                      isActive && "font-medium text-foreground",
+                      isDone && "text-foreground",
+                      !isDone && !isActive && "text-muted-foreground"
+                    )}
+                  >
+                    {label}
+                  </span>
+                </li>
+              )
+            })}
+          </ol>
+        </div>
+      </div>
     </div>
   )
 }
 
-function SkillRequirementControl({
+function SkillRequirementFields({
   skill,
   requirement,
   onChange,
@@ -1244,42 +1471,24 @@ function SkillRequirementControl({
   requirement: ProjectSkillRequirement
   onChange: (nextRequirement: Partial<ProjectSkillRequirement>) => void
 }) {
-  const totalCount = getRequirementTotal(requirement)
-
   return (
-    <div className="rounded-2xl border border-border bg-background p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex min-w-0 items-start gap-3">
-          <SkillIcon skill={skill} />
-          <div className="min-w-0">
-            <p className="font-medium">{skillLabels[skill]}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {skillDescriptions[skill]}
-            </p>
-          </div>
-        </div>
-        <Badge variant={totalCount > 0 ? "secondary" : "outline"} className="shrink-0">
-          {totalCount} total
-        </Badge>
-      </div>
-      <div className="mt-4 flex flex-col gap-2.5">
-        <SkillLevelBar requirement={requirement} />
-        {skillRequirementLevels.map((level) => {
-          const field = getRequirementLevelField(level)
-          const value = requirement[field]
+    <div className="flex flex-col gap-2.5">
+      <SkillLevelBar requirement={requirement} />
+      {skillRequirementLevels.map((level) => {
+        const field = getRequirementLevelField(level)
+        const value = requirement[field]
 
-          return (
-            <SkillRequirementLevelRow
-              key={field}
-              skill={skill}
-              level={level}
-              value={value}
-              onDecrease={() => onChange({ [field]: value - 1 })}
-              onIncrease={() => onChange({ [field]: value + 1 })}
-            />
-          )
-        })}
-      </div>
+        return (
+          <SkillRequirementLevelRow
+            key={field}
+            skill={skill}
+            level={level}
+            value={value}
+            onDecrease={() => onChange({ [field]: value - 1 })}
+            onIncrease={() => onChange({ [field]: value + 1 })}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -1359,10 +1568,25 @@ function RoleCard({ role }: { role: RoleRequirement }) {
   )
 }
 
-function SkillIcon({ skill }: { skill: SkillKey }) {
+function SkillIcon({
+  skill,
+  className,
+}: {
+  skill: SkillKey
+  className?: string
+}) {
   return (
-    <span className="grid size-8 shrink-0 place-items-center rounded-2xl bg-muted text-muted-foreground">
-      <HugeiconsIcon icon={skillIconMap[skill]} strokeWidth={2} />
+    <span
+      className={cn(
+        "grid size-6 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground",
+        className
+      )}
+    >
+      <HugeiconsIcon
+        icon={skillIconMap[skill]}
+        strokeWidth={2}
+        className="size-3.5"
+      />
     </span>
   )
 }
