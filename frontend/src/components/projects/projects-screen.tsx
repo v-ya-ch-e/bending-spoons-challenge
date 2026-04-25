@@ -19,6 +19,15 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
@@ -53,6 +62,7 @@ type FilterKey =
   | "maintenance"
   | "needs-staffing"
 type SortKey = "name" | "phase" | "team" | "gap"
+type ViewMode = "list" | "cards"
 
 const skillLabels: Record<SkillKey, string> = {
   android: "Android",
@@ -82,6 +92,7 @@ export function ProjectsScreen() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filter, setFilter] = useState<FilterKey>("all")
   const [sort, setSort] = useState<SortKey>("name")
+  const [viewMode, setViewMode] = useState<ViewMode>("list")
   const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -262,7 +273,7 @@ export function ProjectsScreen() {
         />
       )}
       <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-4">
           <div className="max-w-2xl">
             <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -271,8 +282,8 @@ export function ProjectsScreen() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <InputGroup className="w-full sm:w-88">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <InputGroup className="w-full lg:max-w-md">
               <InputGroupAddon>
                 <span>Search</span>
               </InputGroupAddon>
@@ -284,23 +295,39 @@ export function ProjectsScreen() {
               />
             </InputGroup>
 
-            <Select value={sort} onValueChange={(value) => setSort(value as SortKey)}>
-              <SelectTrigger
-                size="sm"
-                aria-label="Sort projects"
-                className="min-w-40"
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <Select
+                value={sort}
+                onValueChange={(value) => setSort(value as SortKey)}
               >
-                <SelectValue placeholder="Sort" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="name">Sort: Name</SelectItem>
-                  <SelectItem value="phase">Sort: Phase</SelectItem>
-                  <SelectItem value="team">Sort: Team size</SelectItem>
-                  <SelectItem value="gap">Sort: Staffing gap</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
+                <SelectTrigger
+                  size="sm"
+                  aria-label="Sort projects"
+                  className="min-w-40"
+                >
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="name">Sort: Name</SelectItem>
+                    <SelectItem value="phase">Sort: Phase</SelectItem>
+                    <SelectItem value="team">Sort: Team size</SelectItem>
+                    <SelectItem value="gap">Sort: Staffing gap</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+
+              <Tabs
+                value={viewMode}
+                onValueChange={(value) => setViewMode(value as ViewMode)}
+                className="shrink-0"
+              >
+                <TabsList>
+                  <TabsTrigger value="list">List</TabsTrigger>
+                  <TabsTrigger value="cards">Cards</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </div>
         </div>
 
@@ -341,21 +368,42 @@ export function ProjectsScreen() {
           </Alert>
         ) : (
           <div className="relative flex min-h-0 flex-1">
-            <section className="min-w-0 flex-1 rounded-3xl border border-border bg-card">
-              {isLoading ? (
-                <ProjectsTableSkeleton />
-              ) : filteredProjects.length > 0 ? (
-                <ProjectsTable
-                  projects={filteredProjects}
-                  selectedProjectId={selectedProjectId}
-                  onRowOpen={openProject}
-                />
-              ) : (
-                <ProjectsEmptyState />
+            <section
+              className={cn(
+                "flex min-h-0 min-w-0 flex-1 flex-col",
+                viewMode === "list" &&
+                  "overflow-hidden rounded-3xl border border-border bg-card"
               )}
+            >
+              <ScrollArea className="min-h-0 flex-1">
+                {isLoading ? (
+                  <ProjectsTableSkeleton />
+                ) : filteredProjects.length > 0 ? (
+                  viewMode === "list" ? (
+                    <ProjectsTable
+                      projects={filteredProjects}
+                      selectedProjectId={selectedProjectId}
+                      onRowOpen={openProject}
+                    />
+                  ) : (
+                    <ProjectsCardGrid
+                      projects={filteredProjects}
+                      selectedProjectId={selectedProjectId}
+                      onProjectOpen={openProject}
+                    />
+                  )
+                ) : (
+                  <ProjectsEmptyState />
+                )}
+              </ScrollArea>
 
               {!isLoading && filteredProjects.length > 0 && (
-                <div className="border-t border-border px-4 py-3 text-sm text-muted-foreground">
+                <div
+                  className={cn(
+                    "px-4 py-3 text-sm text-muted-foreground",
+                    viewMode === "list" && "border-t border-border"
+                  )}
+                >
                   Showing {filteredProjects.length} of {projects.length} projects
                 </div>
               )}
@@ -385,16 +433,15 @@ function ProjectsTable({
   onRowOpen: (projectId: number) => void
 }) {
   return (
-    <Table>
+    <Table className="table-fixed">
       <TableHeader>
         <TableRow>
           <TableHead className="w-[24%]">Project</TableHead>
-          <TableHead>Phase</TableHead>
-          <TableHead>Required skills</TableHead>
-          <TableHead>Team</TableHead>
-          <TableHead>Staffing</TableHead>
-          <TableHead>Repos</TableHead>
-          <TableHead className="w-24 text-right">Action</TableHead>
+          <TableHead className="w-[15%]">Phase</TableHead>
+          <TableHead className="w-[25%]">Required skills</TableHead>
+          <TableHead className="w-[14%]">Team</TableHead>
+          <TableHead className="w-[13%]">Staffing</TableHead>
+          <TableHead className="w-[9%] text-right">Action</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -409,7 +456,7 @@ function ProjectsTable({
               className="cursor-pointer transition-[background-color,transform] duration-150 hover:translate-x-0.5"
               onClick={() => onRowOpen(project.id)}
             >
-              <TableCell>
+              <TableCell className="min-w-0">
                 <div className="flex min-w-0 items-center gap-3">
                   <Avatar>
                     <AvatarImage src={project.icon_url} alt="" />
@@ -417,34 +464,28 @@ function ProjectsTable({
                   </Avatar>
                   <div className="min-w-0">
                     <p className="truncate font-medium">{project.project_name}</p>
-                    <p className="line-clamp-1 text-xs text-muted-foreground">
-                      {project.project_description}
+                    <p className="truncate text-xs text-muted-foreground">
+                      {project.github_repositories.length} repositories
                     </p>
                   </div>
                 </div>
               </TableCell>
-              <TableCell>
+              <TableCell className="min-w-0">
                 <PhaseBadge phase={project.project_phase} />
               </TableCell>
-              <TableCell>
+              <TableCell className="min-w-0 whitespace-normal">
                 <SkillBadges skills={project.required_skills} compact />
               </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-3">
-                  <TeamAvatars members={project.current_team_members} compact />
+              <TableCell className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
                   <span className="text-sm text-muted-foreground">
                     {project.current_team_members.length} /{" "}
                     {project.required_people_amount}
                   </span>
                 </div>
               </TableCell>
-              <TableCell>
+              <TableCell className="min-w-0">
                 <StaffingBadge gap={gap} />
-              </TableCell>
-              <TableCell>
-                <Badge variant="outline">
-                  {project.github_repositories.length} repos
-                </Badge>
               </TableCell>
               <TableCell className="text-right">
                 <Button
@@ -464,6 +505,95 @@ function ProjectsTable({
         })}
       </TableBody>
     </Table>
+  )
+}
+
+function ProjectsCardGrid({
+  projects,
+  selectedProjectId,
+  onProjectOpen,
+}: {
+  projects: Project[]
+  selectedProjectId?: number
+  onProjectOpen: (projectId: number) => void
+}) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {projects.map((project) => {
+        const gap = getStaffingGap(project)
+        const isSelected = project.id === selectedProjectId
+
+        return (
+          <Card
+            key={project.id}
+            size="sm"
+            className={cn(
+              "animate-in fade-in-0 slide-in-from-bottom-1 cursor-pointer duration-300",
+              isSelected && "ring-2 ring-ring"
+            )}
+            onClick={() => onProjectOpen(project.id)}
+          >
+            <div className="relative h-32 overflow-hidden bg-muted">
+              <Image
+                src={project.poster_url}
+                alt=""
+                width={1200}
+                height={630}
+                unoptimized
+                className="h-full w-full object-cover opacity-90 transition-transform duration-300 group-hover/card:scale-105"
+              />
+            </div>
+            <CardHeader>
+              <CardTitle className="flex min-w-0 items-center gap-3">
+                <Avatar>
+                  <AvatarImage src={project.icon_url} alt="" />
+                  <AvatarFallback>{getInitials(project.project_name)}</AvatarFallback>
+                </Avatar>
+                <span className="min-w-0 truncate">{project.project_name}</span>
+              </CardTitle>
+              <CardDescription className="line-clamp-2">
+                {project.project_description}
+              </CardDescription>
+              <CardAction>
+                <PhaseBadge phase={project.project_phase} />
+              </CardAction>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex flex-wrap gap-1.5">
+                <StaffingBadge gap={gap} />
+                <Badge variant="outline">
+                  {project.current_team_members.length} /{" "}
+                  {project.required_people_amount} people
+                </Badge>
+                <Badge variant="outline">
+                  {project.github_repositories.length} repos
+                </Badge>
+              </div>
+              <SkillBadges skills={project.required_skills} compact />
+              <div className="flex items-center justify-between gap-3">
+                <TeamAvatars members={project.current_team_members} compact />
+                <span className="text-xs text-muted-foreground">
+                  {getCoveragePercent(project)}% staffed
+                </span>
+              </div>
+            </CardContent>
+            <CardFooter className="justify-end">
+              <Button
+                type="button"
+                size="sm"
+                variant={isSelected ? "secondary" : "outline"}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onProjectOpen(project.id)
+                }}
+              >
+                Open
+              </Button>
+            </CardFooter>
+          </Card>
+        )
+      })}
+    </div>
   )
 }
 

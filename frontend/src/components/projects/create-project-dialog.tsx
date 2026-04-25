@@ -3,7 +3,6 @@
 import { useMemo, useState, type ReactNode } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
-  BookOpen01Icon,
   Briefcase01Icon,
   ChartRelationshipIcon,
   CheckListIcon,
@@ -71,7 +70,8 @@ type FormState = {
   description: string
   iconUrl: string
   posterUrl: string
-  githubRepoUrl: string
+  githubRepoDraft: string
+  githubRepoUrls: string[]
   notionSource: string
   slackSource: string
   includeNotion: boolean
@@ -153,7 +153,8 @@ const initialFormState: FormState = {
   description: "",
   iconUrl: "",
   posterUrl: "",
-  githubRepoUrl: "",
+  githubRepoDraft: "",
+  githubRepoUrls: [],
   notionSource: "",
   slackSource: "",
   includeNotion: true,
@@ -186,9 +187,9 @@ export function CreateProjectDialog({
   )
   const resolvedIconUrl = formState.iconUrl || media.iconUrl
   const resolvedPosterUrl = formState.posterUrl || media.posterUrl
-  const normalizedGithubRepoUrl = useMemo(
-    () => normalizeGithubUrl(formState.githubRepoUrl),
-    [formState.githubRepoUrl]
+  const normalizedGithubRepoUrls = useMemo(
+    () => normalizeGithubUrls(formState.githubRepoUrls),
+    [formState.githubRepoUrls]
   )
 
   function updateFormState(
@@ -226,8 +227,8 @@ export function CreateProjectDialog({
       }
     }
 
-    if (step === "sources" && !normalizedGithubRepoUrl) {
-      return "Enter a GitHub repository URL or owner/repo path."
+    if (step === "sources" && normalizedGithubRepoUrls.length === 0) {
+      return "Add at least one GitHub repository URL or owner/repo path."
     }
 
     if ((step === "requirements" || step === "review") && !suggestion) {
@@ -300,7 +301,7 @@ export function CreateProjectDialog({
       setSubmitError(null)
       setStepIndex(2)
       const nextSuggestion = await suggestProjectRequirements({
-        github_repo_url: normalizedGithubRepoUrl,
+        github_repo_urls: normalizedGithubRepoUrls,
         project_phase: formState.projectPhase,
         task_description: formState.description,
       })
@@ -342,7 +343,7 @@ export function CreateProjectDialog({
       current_team_member_ids: [],
       required_people_amount: requiredPeopleAmount,
       required_skills: requirements,
-      github_repositories: [normalizedGithubRepoUrl],
+      github_repositories: normalizedGithubRepoUrls,
     }
 
     try {
@@ -400,6 +401,7 @@ export function CreateProjectDialog({
                 {currentStep.id === "company" && (
                   <CompanyStep
                     formState={formState}
+                    domain={media.domain}
                     iconUrl={resolvedIconUrl}
                     onChange={updateFormState}
                   />
@@ -408,7 +410,7 @@ export function CreateProjectDialog({
                 {currentStep.id === "sources" && (
                   <SourcesStep
                     formState={formState}
-                    normalizedGithubRepoUrl={normalizedGithubRepoUrl}
+                    normalizedGithubRepoUrls={normalizedGithubRepoUrls}
                     onChange={updateFormState}
                   />
                 )}
@@ -429,7 +431,7 @@ export function CreateProjectDialog({
                   <ReviewStep
                     formState={formState}
                     iconUrl={resolvedIconUrl}
-                    githubRepoUrl={normalizedGithubRepoUrl}
+                    githubRepoUrls={normalizedGithubRepoUrls}
                     suggestion={suggestion}
                     requirements={requirements}
                     requiredPeopleAmount={requiredPeopleAmount}
@@ -548,74 +550,133 @@ function StepNavigation({
 
 function CompanyStep({
   formState,
+  domain,
   iconUrl,
   onChange,
 }: {
   formState: FormState
+  domain: string
   iconUrl: string
   onChange: (partialState: Partial<FormState>) => void
 }) {
+  const hasLogoPreview = Boolean(iconUrl)
+
   return (
     <section className="animate-in fade-in-0 slide-in-from-right-2 flex flex-col gap-6 duration-200">
       <StepHeading
         title="Company"
         description="Create a company workspace and define the initial staffing scope."
       />
-      <div className="grid gap-4 md:grid-cols-[1fr_16rem]">
-        <div className="flex flex-col gap-4">
-          <Field label="Company name" required>
-            <Input
-              value={formState.projectName}
-              onChange={(event) => onChange({ projectName: event.target.value })}
-              placeholder="Eventbrite"
-              aria-label="Company name"
-            />
-          </Field>
-          <Field label="Website URL" required>
-            <Input
-              value={formState.websiteUrl}
-              onChange={(event) => onChange({ websiteUrl: event.target.value })}
-              placeholder="eventbrite.com"
-              aria-label="Website URL"
-            />
-          </Field>
-          <Field label="Phase" required>
-            <Select
-              value={formState.projectPhase}
-              onValueChange={(value) =>
-                onChange({ projectPhase: value as ProjectPhase })
-              }
-            >
-              <SelectTrigger aria-label="Phase" className="w-full">
-                <SelectValue placeholder="Select phase" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem value="new acquisition">New acquisition</SelectItem>
-                  <SelectItem value="growth">Growth</SelectItem>
-                  <SelectItem value="maintenance">Maintenance</SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </Field>
+      <div className="grid gap-5 lg:grid-cols-[1fr_18rem]">
+        <div className="flex flex-col gap-5">
+          <section className="rounded-3xl border border-border p-4">
+            <div className="mb-4">
+              <h3 className="font-medium">Company identity</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                This becomes the workspace name, product context, and acquisition phase.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Company name" required>
+                <Input
+                  value={formState.projectName}
+                  onChange={(event) => onChange({ projectName: event.target.value })}
+                  placeholder="Eventbrite"
+                  aria-label="Company name"
+                />
+              </Field>
+              <Field label="Website URL" required>
+                <Input
+                  value={formState.websiteUrl}
+                  onChange={(event) => onChange({ websiteUrl: event.target.value })}
+                  placeholder="eventbrite.com"
+                  aria-label="Website URL"
+                />
+              </Field>
+            </div>
+            <div className="mt-4">
+              <Field label="Phase" required>
+                <Select
+                  value={formState.projectPhase}
+                  onValueChange={(value) =>
+                    onChange({ projectPhase: value as ProjectPhase })
+                  }
+                >
+                  <SelectTrigger aria-label="Phase" className="w-full sm:w-64">
+                    <SelectValue placeholder="Select phase" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="new acquisition">New acquisition</SelectItem>
+                      <SelectItem value="growth">Growth</SelectItem>
+                      <SelectItem value="maintenance">Maintenance</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-border p-4">
+            <div className="mb-4">
+              <h3 className="font-medium">Staffing scope</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Keep this short. It is sent to the requirements extraction backend.
+              </p>
+            </div>
+            <Field label="Short description" required>
+              <Textarea
+                value={formState.description}
+                onChange={(event) => onChange({ description: event.target.value })}
+                placeholder="Understand the codebase, stabilize billing, and prepare the initial integration roadmap."
+                aria-label="Short description"
+                className="min-h-32"
+              />
+            </Field>
+          </section>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <div className="rounded-3xl border border-border p-4">
-            <p className="text-sm font-medium">Company logo</p>
-            <div className="mt-4 flex items-center gap-3">
-              <Avatar size="lg">
-                <AvatarImage src={iconUrl} alt="" />
-                <AvatarFallback>{getInitials(formState.projectName || "Company")}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0">
-                <p className="text-sm text-muted-foreground">
-                  Generated from the website domain.
-                </p>
-                <p className="truncate text-xs text-muted-foreground">{iconUrl}</p>
-              </div>
+        <aside className="flex flex-col gap-4">
+          <section className="rounded-3xl border border-border p-4">
+            <div>
+              <h3 className="font-medium">Brand assets</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                A logo is generated after a valid website domain is available.
+              </p>
             </div>
-          </div>
+            <div className="mt-4 rounded-3xl bg-muted p-4">
+              {hasLogoPreview ? (
+                <div className="flex items-center gap-3">
+                  <Avatar size="lg">
+                    <AvatarImage src={iconUrl} alt="" />
+                    <AvatarFallback>
+                      {getInitials(formState.projectName || "Company")}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">
+                      {domain ? `Generated from ${domain}` : "Custom logo"}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">{iconUrl}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex min-h-20 items-center gap-3 text-muted-foreground">
+                  <div className="grid size-10 place-items-center rounded-2xl bg-background">
+                    <HugeiconsIcon icon={Briefcase01Icon} strokeWidth={2} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      No logo generated yet
+                    </p>
+                    <p className="text-xs">
+                      Enter a website URL or paste a direct logo URL.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
           <Field
             label="Logo URL"
             description="Optional. Defaults to the domain favicon."
@@ -627,31 +688,47 @@ function CompanyStep({
               aria-label="Logo URL"
             />
           </Field>
-        </div>
+        </aside>
       </div>
-
-      <Field label="Short description" required>
-        <Textarea
-          value={formState.description}
-          onChange={(event) => onChange({ description: event.target.value })}
-          placeholder="Understand the codebase, stabilize billing, and prepare the initial integration roadmap."
-          aria-label="Short description"
-          className="min-h-28"
-        />
-      </Field>
     </section>
   )
 }
 
 function SourcesStep({
   formState,
-  normalizedGithubRepoUrl,
+  normalizedGithubRepoUrls,
   onChange,
 }: {
   formState: FormState
-  normalizedGithubRepoUrl: string
-  onChange: (partialState: Partial<FormState>) => void
+  normalizedGithubRepoUrls: string[]
+  onChange: (
+    partialState: Partial<FormState> | ((current: FormState) => Partial<FormState>)
+  ) => void
 }) {
+  const normalizedDraftRepoUrl = normalizeGithubUrl(formState.githubRepoDraft)
+
+  function handleAddRepository() {
+    if (!normalizedDraftRepoUrl) {
+      return
+    }
+
+    onChange((current) => ({
+      githubRepoDraft: "",
+      githubRepoUrls: normalizeGithubUrls([
+        ...current.githubRepoUrls,
+        normalizedDraftRepoUrl,
+      ]),
+    }))
+  }
+
+  function handleRemoveRepository(repositoryUrl: string) {
+    onChange((current) => ({
+      githubRepoUrls: current.githubRepoUrls.filter(
+        (currentUrl) => normalizeGithubUrl(currentUrl) !== repositoryUrl
+      ),
+    }))
+  }
+
   return (
     <section className="animate-in fade-in-0 slide-in-from-right-2 flex flex-col gap-6 duration-200">
       <StepHeading
@@ -660,22 +737,64 @@ function SourcesStep({
       />
       <div className="flex flex-col gap-3">
         <SourceCard
-          icon={<span className="font-semibold">GH</span>}
+          logo={<GitHubLogo />}
           title="GitHub"
           description="Required for extracting technical requirements."
-          status={normalizedGithubRepoUrl ? "Connected" : "Required"}
+          status={
+            normalizedGithubRepoUrls.length > 0
+              ? `${normalizedGithubRepoUrls.length} connected`
+              : "Required"
+          }
           checked
         >
-          <Input
-            value={formState.githubRepoUrl}
-            onChange={(event) => onChange({ githubRepoUrl: event.target.value })}
-            placeholder="https://github.com/eventbrite/core-platform"
-            aria-label="GitHub repository"
-          />
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-2">
+              <Input
+                value={formState.githubRepoDraft}
+                onChange={(event) => onChange({ githubRepoDraft: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault()
+                    handleAddRepository()
+                  }
+                }}
+                placeholder="https://github.com/eventbrite/core-platform"
+                aria-label="GitHub repository"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAddRepository}
+                disabled={!normalizedDraftRepoUrl}
+              >
+                Add
+              </Button>
+            </div>
+            {normalizedGithubRepoUrls.length > 0 && (
+              <div className="flex flex-col gap-2">
+                {normalizedGithubRepoUrls.map((repositoryUrl) => (
+                  <div
+                    key={repositoryUrl}
+                    className="flex items-center justify-between gap-3 rounded-2xl bg-muted px-3 py-2"
+                  >
+                    <span className="min-w-0 truncate text-sm">{repositoryUrl}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => handleRemoveRepository(repositoryUrl)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </SourceCard>
 
         <SourceCard
-          icon={<HugeiconsIcon icon={BookOpen01Icon} strokeWidth={2} />}
+          logo={<NotionLogo />}
           title="Notion"
           description="Optional, improves business and documentation context."
           status={formState.includeNotion ? "Selected" : "Optional"}
@@ -692,7 +811,7 @@ function SourcesStep({
         </SourceCard>
 
         <SourceCard
-          icon={<span className="text-lg font-semibold">#</span>}
+          logo={<SlackLogo />}
           title="Slack"
           description="Optional, adds operational context for the demo."
           status={formState.includeSlack ? "Selected" : "Optional"}
@@ -711,7 +830,7 @@ function SourcesStep({
       <Alert>
         <AlertTitle>GitHub drives extraction</AlertTitle>
         <AlertDescription>
-          The current backend analyzes the GitHub repository, project phase, and
+          The current backend analyzes GitHub repositories, project phase, and
           description. Notion and Slack are kept as review context until backend
           support is added.
         </AlertDescription>
@@ -826,7 +945,7 @@ function RequirementsStep({
           <div>
             <h3 className="font-medium">No requirements extracted yet</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Run extraction from the connected GitHub repository.
+              Run extraction from the connected GitHub repositories.
             </p>
           </div>
           <Button type="button" onClick={onExtract}>
@@ -841,7 +960,7 @@ function RequirementsStep({
 function ReviewStep({
   formState,
   iconUrl,
-  githubRepoUrl,
+  githubRepoUrls,
   suggestion,
   requirements,
   requiredPeopleAmount,
@@ -849,7 +968,7 @@ function ReviewStep({
 }: {
   formState: FormState
   iconUrl: string
-  githubRepoUrl: string
+  githubRepoUrls: string[]
   suggestion: StaffingSuggestion | null
   requirements: Skills
   requiredPeopleAmount: number
@@ -881,7 +1000,10 @@ function ReviewStep({
       </SummaryCard>
 
       <SummaryCard title="Sources" onEdit={() => onEditStep(1)}>
-        <SummaryRow label="GitHub" value={githubRepoUrl || "Not set"} />
+        <SummaryRow
+          label="GitHub"
+          value={githubRepoUrls.length > 0 ? githubRepoUrls.join(", ") : "Not set"}
+        />
         <SummaryRow
           label="Notion"
           value={formState.includeNotion ? formState.notionSource || "Selected" : "Skipped"}
@@ -915,7 +1037,7 @@ function ReviewStep({
       <Alert>
         <AlertTitle>What happens next</AlertTitle>
         <AlertDescription>
-          The company workspace, repository, generated logo, and minimum staffing
+          The company workspace, repositories, generated logo, and minimum staffing
           requirements will be saved to the current projects API.
         </AlertDescription>
       </Alert>
@@ -923,8 +1045,68 @@ function ReviewStep({
   )
 }
 
+function GitHubLogo() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="size-6 fill-foreground"
+    >
+      <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2.14c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.17 1.18a10.9 10.9 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.43-2.7 5.4-5.27 5.69.42.36.78 1.07.78 2.16v3.2c0 .31.21.67.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" />
+    </svg>
+  )
+}
+
+function NotionLogo() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 32 32"
+      className="size-7"
+    >
+      <rect x="5" y="5" width="22" height="22" rx="3" fill="white" />
+      <rect
+        x="5"
+        y="5"
+        width="22"
+        height="22"
+        rx="3"
+        fill="none"
+        stroke="black"
+        strokeWidth="2"
+      />
+      <text
+        x="16"
+        y="22.5"
+        fill="black"
+        fontFamily="Georgia, serif"
+        fontSize="18"
+        fontWeight="700"
+        textAnchor="middle"
+      >
+        N
+      </text>
+    </svg>
+  )
+}
+
+function SlackLogo() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 32 32" className="size-7">
+      <path fill="#36C5F0" d="M13 4a3 3 0 0 1 6 0v8h-6V4Z" />
+      <path fill="#2EB67D" d="M28 13a3 3 0 0 1 0 6h-8v-6h8Z" />
+      <path fill="#ECB22E" d="M19 28a3 3 0 0 1-6 0v-8h6v8Z" />
+      <path fill="#E01E5A" d="M4 19a3 3 0 0 1 0-6h8v6H4Z" />
+      <path fill="#ECB22E" d="M13 13H8a3 3 0 1 1 3-3v3h2Z" />
+      <path fill="#36C5F0" d="M19 13V8a3 3 0 1 1 3 3h-3v2Z" />
+      <path fill="#2EB67D" d="M19 19h5a3 3 0 1 1-3 3v-3h-2Z" />
+      <path fill="#E01E5A" d="M13 19v5a3 3 0 1 1-3-3h3v-2Z" />
+    </svg>
+  )
+}
+
 function SourceCard({
-  icon,
+  logo,
   title,
   description,
   status,
@@ -932,7 +1114,7 @@ function SourceCard({
   onCheckedChange,
   children,
 }: {
-  icon: ReactNode
+  logo: ReactNode
   title: string
   description: string
   status: string
@@ -943,8 +1125,8 @@ function SourceCard({
   return (
     <div className="grid gap-4 rounded-3xl border border-border p-4 md:grid-cols-[1fr_20rem] md:items-center">
       <div className="flex items-start gap-3">
-        <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-muted text-muted-foreground">
-          {icon}
+        <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-background ring-1 ring-border">
+          {logo}
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -1202,13 +1384,14 @@ function getProjectMedia(websiteUrl: string) {
 
   if (!domain) {
     return {
-      iconUrl: "https://www.google.com/s2/favicons?domain=bendingspoons.com&sz=128",
-      posterUrl:
-        "https://image.thum.io/get/width/1200/crop/630/https://bendingspoons.com",
+      domain: "",
+      iconUrl: "",
+      posterUrl: "",
     }
   }
 
   return {
+    domain,
     iconUrl: `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
     posterUrl: `https://image.thum.io/get/width/1200/crop/630/https://${domain}`,
   }
@@ -1256,6 +1439,24 @@ function normalizeGithubUrl(value: string) {
   } catch {
     return ""
   }
+}
+
+function normalizeGithubUrls(values: string[]) {
+  const normalizedValues: string[] = []
+  const seenValues = new Set<string>()
+
+  values.forEach((value) => {
+    const normalizedValue = normalizeGithubUrl(value)
+
+    if (!normalizedValue || seenValues.has(normalizedValue)) {
+      return
+    }
+
+    normalizedValues.push(normalizedValue)
+    seenValues.add(normalizedValue)
+  })
+
+  return normalizedValues
 }
 
 function getInitials(name: string) {

@@ -83,6 +83,7 @@ Current orchestration endpoints:
 - `POST /projects`
 - `GET /projects/{project_id}`
 - `PUT /projects/{project_id}`
+- `POST /skill-profile:suggest`
 - `POST /projects/{project_id}/skill-profile:suggest`
 - `PUT /projects/{project_id}/skill-profile`
 - `POST /projects/{project_id}/matching:run`

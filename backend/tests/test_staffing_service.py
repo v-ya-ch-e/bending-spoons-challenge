@@ -19,7 +19,10 @@ class TestStaffingService(unittest.TestCase):
 
         async def run_test():
             payload = SkillProfileSuggestRequest(
-                github_repo_url="https://github.com/fastapi/fastapi",
+                github_repo_urls=[
+                    "https://github.com/fastapi/fastapi",
+                    "https://github.com/pydantic/pydantic",
+                ],
                 project_phase=ProjectPhase.GROWTH,
                 task_description=(
                     "Extend a production Python API framework with better "

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
+import httpx
 
 from schemas import (
     MatchingResult,
@@ -47,14 +48,34 @@ def update_project(project_id: int, payload: ProjectUpdate) -> Project:
     raise HTTPException(status_code=501, detail="Project update is not implemented yet")
 
 
-@app.post("/projects/{project_id}/skill-profile:suggest", response_model=StaffingSuggestion)
-async def suggest_skill_profile(
+async def run_skill_profile_suggestion(
     project_id: int, payload: SkillProfileSuggestRequest
 ) -> StaffingSuggestion:
     try:
         return await skill_profile_service.suggest_skill_profile(project_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=exc.response.status_code,
+            detail="GitHub repository lookup failed",
+        ) from exc
     except NotImplementedError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
+
+
+@app.post("/skill-profile:suggest", response_model=StaffingSuggestion)
+async def suggest_skill_profile_without_project(
+    payload: SkillProfileSuggestRequest,
+) -> StaffingSuggestion:
+    return await run_skill_profile_suggestion(project_id=0, payload=payload)
+
+
+@app.post("/projects/{project_id}/skill-profile:suggest", response_model=StaffingSuggestion)
+async def suggest_skill_profile(
+    project_id: int, payload: SkillProfileSuggestRequest
+) -> StaffingSuggestion:
+    return await run_skill_profile_suggestion(project_id, payload)
 
 
 @app.put("/projects/{project_id}/skill-profile", response_model=SkillProfile)
