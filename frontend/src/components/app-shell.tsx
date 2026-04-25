@@ -7,10 +7,19 @@ import {
   currentUser,
   roleWorkspaces,
   type AppRole,
+  type NavItem,
 } from "@/data/mock-navigation"
 import { SidebarNav } from "@/components/sidebar-nav"
 import { Topbar } from "@/components/topbar"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import {
+  getCachedEmployees,
+  getCachedMatchingRuns,
+  getCachedProjects,
+  listEmployees,
+  listMatchingRuns,
+  listProjects,
+} from "@/lib/db-api"
 import {
   preferenceCookieMaxAge,
   sidebarCollapsedCookieName,
@@ -39,13 +48,38 @@ export function AppShell({
   const router = useRouter()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed)
   const [themeMode, setThemeMode] = useState<ThemeMode>(initialThemeMode)
+  const [projectCount, setProjectCount] = useState<number | undefined>(
+    () => getCachedProjects()?.length
+  )
+  const [employeeCount, setEmployeeCount] = useState<number | undefined>(
+    () => getCachedEmployees()?.length
+  )
+  const [matchingRunCount, setMatchingRunCount] = useState<number | undefined>(
+    () => getCachedMatchingRuns()?.length
+  )
 
   const role: AppRole = pathname.startsWith("/spooner")
     ? "spooner"
     : pathname.startsWith("/cto")
       ? "cto"
       : initialRole
-  const workspace = roleWorkspaces[role]
+  const baseWorkspace = roleWorkspaces[role]
+
+  const workspace = useMemo(() => {
+    const navItems: NavItem[] = baseWorkspace.navItems.map((item) => {
+      if (item.value === "projects" && projectCount !== undefined) {
+        return { ...item, count: String(projectCount) }
+      }
+      if (item.value === "employees" && employeeCount !== undefined) {
+        return { ...item, count: String(employeeCount) }
+      }
+      if (item.value === "matching" && matchingRunCount !== undefined) {
+        return { ...item, count: String(matchingRunCount) }
+      }
+      return item
+    })
+    return { ...baseWorkspace, navItems }
+  }, [baseWorkspace, projectCount, employeeCount, matchingRunCount])
 
   const activeNavItem = useMemo(() => {
     return (
@@ -53,6 +87,32 @@ export function AppShell({
       workspace.navItems[0]
     )
   }, [pathname, workspace.navItems])
+
+  useEffect(() => {
+    let isMounted = true
+
+    listProjects()
+      .then((projects) => {
+        if (isMounted) setProjectCount(projects.length)
+      })
+      .catch(() => {})
+
+    listEmployees()
+      .then((employees) => {
+        if (isMounted) setEmployeeCount(employees.length)
+      })
+      .catch(() => {})
+
+    listMatchingRuns()
+      .then((runs) => {
+        if (isMounted) setMatchingRunCount(runs.length)
+      })
+      .catch(() => {})
+
+    return () => {
+      isMounted = false
+    }
+  }, [pathname])
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
