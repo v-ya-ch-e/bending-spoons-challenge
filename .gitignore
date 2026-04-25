@@ -1,4 +1,5 @@
 # Virtual enviroments
+.venv/
 venv/
 ENV/
 env/
@@ -17,6 +18,9 @@ thumbs.db
 
 # Logs and temproraries
 *.log
+
+# Environment variables
+.env
 
 # Certificates
 *.crt
