@@ -85,7 +85,9 @@ Current orchestration endpoints:
 
 - `POST /skill-profile`
 - `POST /projects/{project_id}/documentation:refresh`
+- `POST /projects/{project_id}/documentation:refresh-stream`
 - `POST /projects/{project_id}/documentation:chat`
+- `POST /projects/{project_id}/documentation:chat-stream`
 - `POST /move-requests/{request_id}/instructions/{instruction_type}:generate`
 - `POST /projects/{project_id}/matching:run`
 - `POST /matching/portfolio:rebalance`

@@ -79,6 +79,11 @@ class FakeCompletions:
         self.payload = payload
 
     def create(self, **_kwargs):
+        if _kwargs.get("stream"):
+            text = self.payload.get("content_markdown") or self.payload.get("answer") or ""
+            delta = type("Delta", (), {"content": text})
+            choice = type("Choice", (), {"delta": delta})
+            return [type("Chunk", (), {"choices": [choice]})]
         message = type("Message", (), {"content": json.dumps(self.payload)})
         choice = type("Choice", (), {"message": message})
         return type("Response", (), {"choices": [choice]})
@@ -150,6 +155,42 @@ class ProjectDocumentationServiceTest(unittest.TestCase):
 
         self.assertEqual(response.answer, "Use the API section for onboarding.")
         self.assertIn("Updated docs", response.updated_content_markdown)
+
+    def test_stream_project_documentation_emits_content_and_done(self) -> None:
+        db_client = FakeDbClient()
+        openai_client = FakeOpenAIClient(
+            {"content_markdown": "# Atlas Staffing\n\nGenerated docs."}
+        )
+
+        events = list(
+            project_documentation_service.stream_project_documentation_generation(
+                1,
+                db_client=db_client,
+                github_client=FakeGitHubClient(),
+                openai_client=openai_client,
+            )
+        )
+
+        self.assertTrue(any("event: content_delta" in event for event in events))
+        self.assertTrue(any("event: done" in event for event in events))
+        self.assertEqual(db_client.documentation["status"], "ready")
+
+    def test_stream_chat_emits_answer_delta(self) -> None:
+        db_client = FakeDbClient()
+        db_client.documentation["content_markdown"] = "# Atlas Staffing\n\nExisting docs."
+        openai_client = FakeOpenAIClient({"answer": "Read the setup section first."})
+
+        events = list(
+            project_documentation_service.stream_documentation_chat(
+                1,
+                ProjectDocumentationChatRequest(message="Where do I start?"),
+                db_client=db_client,
+                openai_client=openai_client,
+            )
+        )
+
+        self.assertTrue(any("event: answer_delta" in event for event in events))
+        self.assertTrue(any("Read the setup section first." in event for event in events))
 
 
 if __name__ == "__main__":

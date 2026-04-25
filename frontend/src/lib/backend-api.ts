@@ -44,6 +44,8 @@ export type DocumentationChatResponse = {
   updated_content_markdown: string | null
 }
 
+type StreamEventHandler = (event: string, data: Record<string, unknown>) => void
+
 const backendApiBasePath = "/api"
 const backendSkillKeys: SkillKey[] = [
   "android",
@@ -222,6 +224,39 @@ export function chatWithProjectDocumentation(
   )
 }
 
+export function streamProjectDocumentationRefresh(
+  projectId: number,
+  onEvent: StreamEventHandler
+) {
+  return fetchBackendEventStream(
+    `/projects/${projectId}/documentation:refresh-stream`,
+    { method: "POST" },
+    onEvent
+  )
+}
+
+export function streamProjectDocumentationChat(
+  projectId: number,
+  input: DocumentationChatInput,
+  onEvent: StreamEventHandler
+) {
+  return fetchBackendEventStream(
+    `/projects/${projectId}/documentation:chat-stream`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: input.message,
+        history: input.history ?? [],
+        mode: input.mode ?? "ask",
+      }),
+    },
+    onEvent
+  )
+}
+
 export const skillKeys = backendSkillKeys
 
 type LegacySkillProfileResponse = {
@@ -259,5 +294,74 @@ function normalizeSkillProfileResponse(
     required_skills: requiredSkills,
     total_headcount: payload.required_people_amount,
     summary: "Generated from backend skill profile analysis.",
+  }
+}
+
+async function fetchBackendEventStream(
+  path: string,
+  init: RequestInit,
+  onEvent: StreamEventHandler
+) {
+  const response = await fetch(`${backendApiBasePath}${path}`, {
+    ...init,
+    headers: {
+      Accept: "text/event-stream",
+      ...init.headers,
+    },
+  })
+
+  if (!response.ok) {
+    const { detail, bodyText } = await readBackendError(response)
+    throw new BackendApiError(
+      detail || `Backend API stream ${path} failed (${response.status})`,
+      response.status,
+      detail || bodyText
+    )
+  }
+
+  if (!response.body) {
+    throw new BackendApiError("Backend API stream did not return a response body.", 0)
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) {
+      break
+    }
+    buffer += decoder.decode(value, { stream: true })
+    const events = buffer.split("\n\n")
+    buffer = events.pop() ?? ""
+    for (const rawEvent of events) {
+      emitServerSentEvent(rawEvent, onEvent)
+    }
+  }
+
+  buffer += decoder.decode()
+  if (buffer.trim()) {
+    emitServerSentEvent(buffer, onEvent)
+  }
+}
+
+function emitServerSentEvent(rawEvent: string, onEvent: StreamEventHandler) {
+  const lines = rawEvent.split("\n")
+  const eventLine = lines.find((line) => line.startsWith("event:"))
+  const dataLines = lines.filter((line) => line.startsWith("data:"))
+  const event = eventLine?.slice("event:".length).trim() || "message"
+  const dataText = dataLines
+    .map((line) => line.slice("data:".length).trimStart())
+    .join("\n")
+  if (!dataText) {
+    onEvent(event, {})
+    return
+  }
+
+  try {
+    onEvent(event, JSON.parse(dataText) as Record<string, unknown>)
+  } catch {
+    onEvent(event, { value: dataText })
   }
 }

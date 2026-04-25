@@ -4,6 +4,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 
 from clients import DbApiError
 from schemas import (
@@ -67,6 +68,14 @@ async def refresh_project_documentation(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.post("/projects/{project_id}/documentation:refresh-stream")
+def stream_project_documentation_refresh(project_id: int) -> StreamingResponse:
+    return StreamingResponse(
+        project_documentation_service.stream_project_documentation_generation(project_id),
+        media_type="text/event-stream",
+    )
+
+
 @app.post(
     "/projects/{project_id}/documentation:chat",
     response_model=ProjectDocumentationChatResponse,
@@ -85,6 +94,17 @@ async def chat_with_project_documentation(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/projects/{project_id}/documentation:chat-stream")
+def stream_project_documentation_chat(
+    project_id: int,
+    payload: ProjectDocumentationChatRequest,
+) -> StreamingResponse:
+    return StreamingResponse(
+        project_documentation_service.stream_documentation_chat(project_id, payload),
+        media_type="text/event-stream",
+    )
 
 
 @app.post(
