@@ -1,4 +1,4 @@
-"""Apply backend/db/schema.sql to the configured MySQL database."""
+"""Apply db-rest-api/db/schema.sql to the configured MySQL database."""
 
 from __future__ import annotations
 

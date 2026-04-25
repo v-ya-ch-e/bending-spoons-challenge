@@ -1,4 +1,7 @@
 fastapi
+mysql-connector-python>=9.6.0
+openai>=2.32.0
+pydantic
 PyMySQL
-python-dotenv
+python-dotenv>=1.0.1
 uvicorn[standard]

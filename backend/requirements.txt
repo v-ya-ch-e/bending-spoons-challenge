@@ -1,3 +1,0 @@
-openai>=2.32.0
-mysql-connector-python>=9.6.0
-python-dotenv>=1.0.1

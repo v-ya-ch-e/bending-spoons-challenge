@@ -1,3 +1,4 @@
+
 # Frontend Agent Guidelines
 
 This file defines frontend-specific guidance for AI/code agents working in `frontend/`.
@@ -39,3 +40,4 @@ Before implementation, verify APIs and conventions against local docs in:
 `node_modules/next/dist/docs/`
 
 Follow deprecations and current file/route conventions from those docs.
+
