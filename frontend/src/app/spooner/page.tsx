@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation"
+import { SpoonerPickerScreen } from "@/components/spooner/spooner-picker-screen"
 
-export default function SpoonerHome() {
-  redirect("/spooner/my-project")
+export default function SpoonerPickerPage() {
+  return <SpoonerPickerScreen />
 }

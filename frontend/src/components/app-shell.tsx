@@ -19,10 +19,12 @@ import {
   listEmployees,
   listMatchingRuns,
   listProjects,
+  type Employee,
 } from "@/lib/db-api"
 import {
   preferenceCookieMaxAge,
   sidebarCollapsedCookieName,
+  spoonerIdCookieName,
   themeModeCookieName,
   type ThemeMode,
 } from "@/lib/ui-preferences"
@@ -31,23 +33,59 @@ type AppShellProps = {
   initialSidebarCollapsed: boolean
   initialThemeMode: ThemeMode
   initialRole?: AppRole
+  initialSpoonerId?: number | null
   children: ReactNode
 }
 
+const spoonerPathRegex = /^\/spooner\/(\d+)(?:\/|$)/
+const defaultSpoonerSection = "my-project"
+
 function writePreferenceCookie(name: string, value: string) {
   document.cookie = `${name}=${value}; path=/; max-age=${preferenceCookieMaxAge}; samesite=lax`
+}
+
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).slice(0, 2)
+  return parts.map((part) => part.charAt(0).toUpperCase()).join("") || "?"
+}
+
+function slugify(name: string) {
+  return (
+    name
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, ".")
+      .replace(/^\.+|\.+$/g, "") || "spooner"
+  )
+}
+
+function buildSpoonerUser(employee: Employee) {
+  return {
+    name: employee.name,
+    email: `${slugify(employee.name)}@bendingspoons.com`,
+    initials: getInitials(employee.name),
+    team: employee.role,
+  }
 }
 
 export function AppShell({
   initialSidebarCollapsed,
   initialThemeMode,
   initialRole = "cto",
+  initialSpoonerId = null,
   children,
 }: AppShellProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed)
   const [themeMode, setThemeMode] = useState<ThemeMode>(initialThemeMode)
+  const [savedSpoonerId, setSavedSpoonerId] = useState<number | null>(
+    initialSpoonerId
+  )
+  const [employees, setEmployees] = useState<Employee[]>(
+    () => getCachedEmployees() ?? []
+  )
   const [projectCount, setProjectCount] = useState<number | undefined>(
     () => getCachedProjects()?.length
   )
@@ -63,23 +101,56 @@ export function AppShell({
     : pathname.startsWith("/cto")
       ? "cto"
       : initialRole
+
+  const urlSpoonerId = useMemo(() => {
+    const match = pathname.match(spoonerPathRegex)
+    if (!match) return null
+    const parsed = Number.parseInt(match[1], 10)
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+  }, [pathname])
+
+  const activeSpoonerId = urlSpoonerId ?? savedSpoonerId
+  const selectedSpooner = useMemo(
+    () => employees.find((employee) => employee.id === activeSpoonerId) ?? null,
+    [employees, activeSpoonerId]
+  )
+
+  const displayedUser = useMemo(() => {
+    if (role === "spooner" && selectedSpooner) {
+      return buildSpoonerUser(selectedSpooner)
+    }
+    return currentUser
+  }, [role, selectedSpooner])
+
   const baseWorkspace = roleWorkspaces[role]
 
   const workspace = useMemo(() => {
     const navItems: NavItem[] = baseWorkspace.navItems.map((item) => {
-      if (item.value === "projects" && projectCount !== undefined) {
-        return { ...item, count: String(projectCount) }
+      const nextItem: NavItem =
+        role === "spooner" && urlSpoonerId !== null
+          ? { ...item, href: `/spooner/${urlSpoonerId}/${item.value}` }
+          : item
+
+      if (nextItem.value === "projects" && projectCount !== undefined) {
+        return { ...nextItem, count: String(projectCount) }
       }
-      if (item.value === "employees" && employeeCount !== undefined) {
-        return { ...item, count: String(employeeCount) }
+      if (nextItem.value === "employees" && employeeCount !== undefined) {
+        return { ...nextItem, count: String(employeeCount) }
       }
-      if (item.value === "matching" && matchingRunCount !== undefined) {
-        return { ...item, count: String(matchingRunCount) }
+      if (nextItem.value === "matching" && matchingRunCount !== undefined) {
+        return { ...nextItem, count: String(matchingRunCount) }
       }
-      return item
+      return nextItem
     })
     return { ...baseWorkspace, navItems }
-  }, [baseWorkspace, projectCount, employeeCount, matchingRunCount])
+  }, [
+    baseWorkspace,
+    role,
+    urlSpoonerId,
+    projectCount,
+    employeeCount,
+    matchingRunCount,
+  ])
 
   const activeNavItem = useMemo(() => {
     return (
@@ -98,8 +169,10 @@ export function AppShell({
       .catch(() => {})
 
     listEmployees()
-      .then((employees) => {
-        if (isMounted) setEmployeeCount(employees.length)
+      .then((nextEmployees) => {
+        if (!isMounted) return
+        setEmployees(nextEmployees)
+        setEmployeeCount(nextEmployees.length)
       })
       .catch(() => {})
 
@@ -113,6 +186,14 @@ export function AppShell({
       isMounted = false
     }
   }, [pathname])
+
+  useEffect(() => {
+    if (urlSpoonerId !== null && urlSpoonerId !== savedSpoonerId) {
+      setSavedSpoonerId(urlSpoonerId)
+      window.localStorage.setItem(spoonerIdCookieName, String(urlSpoonerId))
+      writePreferenceCookie(spoonerIdCookieName, String(urlSpoonerId))
+    }
+  }, [urlSpoonerId, savedSpoonerId])
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
@@ -132,7 +213,24 @@ export function AppShell({
   }, [themeMode])
 
   function handleRoleChange(nextRole: AppRole) {
+    if (nextRole === "spooner") {
+      const targetId = urlSpoonerId ?? savedSpoonerId
+      if (targetId !== null) {
+        router.push(`/spooner/${targetId}/${defaultSpoonerSection}`)
+      } else {
+        router.push("/spooner")
+      }
+      return
+    }
     router.push(roleWorkspaces[nextRole].navItems[0].href)
+  }
+
+  function handleSpoonerChange(nextId: number) {
+    setSavedSpoonerId(nextId)
+    window.localStorage.setItem(spoonerIdCookieName, String(nextId))
+    writePreferenceCookie(spoonerIdCookieName, String(nextId))
+    const nextSection = activeNavItem?.value ?? defaultSpoonerSection
+    router.push(`/spooner/${nextId}/${nextSection}`)
   }
 
   function handleSidebarCollapsedChange(collapsed: boolean) {
@@ -156,10 +254,13 @@ export function AppShell({
             activeItem={activeNavItem.value}
             role={role}
             onRoleChange={handleRoleChange}
-            user={currentUser}
+            user={displayedUser}
             collapsed={sidebarCollapsed}
             themeMode={themeMode}
             onThemeModeChange={handleThemeModeChange}
+            spoonerId={activeSpoonerId}
+            spoonerOptions={employees}
+            onSpoonerChange={handleSpoonerChange}
           />
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
