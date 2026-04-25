@@ -78,7 +78,7 @@ This should not be a static “skills matrix.” At Bending Spoons, engineers ar
 
 Employee profile data:
 
-- Name. 
+- Name.
 - Role.
 - Current project.
 - Skills and capabilities, using the core skill categories and level scale below.
@@ -123,22 +123,11 @@ A central overview of all active projects, products, acquired companies, and int
 Project data:
 
 - Project name.
-- Product/company.
-- Project phase: new acquisition, integration, growth, maintenance, incident, internal tooling.
+- Project description.
+- Project phase: new acquisition, growth, maintenance.
 - Current team members.
-- Required capabilities, using the core skill categories: Android, iOS, Web, Backend, Infrastructure, and AI.
-- Required skill levels from 0–3 per category.
-- AI-inferred required capabilities based on connected GitHub repositories, Notion docs, and Slack/project context.
-- CTO-adjusted required capabilities after review.
-- Urgency.
-- Expected duration.
-- Project goals.
+- Required people amount + skill levels per core skill category (Android, iOS, Web, Backend, Infrastructure, and AI/ML).
 - GitHub repositories.
-- Notion pages.
-- Slack channels.
-- Documentation health.
-- Staffing health.
-- Open risks and known blockers.
 
 The project registry becomes the single source of truth for what exists, who works where, what needs help, and what knowledge is available.
 
