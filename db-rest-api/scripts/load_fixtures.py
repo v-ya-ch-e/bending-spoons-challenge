@@ -13,6 +13,7 @@ import mysql.connector
 from dotenv import load_dotenv
 
 DEFAULT_FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "seed_data.json"
+SKILL_KEYS = ("android", "ios", "web", "backend", "infrastructure", "ai")
 
 
 def get_connection():
@@ -37,7 +38,31 @@ def load_fixture(path: Path) -> dict[str, list[dict[str, Any]]]:
     for key in ("employees", "projects", "move_requests"):
         if key not in data or not isinstance(data[key], list):
             sys.exit(f"Fixture missing required list field: {key}")
+    validate_fixture_contract(data)
     return data
+
+
+def validate_fixture_contract(data: dict[str, list[dict[str, Any]]]) -> None:
+    for project in data["projects"]:
+        validate_skill_map(project.get("required_skills"), f"project {project.get('project_name')!r}")
+    for employee in data["employees"]:
+        validate_skill_map(employee.get("skills"), f"employee {employee.get('name')!r}")
+
+
+def validate_skill_map(value: Any, label: str) -> None:
+    if not isinstance(value, dict):
+        sys.exit(f"{label} skills must be an object with canonical skill keys")
+    if set(value) != set(SKILL_KEYS):
+        sys.exit(f"{label} skills must use exactly these keys: {', '.join(SKILL_KEYS)}")
+    invalid = [
+        skill
+        for skill in SKILL_KEYS
+        if not isinstance(value[skill], int) or value[skill] < 0 or value[skill] > 3
+    ]
+    if invalid:
+        sys.exit(
+            f"{label} skill levels must be integers from 0 to 3: {', '.join(invalid)}"
+        )
 
 
 def insert_projects(cursor, projects: list[dict[str, Any]]) -> dict[str, int]:

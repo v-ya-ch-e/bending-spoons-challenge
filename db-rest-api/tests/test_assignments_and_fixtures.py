@@ -131,3 +131,43 @@ def test_checked_in_seed_data_matches_fixture_contract() -> None:
         expected_move_request_count=12,
     )
     assert errors == []
+
+
+def test_fixture_loader_rejects_noncanonical_skill_maps() -> None:
+    loader = load_module(
+        "load_fixtures_for_validation",
+        DB_API_DIR / "scripts" / "load_fixtures.py",
+    )
+
+    data = {
+        "projects": [
+            {
+                "project_name": "Broken",
+                "required_skills": {
+                    "android": {"level_1": 1},
+                    "ios": 0,
+                    "web": 0,
+                    "backend": 0,
+                    "infrastructure": 0,
+                    "ai": 0,
+                },
+            }
+        ],
+        "employees": [
+            {
+                "name": "Valid Employee",
+                "skills": {
+                    "android": 0,
+                    "ios": 0,
+                    "web": 0,
+                    "backend": 1,
+                    "infrastructure": 0,
+                    "ai": 0,
+                },
+            }
+        ],
+        "move_requests": [],
+    }
+
+    with pytest.raises(SystemExit):
+        loader.validate_fixture_contract(data)
