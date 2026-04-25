@@ -8,6 +8,7 @@ os.environ.setdefault("BACKEND_ROOT_PATH", "")
 
 from main import app
 from schemas import MatchingRunRequest, MatchingRunResponse
+from schemas.matching import BestPlan, MatchingLlmResponse, RecommendedMove
 from services.matching.pipeline import run_matching_pipeline
 
 
@@ -63,6 +64,7 @@ class FakeDbApiClient:
         self.move_requests = []
         self.runs = []
         self.candidates = []
+        self.recommendations = []
         self.hiring_recommendations = []
         self.events = []
         self.updated_runs = []
@@ -102,6 +104,15 @@ class FakeDbApiClient:
         self.candidates.append(candidate)
         return candidate
 
+    def create_matching_recommendation(self, run_id, payload):
+        recommendation = {
+            "id": len(self.recommendations) + 1,
+            "run_id": run_id,
+            **payload,
+        }
+        self.recommendations.append(recommendation)
+        return recommendation
+
     def create_matching_hiring_recommendation(self, run_id, payload):
         recommendation = {
             "id": len(self.hiring_recommendations) + 1,
@@ -117,6 +128,32 @@ class FakeDbApiClient:
         return event
 
 
+def fake_llm_evaluator(payload):
+    plan = payload.candidate_plans[0]
+    move = plan.gap_closing_moves[0]
+    return MatchingLlmResponse(
+        best=BestPlan(
+            candidate_plan_id=plan.candidate_plan_id,
+            fit_score=0.92,
+            reason="Best fit with low disruption.",
+            moves=[
+                RecommendedMove(
+                    employee_id=move.employee_id,
+                    from_project_id=move.from_project_id,
+                    to_project_id=move.to_project_id,
+                    action=move.action,
+                    suggested_role="Senior backend engineer",
+                    current_project_impact="low",
+                )
+            ],
+            bench_moves=[],
+            risks=[],
+        ),
+        alternatives=[],
+        hiring_recommendations=[],
+    )
+
+
 class TestMatchingPipeline(unittest.TestCase):
     def test_pipeline_persists_run_candidates_events_and_counts(self):
         db_client = FakeDbApiClient()
@@ -128,13 +165,18 @@ class TestMatchingPipeline(unittest.TestCase):
                 requested_by="test-suite",
             ),
             db_client=db_client,
+            llm_evaluator=fake_llm_evaluator,
         )
 
         self.assertEqual(response.run_id, 42)
         self.assertEqual(response.candidate_count, 1)
-        self.assertEqual(response.recommendation_count, 0)
+        self.assertEqual(response.recommendation_count, 1)
+        self.assertEqual(response.selected_candidate_plan_id, "plan_01")
         self.assertEqual(len(db_client.candidates), 1)
+        self.assertEqual(len(db_client.recommendations), 1)
         self.assertEqual(db_client.candidates[0]["candidate_plan_id"], "plan_01")
+        self.assertEqual(db_client.recommendations[0]["candidate_plan_id"], "plan_01")
+        self.assertEqual(db_client.recommendations[0]["suggested_moves"][0]["employee_id"], 10)
         self.assertEqual(db_client.candidates[0]["plan_payload"]["moves"][0]["employee_id"], 10)
         self.assertEqual(db_client.runs[0]["rule_config"]["policy_id"], 7)
         self.assertEqual(db_client.runs[0]["rule_config"]["policy_name"], "Default strict matching")
@@ -147,6 +189,10 @@ class TestMatchingPipeline(unittest.TestCase):
             "strict_rules.completed",
             [event["event_type"] for event in db_client.events],
         )
+        self.assertIn(
+            "llm_evaluation.completed",
+            [event["event_type"] for event in db_client.events],
+        )
 
     def test_active_policy_is_the_only_rule_configuration_source(self):
         db_client = FakeDbApiClient()
@@ -156,6 +202,7 @@ class TestMatchingPipeline(unittest.TestCase):
             target_project_id=1,
             request=MatchingRunRequest(),
             db_client=db_client,
+            llm_evaluator=fake_llm_evaluator,
         )
 
         rule_config = db_client.runs[0]["rule_config"]
@@ -173,8 +220,10 @@ class TestMatchingPipeline(unittest.TestCase):
             candidate_count=0,
             recommendation_count=0,
             hiring_recommendation_count=0,
+            selected_candidate_plan_id=None,
             summary="No candidates.",
             candidates=[],
+            recommendations=[],
             hiring_recommendations=[],
             logs=[],
         )

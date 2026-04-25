@@ -57,6 +57,18 @@ class MatchingHiringRecommendationResponse(BaseModel):
     suggested_assignment: str | None = None
 
 
+class MatchingRecommendationResponse(BaseModel):
+    candidate_plan_id: str
+    rank: int = Field(gt=0)
+    fit_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    summary: str
+    explanation: str | None = None
+    risks: list[str]
+    ramp_up_estimate: str | None = None
+    suggested_moves: list[dict[str, Any]]
+    model_metadata: dict[str, Any] | None = None
+
+
 class MatchingRunEventResponse(BaseModel):
     level: Literal["info", "warning", "error"]
     stage: str
@@ -73,8 +85,10 @@ class MatchingRunResponse(BaseModel):
     candidate_count: int
     recommendation_count: int
     hiring_recommendation_count: int
+    selected_candidate_plan_id: str | None = None
     summary: str
     candidates: list[MatchingCandidateResponse]
+    recommendations: list[MatchingRecommendationResponse]
     hiring_recommendations: list[MatchingHiringRecommendationResponse]
     logs: list[MatchingRunEventResponse]
 
@@ -94,10 +108,11 @@ class GapClosingMove(BaseModel):
     employee_id: int = Field(gt=0)
     name: str
     role: str
-    from_project_id: int = Field(gt=0)
-    from_project_name: str
+    from_project_id: int | None = None
+    from_project_name: str | None = None
     to_project_id: int = Field(gt=0)
     to_project_name: str
+    action: Literal["assign", "move", "add_assignment"] = "move"
     skills: Skills
     preferences: list[str]
     interests: list[str]
@@ -151,8 +166,9 @@ class MatchingLlmRequest(BaseModel):
 
 class RecommendedMove(BaseModel):
     employee_id: int = Field(gt=0)
-    from_project_id: int = Field(gt=0)
+    from_project_id: int | None = None
     to_project_id: int = Field(gt=0)
+    action: Literal["assign", "move", "add_assignment"]
     suggested_role: str
     current_project_impact: Impact
 

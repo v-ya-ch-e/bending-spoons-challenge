@@ -28,9 +28,11 @@ The LLM must not:
 
 ## Always-On Two-Step
 
-Step 2 is not optional and there is no deterministic fallback path. If the
-OpenAI call fails or returns invalid JSON, the matching run fails and the API
-returns an error. Keeping a single code path avoids duplicating ranking logic.
+Step 2 runs whenever step 1 produces at least one candidate plan. There is no
+deterministic fallback path for ranked recommendations: if the OpenAI call fails
+or returns invalid JSON, the matching run fails and the API returns an error.
+If step 1 produces no candidates, there is no plan for the LLM to rank; the run
+completes with hiring recommendations when strict rules detected gaps.
 
 ## Inputs From Step 1
 
@@ -62,6 +64,7 @@ section describes only what gets forwarded to the LLM.
           "from_project_name": "WeTransfer",
           "to_project_id": 7,
           "to_project_name": "Eventbrite",
+          "action": "move",
           "skills": { "backend": 3, "infrastructure": 2, "web": 1 },
           "preferences": ["Eventbrite"],
           "interests": ["platform"]
@@ -104,6 +107,10 @@ section describes only what gets forwarded to the LLM.
 Notes on input shape:
 
 - `gap_closing_moves` are step 1's required-coverage moves.
+- `from_project_id` and `from_project_name` are `null` for `assign` and
+  `add_assignment` moves that do not remove the employee from a source project.
+- `action` is copied from the strict-rule candidate and must be preserved in the
+  model output.
 - `bench_moves` are deterministic placements for otherwise-unassigned employees,
   picked by step 1 for support/learning. The LLM does not relocate them; it
   only writes reasons.
@@ -158,6 +165,7 @@ User message: the JSON payload above.
         "employee_id": 3,
         "from_project_id": 2,
         "to_project_id": 7,
+        "action": "move",
         "suggested_role": "Backend/platform engineer",
         "current_project_impact": "low"
       }
@@ -219,7 +227,8 @@ Validation is structural and ID-based only.
 - `best.candidate_plan_id` and every `alternatives[].candidate_plan_id` must
   exist in step 1 output.
 - Every move under `best` and `alternatives` must already be present in that
-  candidate plan (employee_id, from_project_id, to_project_id all match).
+  candidate plan (`employee_id`, `from_project_id`, `to_project_id`, and
+  `action` all match).
 - Every `bench_moves` entry must already be present in that candidate plan.
 - `fit_score` must be in `[0.0, 1.0]`.
 - `current_project_impact` must be `low`, `medium`, or `high`.
@@ -240,31 +249,36 @@ GET  /projects/{project_id}/matching/latest
 ```
 
 `POST` runs the full pipeline (step 1 + step 2) and returns the validated
-result. `GET` returns the most recent stored run for the project. There are no
-per-recommendation action routes; move requests are created through the
-existing DB API `POST /move-requests` endpoint when the user accepts a plan.
+result. Persisted reads and the recommendation-to-move-request action live in
+the DB API:
+
+```http
+GET  /db-api/matching-runs/{run_id}/recommendations
+POST /db-api/matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests
+```
 
 ## Persistence
 
-Persist the validated result via the DB API. For v1, store:
+Persist the validated result via the DB API. Store:
 
-- The matching run (target project, status, created_at).
-- The final response JSON (`best`, `alternatives`, `hiring_recommendations`).
+- The matching run with counts, selected candidate plan, summary, and timestamps.
+- Strict-rule candidate plans in `matching_candidates`.
+- Ranked LLM output in `matching_recommendations`.
+- Hiring recommendations in `matching_hiring_recommendations`.
+- Frontend-visible events in `matching_run_events`.
 
-No per-candidate table, no event timeline, no model metadata, no prompt
-storage.
+Do not store raw prompt text or secrets. Store model name and prompt version in
+`matching_recommendations.model_metadata`.
 
 ## Module Responsibilities
 
-`backend/services/matching_service.py`:
+`backend/services/matching_service.py` and `backend/services/matching/pipeline.py`:
 
-- Orchestrates step 1 (algorithm) and step 2 (LLM).
+- Orchestrate step 1 (algorithm) and step 2 (LLM).
 - Calls `clients/llm_client.py` for the OpenAI call.
 - Validates the response and persists the run via `clients/db_client.py`.
-- Mirrors the structure of `services/skill_profile_service.py`.
-
-If the file grows large enough to hurt readability, split step 1 and step 2
-into a `services/matching/` package later. Do not pre-split.
+- Keep route handlers thin; shared matching behavior belongs in
+  `services/matching/`.
 
 ## Tone
 

@@ -7,21 +7,24 @@ agent workflows. It summarizes the current backend behavior from
 
 ## Current Product Contract
 
-Matching is currently wired as deterministic Step 1:
+Matching runs as a synchronous two-step pipeline:
 
 1. The frontend triggers a matching run through the backend API.
 2. The backend loads projects, employees, move requests, and the active policy
    from the DB API.
 3. The backend generates deterministic candidate plans, hiring gaps, and
    frontend-visible run events.
-4. The backend persists the run, candidates, hiring recommendations, and events
-   through the DB API.
-5. The response returns the same run result synchronously.
+4. When at least one strict-rule candidate exists, OpenAI evaluates only those
+   candidates, picks the best plan, and optionally returns up to two alternatives.
+5. The backend persists the run, candidates, LLM-ranked recommendations, hiring
+   recommendations, and events through the DB API.
+6. The response returns the same run result synchronously.
 
-The OpenAI ranking step is not part of the current wired matching response.
-`recommendation_count` is expected to be `0` for strict-rule runs, and final
-LLM-ranked rows in `matching_recommendations` are reserved for a later step.
-For the current frontend, render `candidates` as the selectable staffing plans.
+For normal runs with candidates, render `recommendations` as the selectable
+staffing plans and use `selected_candidate_plan_id` for the LLM-selected best
+plan. Keep `candidates` available as the strict-rule audit trail. If strict
+rules produce no candidates, `recommendation_count` is `0` and the main outcome
+may be hiring recommendations.
 
 Matching never mutates `project_assignments` by itself. A candidate plan is a
 recommendation only.
@@ -101,8 +104,10 @@ type MatchingRunResponse = {
   candidate_count: number
   recommendation_count: number
   hiring_recommendation_count: number
+  selected_candidate_plan_id: string | null
   summary: string
   candidates: MatchingCandidate[]
+  recommendations: MatchingRecommendation[]
   hiring_recommendations: MatchingHiringRecommendation[]
   logs: MatchingRunEvent[]
 }
@@ -110,6 +115,29 @@ type MatchingRunResponse = {
 
 Render `summary` near the top of the result. Use the counts to drive badges and
 empty states.
+
+### Recommendations
+
+```ts
+type MatchingRecommendation = {
+  candidate_plan_id: string
+  rank: number
+  fit_score: number | null
+  summary: string
+  explanation: string | null
+  risks: string[]
+  ramp_up_estimate: string | null
+  suggested_moves: MatchingMove[]
+  model_metadata: {
+    model?: string
+    prompt_version?: string
+  } | null
+}
+```
+
+Display recommendations ordered by `rank`. The first item is the LLM-picked best
+plan. Use `summary`, `explanation`, `fit_score`, `risks`, and
+`suggested_moves` for the primary decision UI.
 
 ### Candidates
 
@@ -138,6 +166,7 @@ type MatchingMove = {
   current_project_impact: "low" | "medium" | "high"
   hard_rule_reasons: string[]
   reason: string
+  move_request_reason?: string
 }
 
 type ProjectCoverageAfter = {
@@ -148,7 +177,8 @@ type ProjectCoverageAfter = {
 }
 ```
 
-Display candidates ordered as returned. A useful card layout:
+Display candidates ordered as returned when showing the strict-rule audit trail
+or debugging why a plan was allowed. A useful card layout:
 
 - Candidate title: `candidate_plan_id` plus `strict_score`.
 - Summary: `summary`.
@@ -217,6 +247,9 @@ Common current event types:
 - `strict_rules.completed`
 - `strict_rules.no_candidates`
 - `strict_rules.failed`
+- `llm_evaluation.started`
+- `llm_evaluation.completed`
+- `llm_evaluation.failed`
 
 ## Read Persisted Results
 
@@ -227,6 +260,7 @@ GET /db-api/projects/{project_id}/matching/latest
 GET /db-api/matching-runs/latest?use_case=project_rebalance&target_project_id=7
 GET /db-api/matching-runs/{run_id}
 GET /db-api/matching-runs/{run_id}/candidates
+GET /db-api/matching-runs/{run_id}/recommendations
 GET /db-api/matching-runs/{run_id}/hiring-recommendations
 GET /db-api/matching-runs/{run_id}/events
 ```
@@ -234,31 +268,26 @@ GET /db-api/matching-runs/{run_id}/events
 `GET /db-api/projects/{project_id}/matching/latest` returns only the run record,
 not child candidates/events. Fetch children with the run ID.
 
-The DB API also exposes:
+The DB API also exposes `POST
+/db-api/matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests`
+to create move requests from the selected LLM recommendation.
 
-```http
-GET /db-api/matching-runs/{run_id}/recommendations
-POST /db-api/matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests
-```
-
-Those are for LLM-ranked `matching_recommendations`. They will usually be empty
-for current strict-rule-only runs, so do not depend on them for rendering
-candidate plans.
-
-## Accepting A Candidate
+## Accepting A Recommendation
 
 Current matching runs are advisory. Do not update project assignments directly
 from the matching response.
 
 Recommended current UI behavior:
 
-1. Let the CTO review a candidate plan.
-2. If the product flow supports acceptance, create one move request per selected
-   move with `POST /db-api/move-requests`.
+1. Let the CTO review an LLM-ranked recommendation.
+2. If the product flow supports acceptance, call `POST
+   /db-api/matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests`
+   to create one move request per suggested move.
 3. Keep assignment changes separate from move-request creation. Updating a move
    request to `accepted` does not automatically update `project_assignments`.
 
-Move request payload from a candidate move:
+The action endpoint builds move requests from `recommendation.suggested_moves`.
+For reference, each created move request has this shape:
 
 ```json
 {
@@ -279,6 +308,8 @@ For `assign` and `add_assignment`, send `"from_project_id": null`.
 - `status: "failed"`: show the run `summary` or error state and offer retry.
 - `candidate_count: 0` with hiring recommendations: show hiring gap cards as the
   main result.
+- `candidate_count > 0` and `recommendation_count: 0`: treat the run as failed
+  or incomplete unless the status is still `running`.
 - `candidate_count: 0` and no hiring recommendations: show "No matching action
   found for the current snapshot."
 - HTTP `400`: request/config problem or unknown target project.
@@ -294,7 +325,7 @@ For `assign` and `add_assignment`, send `"from_project_id": null`.
 - Trigger project matching from project detail/create/update flows.
 - Trigger portfolio matching from a CTO staffing dashboard.
 - Resolve employee/project names client-side from canonical IDs.
-- Render candidates, hiring recommendations, and event timeline separately.
-- Never treat `recommendation_count: 0` as failure for the current strict-rule
-  implementation.
+- Render recommendations, strict candidates, hiring recommendations, and event
+  timeline separately.
+- Treat `recommendations[0]` as the LLM-picked best plan when present.
 - Never assume accepted move requests automatically mutate assignments.

@@ -31,7 +31,9 @@ Hard rules:
 - Never invent employees, projects, skills, or plan IDs.
 - Every candidate_plan_id you reference must come from the input.
 - Every move (gap-closing or bench) you reference must already be present in
-  that candidate plan.
+  that candidate plan. Preserve its action value exactly (`assign`, `move`, or
+  `add_assignment`) and use null for from_project_id when the input move has no
+  source project.
 - fit_score is a float in [0.0, 1.0].
 
 Tone: explain project tradeoffs, not employee performance. Use language like
@@ -107,11 +109,11 @@ def _is_plan_consistent(
         return False
 
     valid_moves = {
-        (m.employee_id, m.from_project_id, m.to_project_id)
+        (m.employee_id, m.from_project_id, m.to_project_id, m.action)
         for m in source.gap_closing_moves
     }
     for move in plan.moves:
-        key = (move.employee_id, move.from_project_id, move.to_project_id)
+        key = (move.employee_id, move.from_project_id, move.to_project_id, move.action)
         if key not in valid_moves:
             return False
 

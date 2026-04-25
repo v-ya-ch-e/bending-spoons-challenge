@@ -39,7 +39,7 @@ The database now stores projects, employees, assignments, move requests, and
 matching persistence records in `db-rest-api`: runs, strict-rule candidates,
 ranked recommendations, hiring recommendations, and frontend-visible run events.
 
-Implemented Step 1 behavior:
+Implemented two-step behavior:
 
 - Strict rules load projects, employees, and move requests from `DbApiClient`.
 - The effective rule config and input snapshot are saved on `matching_runs`.
@@ -47,8 +47,12 @@ Implemented Step 1 behavior:
   `strict_score`, `hard_rule_summary`, and rich `plan_payload` data.
 - Hiring gaps are saved to `matching_hiring_recommendations`.
 - Frontend-visible strict-rule progress is saved to `matching_run_events`.
-- `matching_recommendations` remains reserved for the later LLM ranking step, so
-  Step 1 runs complete with `recommendation_count = 0`.
+- When strict rules produce at least one candidate, OpenAI evaluates the bounded
+  candidate set, picks the best plan, optionally returns alternatives, and the
+  backend saves those rows to `matching_recommendations`.
+- Runs with candidates complete with `recommendation_count > 0` and
+  `selected_candidate_plan_id` set to the LLM-selected plan. Runs with no strict
+  candidates complete without LLM ranking and return hiring gaps when available.
 
 ## Design Principles
 
@@ -152,9 +156,10 @@ Example response:
   "status": "completed",
   "target_project_id": 7,
   "candidate_count": 1,
-  "recommendation_count": 0,
+  "recommendation_count": 1,
   "hiring_recommendation_count": 1,
-  "summary": "Generated 1 deterministic strict-rule candidate plans and 1 hiring gaps.",
+  "selected_candidate_plan_id": "plan_01",
+  "summary": "Generated 1 strict-rule candidate plans; OpenAI selected plan_01 and returned 1 ranked recommendations with 1 hiring recommendations.",
   "candidates": [
     {
       "candidate_plan_id": "plan_01",
@@ -230,6 +235,40 @@ Example response:
       }
     }
   ],
+  "recommendations": [
+    {
+      "candidate_plan_id": "plan_01",
+      "rank": 1,
+      "fit_score": 0.91,
+      "summary": "Best balance of target coverage and low source disruption.",
+      "explanation": "The suggested move closes the backend and infrastructure gap with low source-project disruption.",
+      "risks": [
+        "Project 2 loses one backend-capable engineer but remains above strict minimums."
+      ],
+      "ramp_up_estimate": null,
+      "suggested_moves": [
+        {
+          "employee_id": 3,
+          "from_project_id": 2,
+          "to_project_id": 7,
+          "action": "move",
+          "suggested_role": "Backend/platform engineer",
+          "current_project_impact": "low",
+          "hard_rule_reasons": [
+            "Employee and target project exist in the DB snapshot.",
+            "Move improves or preserves target coverage.",
+            "Source project remains above strict minimums."
+          ],
+          "reason": "Backend 3 and infrastructure 2 match the target gap.",
+          "move_request_reason": "Best balance of target coverage and low source disruption."
+        }
+      ],
+      "model_metadata": {
+        "model": "gpt-4o",
+        "prompt_version": "matching_llm_evaluator_v1"
+      }
+    }
+  ],
   "hiring_recommendations": [
     {
       "project_id": 7,
@@ -273,11 +312,10 @@ POST /matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests
 ```
 
 The action creates `move_requests` only from persisted
-`matching_recommendations`. Current strict-rule-only runs write
-`matching_candidates`, so direct move-request creation from strict candidates is
-handled by the frontend calling `POST /move-requests` per selected move. Direct
-assignment mutation should be kept admin-only or postponed until the product is
-ready for it.
+`matching_recommendations`. Matching runs with strict candidates now write
+LLM-ranked recommendations, so the action endpoint can create move requests from
+the selected recommendation. Direct assignment mutation should be kept
+admin-only or postponed until the product is ready for it.
 
 ## Shared Pipeline Location
 
@@ -554,13 +592,13 @@ If step 1 produces candidates but all candidates leave unresolved gaps:
 - Return hiring recommendations for the remaining uncovered gaps.
 - Make clear that hiring is required to maintain all projects properly.
 
-For the future OpenAI ranking step, if OpenAI fails:
+If OpenAI fails after strict candidates are generated:
 
 - Save an error event.
-- Mark the run as `failed` unless the product explicitly chooses to support a
-  deterministic fallback mode.
+- Mark the run as `failed`. There is no deterministic fallback for ranked
+  recommendations.
 
-For the future OpenAI ranking step, if model output is invalid:
+If model output is invalid:
 
 - Reject invalid rows.
 - Never use unknown employee or project IDs.
@@ -614,9 +652,10 @@ DB API tests:
    Done: Step 1 writes `matching_candidates`, hiring gaps, run counts, and run
    events. These candidates are the handoff to the LLM step.
 4. Add frontend display for run result and run events.
-5. Add OpenAI ranking behind a feature flag and persist final
-   `matching_recommendations`.
-6. Add move-request creation from selected recommendations.
+5. Add OpenAI ranking and persist final `matching_recommendations`. Done: runs
+   with strict candidates now call the LLM evaluator and save ranked
+   recommendations.
+6. Add move-request creation from selected recommendations. Done in `db-rest-api`.
 7. Add optional direct assignment-application flow later.
 
 ## Open Questions For Implementation

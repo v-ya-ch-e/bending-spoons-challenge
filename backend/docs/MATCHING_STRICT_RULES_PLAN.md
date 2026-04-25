@@ -488,10 +488,11 @@ Operational behavior:
   `matching_recommendations`.
 - `plan_payload` contains the candidate summary, proposed moves, risks, and
   `project_coverage_after`.
-- `hard_rule_summary` contains validation and coverage deltas used by the next
-  LLM ranking step.
-- `recommendation_count` remains `0` until the LLM step creates final ranked
-  recommendations.
+- `hard_rule_summary` contains validation and coverage deltas used by the LLM
+  ranking step.
+- When strict candidates exist, the shared pipeline immediately runs the LLM
+  step, persists final ranked recommendations to `matching_recommendations`, and
+  sets `recommendation_count` from those rows.
 - No `project_assignments` mutation and no move-request creation happens during
   Step 1.
 

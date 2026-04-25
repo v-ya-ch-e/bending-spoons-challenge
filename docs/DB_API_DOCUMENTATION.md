@@ -672,10 +672,12 @@ Create candidate payload:
 }
 ```
 
-The backend strict-rule pipeline stores deterministic Step 1 output in
-`matching_candidates`. The later LLM ranking step reads these rows and creates
-final `matching_recommendations`; until then, strict-rule runs can complete with
-`recommendation_count` set to `0`.
+The backend matching pipeline stores deterministic Step 1 output in
+`matching_candidates`. When candidates exist, the LLM ranking step evaluates
+those rows and creates final `matching_recommendations`; completed runs with
+candidate plans should have `recommendation_count` greater than `0`. Runs with
+no strict-rule candidates can still complete with `recommendation_count` set to
+`0` and hiring recommendations as the main outcome.
 
 Create recommendation payload:
 
@@ -693,6 +695,7 @@ Create recommendation payload:
       "employee_id": 3,
       "from_project_id": 2,
       "to_project_id": 7,
+      "action": "move",
       "suggested_role": "Backend/platform engineer",
       "current_project_impact": "low",
       "move_request_reason": "Backend skills match the target project's needs."
