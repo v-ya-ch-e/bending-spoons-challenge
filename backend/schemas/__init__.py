@@ -1,19 +1,42 @@
-"""Pydantic API request/response schemas, not database table schemas."""
+"""Pydantic API request/response schemas."""
 
-from schemas.common import SkillCategory, SkillLevel
-from schemas.matching import EmployeeRecommendation, MatchingResult, MatchRequest
-from schemas.projects import Project, ProjectCreate, ProjectUpdate
-from schemas.skill_profiles import SkillProfile, SkillProfileSuggestRequest
+from schemas.common import Skills
+from schemas.matching import (
+    MatchingCandidateResponse,
+    MatchingHiringRecommendationResponse,
+    MatchingHiringSuggestionResponse,
+    MatchingLlmRequest,
+    MatchingLlmResponse,
+    MatchingMoveResponse,
+    MatchingRecommendationResponse,
+    MatchingRunEventResponse,
+    MatchingRunDiagnosticsResponse,
+    MatchingRunRequest,
+    MatchingRunResponse,
+    MatchingRunSummaryResponse,
+    MatchingSuggestionImpactResponse,
+    MatchingSuggestionMoveResponse,
+    MatchingSuggestionResponse,
+)
+from schemas.skill_profiles import SkillProfileRequest, SkillProfileResponse
 
 __all__ = [
-    "EmployeeRecommendation",
-    "MatchRequest",
-    "MatchingResult",
-    "Project",
-    "ProjectCreate",
-    "ProjectUpdate",
-    "SkillCategory",
-    "SkillLevel",
-    "SkillProfile",
-    "SkillProfileSuggestRequest",
+    "MatchingCandidateResponse",
+    "MatchingHiringRecommendationResponse",
+    "MatchingHiringSuggestionResponse",
+    "MatchingLlmRequest",
+    "MatchingLlmResponse",
+    "MatchingMoveResponse",
+    "MatchingRecommendationResponse",
+    "MatchingRunEventResponse",
+    "MatchingRunDiagnosticsResponse",
+    "MatchingRunRequest",
+    "MatchingRunResponse",
+    "MatchingRunSummaryResponse",
+    "MatchingSuggestionImpactResponse",
+    "MatchingSuggestionMoveResponse",
+    "MatchingSuggestionResponse",
+    "SkillProfileRequest",
+    "SkillProfileResponse",
+    "Skills",
 ]

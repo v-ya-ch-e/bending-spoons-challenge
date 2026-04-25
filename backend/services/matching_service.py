@@ -1,9 +1,18 @@
-from schemas import MatchingResult, MatchRequest
+from __future__ import annotations
+
+from schemas import MatchingRunRequest, MatchingRunResponse
+from services.matching import run_matching_pipeline
+from services.matching.models import MatchingUseCase
 
 
-def run_matching(project_id: int, payload: MatchRequest) -> MatchingResult:
-    raise NotImplementedError("Matching is not implemented yet")
-
-
-def get_latest_matching_result(project_id: int) -> MatchingResult:
-    raise NotImplementedError("Matching result lookup is not implemented yet")
+def run_matching(
+    *,
+    use_case: MatchingUseCase,
+    target_project_id: int | None,
+    request: MatchingRunRequest,
+) -> MatchingRunResponse:
+    return run_matching_pipeline(
+        use_case=use_case,
+        target_project_id=target_project_id,
+        request=request,
+    )

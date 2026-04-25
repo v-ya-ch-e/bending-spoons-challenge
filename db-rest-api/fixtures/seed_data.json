@@ -1,0 +1,356 @@
+{
+  "employees": [
+    {
+      "name": "Luca Fontana",
+      "role": "Senior iOS Engineer",
+      "current_projects": ["Evernote", "StreamYard"],
+      "skills": {"android": 1, "ios": 3, "web": 1, "backend": 1, "infrastructure": 1, "ai": 1},
+      "preferences": ["Komoot", "Remini"],
+      "interests": ["mobile performance", "editor UX", "offline sync"]
+    },
+    {
+      "name": "Giulia Rossi",
+      "role": "Backend Engineer",
+      "current_projects": ["WeTransfer"],
+      "skills": {"android": 0, "ios": 0, "web": 2, "backend": 3, "infrastructure": 3, "ai": 1},
+      "preferences": ["Evernote", "Eventbrite"],
+      "interests": ["storage systems", "API design", "reliability"]
+    },
+    {
+      "name": "Marco Bianchi",
+      "role": "AI/ML Engineer",
+      "current_projects": ["Remini", "Evernote"],
+      "skills": {"android": 0, "ios": 0, "web": 1, "backend": 2, "infrastructure": 2, "ai": 3},
+      "preferences": ["StreamYard", "Brightcove"],
+      "interests": ["generative models", "search ranking", "model serving"]
+    },
+    {
+      "name": "Alessia Conti",
+      "role": "Android Engineer",
+      "current_projects": ["Komoot"],
+      "skills": {"android": 3, "ios": 1, "web": 1, "backend": 1, "infrastructure": 1, "ai": 0},
+      "preferences": ["Meetup", "Eventbrite"],
+      "interests": ["offline maps", "wearables", "navigation"]
+    },
+    {
+      "name": "Francesco Romano",
+      "role": "Web Engineer",
+      "current_projects": ["Eventbrite", "Meetup"],
+      "skills": {"android": 0, "ios": 0, "web": 3, "backend": 2, "infrastructure": 1, "ai": 1},
+      "preferences": ["WeTransfer", "Brightcove"],
+      "interests": ["marketplaces", "frontend architecture", "checkout flows"]
+    },
+    {
+      "name": "Elena Greco",
+      "role": "Product Engineer",
+      "current_projects": ["Meetup"],
+      "skills": {"android": 1, "ios": 2, "web": 2, "backend": 1, "infrastructure": 1, "ai": 1},
+      "preferences": ["Evernote", "Komoot"],
+      "interests": ["community growth", "activation", "mobile UX"]
+    },
+    {
+      "name": "Matteo Gallo",
+      "role": "Engineering Manager",
+      "current_projects": ["Evernote", "WeTransfer"],
+      "skills": {"android": 1, "ios": 1, "web": 2, "backend": 2, "infrastructure": 2, "ai": 1},
+      "preferences": ["Eventbrite", "Brightcove"],
+      "interests": ["team design", "delivery planning", "operating metrics"]
+    },
+    {
+      "name": "Sofia Ferrari",
+      "role": "Infrastructure Engineer",
+      "current_projects": ["Brightcove", "StreamYard"],
+      "skills": {"android": 0, "ios": 0, "web": 1, "backend": 2, "infrastructure": 3, "ai": 1},
+      "preferences": ["WeTransfer", "Remini"],
+      "interests": ["video pipelines", "cloud cost", "observability"]
+    },
+    {
+      "name": "Riccardo Mariani",
+      "role": "iOS Engineer",
+      "current_projects": ["Remini"],
+      "skills": {"android": 1, "ios": 3, "web": 1, "backend": 1, "infrastructure": 0, "ai": 2},
+      "preferences": ["StreamYard", "Evernote"],
+      "interests": ["camera workflows", "AI UX", "subscription funnels"]
+    },
+    {
+      "name": "Giovanni Riva",
+      "role": "Backend Platform Engineer",
+      "current_projects": ["Eventbrite"],
+      "skills": {"android": 0, "ios": 0, "web": 2, "backend": 3, "infrastructure": 2, "ai": 0},
+      "preferences": ["Meetup", "WeTransfer"],
+      "interests": ["payments", "event search", "data consistency"]
+    },
+    {
+      "name": "Beatrice Verdi",
+      "role": "Full-stack Engineer",
+      "current_projects": ["Meetup", "Eventbrite"],
+      "skills": {"android": 1, "ios": 1, "web": 3, "backend": 2, "infrastructure": 1, "ai": 1},
+      "preferences": ["Evernote", "StreamYard"],
+      "interests": ["organizer tooling", "design systems", "growth tests"]
+    },
+    {
+      "name": "Dario Marchetti",
+      "role": "Machine Learning Platform Engineer",
+      "current_projects": ["Remini"],
+      "skills": {"android": 0, "ios": 0, "web": 1, "backend": 2, "infrastructure": 3, "ai": 3},
+      "preferences": ["Evernote", "Brightcove"],
+      "interests": ["GPU inference", "feature stores", "model evaluation"]
+    },
+    {
+      "name": "Francesca Gallo",
+      "role": "QA Automation Engineer",
+      "current_projects": ["StreamYard", "Komoot"],
+      "skills": {"android": 2, "ios": 2, "web": 2, "backend": 1, "infrastructure": 1, "ai": 0},
+      "preferences": ["Meetup", "Remini"],
+      "interests": ["test automation", "release quality", "device labs"]
+    },
+    {
+      "name": "Emanuele Riva",
+      "role": "Video Platform Engineer",
+      "current_projects": ["Brightcove"],
+      "skills": {"android": 0, "ios": 1, "web": 2, "backend": 3, "infrastructure": 3, "ai": 1},
+      "preferences": ["StreamYard", "WeTransfer"],
+      "interests": ["transcoding", "DRM", "live video"]
+    },
+    {
+      "name": "Lorenzo Bianchi",
+      "role": "Web Platform Engineer",
+      "current_projects": ["StreamYard"],
+      "skills": {"android": 0, "ios": 0, "web": 3, "backend": 2, "infrastructure": 2, "ai": 2},
+      "preferences": ["Brightcove", "Eventbrite"],
+      "interests": ["browser media APIs", "real-time UX", "AI editing"]
+    },
+    {
+      "name": "Nicola Fontana",
+      "role": "Android Engineer",
+      "current_projects": ["Meetup"],
+      "skills": {"android": 3, "ios": 1, "web": 1, "backend": 1, "infrastructure": 1, "ai": 0},
+      "preferences": ["Komoot", "Eventbrite"],
+      "interests": ["event discovery", "location UX", "notifications"]
+    },
+    {
+      "name": "Giovanni Ferraro",
+      "role": "Data Engineer",
+      "current_projects": ["WeTransfer", "Brightcove"],
+      "skills": {"android": 0, "ios": 0, "web": 1, "backend": 3, "infrastructure": 3, "ai": 2},
+      "preferences": ["Remini", "Evernote"],
+      "interests": ["data pipelines", "analytics quality", "experimentation"]
+    },
+    {
+      "name": "Laura Esposito",
+      "role": "Product Analyst",
+      "current_projects": [],
+      "skills": {"android": 0, "ios": 0, "web": 2, "backend": 1, "infrastructure": 1, "ai": 2},
+      "preferences": ["Evernote", "Meetup", "Eventbrite"],
+      "interests": ["cohort analysis", "pricing", "retention"]
+    },
+    {
+      "name": "Marta Leone",
+      "role": "Security Engineer",
+      "current_projects": ["WeTransfer"],
+      "skills": {"android": 1, "ios": 1, "web": 2, "backend": 2, "infrastructure": 3, "ai": 0},
+      "preferences": ["Eventbrite", "Brightcove"],
+      "interests": ["access control", "abuse prevention", "secure storage"]
+    },
+    {
+      "name": "Paolo Sala",
+      "role": "Product Designer",
+      "current_projects": [],
+      "skills": {"android": 1, "ios": 1, "web": 2, "backend": 0, "infrastructure": 0, "ai": 1},
+      "preferences": ["StreamYard", "Remini", "Meetup"],
+      "interests": ["creator workflows", "visual systems", "onboarding"]
+    }
+  ],
+  "projects": [
+    {
+      "project_name": "Evernote",
+      "project_description": "Personal productivity and note-taking app focused on fast sync, collaborative editing, AI-powered search, and reliable capture across devices.",
+      "project_phase": "growth",
+      "icon_url": "https://www.google.com/s2/favicons?domain=evernote.com&sz=128",
+      "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://evernote.com",
+      "required_people_amount": 5,
+      "required_skills": {"android": {"level_1": 0, "level_2": 1, "level_3": 0}, "ios": {"level_1": 0, "level_2": 1, "level_3": 0}, "web": {"level_1": 0, "level_2": 0, "level_3": 1}, "backend": {"level_1": 0, "level_2": 0, "level_3": 1}, "infrastructure": {"level_1": 0, "level_2": 1, "level_3": 0}, "ai": {"level_1": 0, "level_2": 1, "level_3": 0}},
+      "github_repositories": ["https://github.com/bendingspoons/evernote-core", "https://github.com/bendingspoons/evernote-sync"]
+    },
+    {
+      "project_name": "Remini",
+      "project_description": "AI photo enhancement and generation product for restoring blurry images, creating professional portraits, and scaling generative image models.",
+      "project_phase": "growth",
+      "icon_url": "https://www.google.com/s2/favicons?domain=remini.ai&sz=128",
+      "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://remini.ai",
+      "required_people_amount": 6,
+      "required_skills": {"android": {"level_1": 0, "level_2": 1, "level_3": 0}, "ios": {"level_1": 0, "level_2": 1, "level_3": 0}, "web": {"level_1": 0, "level_2": 1, "level_3": 0}, "backend": {"level_1": 0, "level_2": 0, "level_3": 1}, "infrastructure": {"level_1": 0, "level_2": 0, "level_3": 1}, "ai": {"level_1": 0, "level_2": 0, "level_3": 1}},
+      "github_repositories": ["https://github.com/bendingspoons/remini-app", "https://github.com/bendingspoons/remini-ml"]
+    },
+    {
+      "project_name": "WeTransfer",
+      "project_description": "Creative file-sharing platform focused on large transfer reliability, faster upload flows, expired-transfer recovery, and creator-friendly collaboration.",
+      "project_phase": "growth",
+      "icon_url": "https://www.google.com/s2/favicons?domain=wetransfer.com&sz=128",
+      "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://wetransfer.com",
+      "required_people_amount": 5,
+      "required_skills": {"android": {"level_1": 1, "level_2": 0, "level_3": 0}, "ios": {"level_1": 1, "level_2": 0, "level_3": 0}, "web": {"level_1": 0, "level_2": 0, "level_3": 1}, "backend": {"level_1": 0, "level_2": 0, "level_3": 1}, "infrastructure": {"level_1": 0, "level_2": 0, "level_3": 1}, "ai": {"level_1": 1, "level_2": 0, "level_3": 0}},
+      "github_repositories": ["https://github.com/bendingspoons/wetransfer-web", "https://github.com/bendingspoons/wetransfer-storage"]
+    },
+    {
+      "project_name": "Meetup",
+      "project_description": "Community platform for discovering groups, organizing events, and helping people meet around shared interests with modern mobile and web experiences.",
+      "project_phase": "maintenance",
+      "icon_url": "https://www.google.com/s2/favicons?domain=meetup.com&sz=128",
+      "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://www.meetup.com",
+      "required_people_amount": 3,
+      "required_skills": {"android": {"level_1": 0, "level_2": 1, "level_3": 0}, "ios": {"level_1": 0, "level_2": 1, "level_3": 0}, "web": {"level_1": 0, "level_2": 1, "level_3": 0}, "backend": {"level_1": 0, "level_2": 1, "level_3": 0}, "infrastructure": {"level_1": 1, "level_2": 0, "level_3": 0}, "ai": {"level_1": 1, "level_2": 0, "level_3": 0}},
+      "github_repositories": ["https://github.com/bendingspoons/meetup-app", "https://github.com/bendingspoons/meetup-events"]
+    },
+    {
+      "project_name": "Komoot",
+      "project_description": "Outdoor route-planning product for hiking and cycling, with offline maps, sport-specific routing, and strong wearable integrations.",
+      "project_phase": "growth",
+      "icon_url": "https://www.google.com/s2/favicons?domain=komoot.com&sz=128",
+      "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://www.komoot.com",
+      "required_people_amount": 4,
+      "required_skills": {"android": {"level_1": 0, "level_2": 0, "level_3": 1}, "ios": {"level_1": 0, "level_2": 0, "level_3": 1}, "web": {"level_1": 0, "level_2": 1, "level_3": 0}, "backend": {"level_1": 0, "level_2": 1, "level_3": 0}, "infrastructure": {"level_1": 0, "level_2": 1, "level_3": 0}, "ai": {"level_1": 1, "level_2": 0, "level_3": 0}},
+      "github_repositories": ["https://github.com/bendingspoons/komoot-mobile", "https://github.com/bendingspoons/komoot-routing"]
+    },
+    {
+      "project_name": "StreamYard",
+      "project_description": "Browser-based live streaming and recording studio for creators and businesses, including 4K local recordings and AI-assisted editing workflows.",
+      "project_phase": "maintenance",
+      "icon_url": "https://www.google.com/s2/favicons?domain=streamyard.com&sz=128",
+      "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://streamyard.com",
+      "required_people_amount": 4,
+      "required_skills": {"android": {"level_1": 0, "level_2": 0, "level_3": 0}, "ios": {"level_1": 1, "level_2": 0, "level_3": 0}, "web": {"level_1": 0, "level_2": 0, "level_3": 1}, "backend": {"level_1": 0, "level_2": 0, "level_3": 1}, "infrastructure": {"level_1": 0, "level_2": 0, "level_3": 1}, "ai": {"level_1": 0, "level_2": 1, "level_3": 0}},
+      "github_repositories": ["https://github.com/bendingspoons/streamyard-studio", "https://github.com/bendingspoons/streamyard-recording"]
+    },
+    {
+      "project_name": "Brightcove",
+      "project_description": "Enterprise video platform for live streaming, video hosting, monetization, DRM, vertical video, and AI-assisted publishing workflows.",
+      "project_phase": "new acquisition",
+      "icon_url": "https://www.google.com/s2/favicons?domain=brightcove.com&sz=128",
+      "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://www.brightcove.com",
+      "required_people_amount": 5,
+      "required_skills": {"android": {"level_1": 1, "level_2": 0, "level_3": 0}, "ios": {"level_1": 1, "level_2": 0, "level_3": 0}, "web": {"level_1": 0, "level_2": 0, "level_3": 1}, "backend": {"level_1": 0, "level_2": 0, "level_3": 1}, "infrastructure": {"level_1": 0, "level_2": 0, "level_3": 1}, "ai": {"level_1": 0, "level_2": 1, "level_3": 0}},
+      "github_repositories": ["https://github.com/bendingspoons/brightcove-video", "https://github.com/bendingspoons/brightcove-ai"]
+    },
+    {
+      "project_name": "Eventbrite",
+      "project_description": "Event discovery and ticketing marketplace undergoing initial integration work around organizer tooling, search, payments, and attendee mobile flows.",
+      "project_phase": "new acquisition",
+      "icon_url": "https://www.google.com/s2/favicons?domain=eventbrite.com&sz=128",
+      "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://www.eventbrite.com",
+      "required_people_amount": 6,
+      "required_skills": {"android": {"level_1": 0, "level_2": 1, "level_3": 0}, "ios": {"level_1": 0, "level_2": 1, "level_3": 0}, "web": {"level_1": 0, "level_2": 0, "level_3": 1}, "backend": {"level_1": 0, "level_2": 0, "level_3": 1}, "infrastructure": {"level_1": 0, "level_2": 1, "level_3": 0}, "ai": {"level_1": 1, "level_2": 0, "level_3": 0}},
+      "github_repositories": ["https://github.com/bendingspoons/eventbrite-marketplace", "https://github.com/bendingspoons/eventbrite-payments"]
+    }
+  ],
+  "move_requests": [
+    {
+      "employee_name": "Luca Fontana",
+      "from_project_name": "StreamYard",
+      "to_project_name": "Komoot",
+      "reason": "Luca's iOS experience with creator tools would help Komoot polish its Apple Watch and offline route flows.",
+      "expected_role": "Senior iOS Engineer",
+      "current_project_impact": "medium",
+      "status": "pending"
+    },
+    {
+      "employee_name": "Giulia Rossi",
+      "from_project_name": "WeTransfer",
+      "to_project_name": "Evernote",
+      "reason": "Giulia has storage and reliability experience that maps well to Evernote sync improvements.",
+      "expected_role": "Backend Engineer",
+      "current_project_impact": "high",
+      "status": "accepted"
+    },
+    {
+      "employee_name": "Marco Bianchi",
+      "from_project_name": "Remini",
+      "to_project_name": "Brightcove",
+      "reason": "Marco can transfer model-serving patterns from Remini to Brightcove's AI video roadmap.",
+      "expected_role": "AI/ML Engineer",
+      "current_project_impact": "medium",
+      "status": "clarification_requested"
+    },
+    {
+      "employee_name": "Alessia Conti",
+      "from_project_name": "Komoot",
+      "to_project_name": "Meetup",
+      "reason": "Alessia's location-heavy Android work on Komoot fits Meetup's event discovery and notification needs.",
+      "expected_role": "Android Engineer",
+      "current_project_impact": "low",
+      "status": "rejected"
+    },
+    {
+      "employee_name": "Francesco Romano",
+      "from_project_name": "Eventbrite",
+      "to_project_name": "WeTransfer",
+      "reason": "Francesco wants to apply marketplace web architecture experience to WeTransfer's creator-facing surfaces.",
+      "expected_role": "Web Engineer",
+      "current_project_impact": "medium",
+      "status": "pending"
+    },
+    {
+      "employee_name": "Elena Greco",
+      "from_project_name": "Meetup",
+      "to_project_name": "Evernote",
+      "reason": "Elena's activation background could support Evernote onboarding and collaborative workflows.",
+      "expected_role": "Product Engineer",
+      "current_project_impact": "low",
+      "status": "accepted"
+    },
+    {
+      "employee_name": "Sofia Ferrari",
+      "from_project_name": "StreamYard",
+      "to_project_name": "WeTransfer",
+      "reason": "Sofia's media infrastructure experience is relevant to improving large upload reliability.",
+      "expected_role": "Infrastructure Engineer",
+      "current_project_impact": "high",
+      "status": "clarification_requested"
+    },
+    {
+      "employee_name": "Riccardo Mariani",
+      "from_project_name": "Remini",
+      "to_project_name": "StreamYard",
+      "reason": "Riccardo can bring AI-first mobile UX experience from Remini to StreamYard's creator recording flows.",
+      "expected_role": "iOS Engineer",
+      "current_project_impact": "medium",
+      "status": "pending"
+    },
+    {
+      "employee_name": "Giovanni Riva",
+      "from_project_name": "Eventbrite",
+      "to_project_name": "Meetup",
+      "reason": "Giovanni's event marketplace backend work can help unify organizer tooling across Eventbrite and Meetup.",
+      "expected_role": "Backend Platform Engineer",
+      "current_project_impact": "medium",
+      "status": "accepted"
+    },
+    {
+      "employee_name": "Emanuele Riva",
+      "from_project_name": "Brightcove",
+      "to_project_name": "StreamYard",
+      "reason": "Emanuele's transcoding and live video background directly matches StreamYard recording improvements.",
+      "expected_role": "Video Platform Engineer",
+      "current_project_impact": "high",
+      "status": "pending"
+    },
+    {
+      "employee_name": "Laura Esposito",
+      "from_project_name": null,
+      "to_project_name": "Eventbrite",
+      "reason": "Laura is currently unassigned and can help Eventbrite size organizer retention and pricing opportunities.",
+      "expected_role": "Product Analyst",
+      "current_project_impact": "low",
+      "status": "accepted"
+    },
+    {
+      "employee_name": "Marta Leone",
+      "from_project_name": "WeTransfer",
+      "to_project_name": "Brightcove",
+      "reason": "Marta's security work on file sharing is useful for Brightcove DRM and enterprise access controls.",
+      "expected_role": "Security Engineer",
+      "current_project_impact": "medium",
+      "status": "rejected"
+    }
+  ]
+}

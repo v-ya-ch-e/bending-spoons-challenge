@@ -1,7 +1,12 @@
 "use client"
 
+import Link from "next/link"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { SidebarLeftIcon, SidebarRightIcon } from "@hugeicons/core-free-icons"
+import {
+  Add01Icon,
+  SidebarLeftIcon,
+  SidebarRightIcon,
+} from "@hugeicons/core-free-icons"
 
 import type { RoleWorkspace } from "@/data/mock-navigation"
 import { Button } from "@/components/ui/button"
@@ -9,6 +14,8 @@ import { Button } from "@/components/ui/button"
 type TopbarProps = {
   workspace: RoleWorkspace
   activeLabel: string
+  primaryAction: string
+  primaryActionHref?: string
   sidebarCollapsed: boolean
   onSidebarCollapsedChange: (collapsed: boolean) => void
 }
@@ -16,6 +23,8 @@ type TopbarProps = {
 export function Topbar({
   workspace,
   activeLabel,
+  primaryAction,
+  primaryActionHref,
   sidebarCollapsed,
   onSidebarCollapsedChange,
 }: TopbarProps) {
@@ -53,9 +62,19 @@ export function Topbar({
         </div>
 
         <div className="flex shrink-0 items-center gap-3">
-          <Button type="button" size="sm" className="rounded-full">
-            {workspace.primaryAction}
-          </Button>
+          {primaryActionHref ? (
+            <Button asChild size="sm" className="rounded-full">
+              <Link href={primaryActionHref}>
+                <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
+                {primaryAction}
+              </Link>
+            </Button>
+          ) : (
+            <Button type="button" size="sm" className="rounded-full">
+              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
+              {primaryAction}
+            </Button>
+          )}
         </div>
       </div>
     </header>

@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { usePathname, useRouter } from "next/navigation"
 
 import {
   currentUser,
@@ -20,6 +21,8 @@ import {
 type AppShellProps = {
   initialSidebarCollapsed: boolean
   initialThemeMode: ThemeMode
+  initialRole?: AppRole
+  children: ReactNode
 }
 
 function writePreferenceCookie(name: string, value: string) {
@@ -29,24 +32,27 @@ function writePreferenceCookie(name: string, value: string) {
 export function AppShell({
   initialSidebarCollapsed,
   initialThemeMode,
+  initialRole = "cto",
+  children,
 }: AppShellProps) {
-  const [role, setRole] = useState<AppRole>("cto")
+  const pathname = usePathname()
+  const router = useRouter()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed)
   const [themeMode, setThemeMode] = useState<ThemeMode>(initialThemeMode)
-  const [activeByRole, setActiveByRole] = useState<Record<AppRole, string>>({
-    cto: roleWorkspaces.cto.navItems[0].value,
-    spooner: roleWorkspaces.spooner.navItems[0].value,
-  })
 
+  const role: AppRole = pathname.startsWith("/spooner")
+    ? "spooner"
+    : pathname.startsWith("/cto")
+      ? "cto"
+      : initialRole
   const workspace = roleWorkspaces[role]
-  const activeItem = activeByRole[role]
 
-  const activeNavItem = useMemo(
-    () =>
-      workspace.navItems.find((item) => item.value === activeItem) ??
-      workspace.navItems[0],
-    [activeItem, workspace.navItems]
-  )
+  const activeNavItem = useMemo(() => {
+    return (
+      workspace.navItems.find((item) => pathname.startsWith(item.href)) ??
+      workspace.navItems[0]
+    )
+  }, [pathname, workspace.navItems])
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
@@ -66,11 +72,7 @@ export function AppShell({
   }, [themeMode])
 
   function handleRoleChange(nextRole: AppRole) {
-    setRole(nextRole)
-  }
-
-  function handleActiveItemChange(value: string) {
-    setActiveByRole((current) => ({ ...current, [role]: value }))
+    router.push(roleWorkspaces[nextRole].navItems[0].href)
   }
 
   function handleSidebarCollapsedChange(collapsed: boolean) {
@@ -87,12 +89,11 @@ export function AppShell({
 
   return (
     <TooltipProvider>
-      <div className="min-h-svh bg-background text-foreground">
-        <div className="flex min-h-svh">
+      <div className="h-svh overflow-hidden bg-background text-foreground">
+        <div className="flex h-full min-h-0">
           <SidebarNav
             workspace={workspace}
-            activeItem={activeItem}
-            onActiveItemChange={handleActiveItemChange}
+            activeItem={activeNavItem.value}
             role={role}
             onRoleChange={handleRoleChange}
             user={currentUser}
@@ -101,15 +102,17 @@ export function AppShell({
             onThemeModeChange={handleThemeModeChange}
           />
 
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <Topbar
               workspace={workspace}
               activeLabel={activeNavItem.label}
+              primaryAction={activeNavItem.primaryAction ?? workspace.primaryAction}
+              primaryActionHref={activeNavItem.primaryActionHref}
               sidebarCollapsed={sidebarCollapsed}
               onSidebarCollapsedChange={handleSidebarCollapsedChange}
             />
 
-            <main className="flex-1" />
+            <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
           </div>
         </div>
       </div>

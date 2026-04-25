@@ -1,16 +1,14 @@
 from pydantic import BaseModel, Field
 
-from schemas.common import SkillCategory, SkillLevel
+from schemas.common import Skills
 
 
-class SkillProfileSuggestRequest(BaseModel):
-    github_repo_url: str
+class SkillProfileRequest(BaseModel):
+    project_id: int = Field(gt=0)
+    github_page: str = Field(min_length=1)
+    project_description: str = Field(min_length=1)
 
 
-class SkillProfile(BaseModel):
-    skills: dict[SkillCategory, SkillLevel]
-    domain_tags: list[str] = []
-    summary: str = ""
-    confidence: float = Field(ge=0, le=1)
-    evidence: list[str] = []
-    approved: bool = False
+class SkillProfileResponse(BaseModel):
+    required_people_amount: int = Field(ge=0)
+    required_skills_per_person: list[Skills]

@@ -9,7 +9,7 @@ For the canonical agent-facing API contract, payload shapes, schema notes, and s
 ## What this provides
 
 - A FastAPI service with health, version, database connectivity, and CRUD endpoints.
-- A three-table MySQL schema (`projects`, `employees`, `move_requests`) defined in plain SQL.
+- A MySQL schema for staffing data plus matching pipeline persistence, defined in plain SQL.
 - A script to apply the schema to AWS RDS.
 - A script that uses the OpenAI API to generate realistic seed data as JSON.
 - A script that loads that JSON into the database.
@@ -98,29 +98,59 @@ Useful endpoints:
 - `GET /move-requests/{request_id}`
 - `PUT /move-requests/{request_id}`
 - `DELETE /move-requests/{request_id}`
+- `GET /policies`
+- `POST /policies`
+- `GET /policies/active`
+- `GET /policies/{policy_id}`
+- `PUT /policies/{policy_id}`
+- `POST /policies/{policy_id}:activate`
+- `DELETE /policies/{policy_id}`
+- `GET /matching-runs`
+- `POST /matching-runs`
+- `GET /matching-runs/latest`
+- `GET /matching-runs/{run_id}`
+- `PUT /matching-runs/{run_id}`
+- `DELETE /matching-runs/{run_id}`
+- `GET /projects/{project_id}/matching/latest`
+- `GET /matching-runs/{run_id}/candidates`
+- `POST /matching-runs/{run_id}/candidates`
+- `GET /matching-candidates/{candidate_id}`
+- `GET /matching-runs/{run_id}/recommendations`
+- `POST /matching-runs/{run_id}/recommendations`
+- `GET /matching-recommendations/{recommendation_id}`
+- `GET /matching-runs/{run_id}/hiring-recommendations`
+- `POST /matching-runs/{run_id}/hiring-recommendations`
+- `GET /matching-runs/{run_id}/events`
+- `POST /matching-runs/{run_id}/events`
+- `POST /matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests`
 - `GET /docs`
 
 List endpoints accept `limit` (default `100`, max `500`) and `offset` query parameters.
+`GET /policies` also accepts an exact `name` filter.
 `PUT` endpoints accept partial payloads and update only the fields provided.
+
+For frontend work, use `current_team_member_ids` and `current_project_ids` as the canonical staffing fields. Name fields such as `current_team_members`, `current_project_names`, and `current_project` are derived display aliases. Project cards can use `icon_url` for compact imagery and `poster_url` for landscape hero/card imagery.
 
 ### Example project payload
 
 ```json
 {
-  "project_name": "Atlas Staffing",
-  "project_description": "Internal staffing platform for dynamic project allocation.",
+  "project_name": "Evernote",
+  "project_description": "Personal productivity and note-taking app focused on fast sync, collaborative editing, AI-powered search, and reliable capture across devices.",
   "project_phase": "growth",
-  "current_team_members": ["Giulia Rossi"],
+  "icon_url": "https://www.google.com/s2/favicons?domain=evernote.com&sz=128",
+  "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://evernote.com",
+  "current_team_member_ids": [1],
   "required_people_amount": 3,
   "required_skills": {
-    "android": 0,
-    "ios": 0,
-    "web": 2,
-    "backend": 3,
-    "infrastructure": 2,
-    "ai": 1
+    "android": { "level_1": 0, "level_2": 0, "level_3": 0 },
+    "ios": { "level_1": 0, "level_2": 0, "level_3": 0 },
+    "web": { "level_1": 0, "level_2": 2, "level_3": 0 },
+    "backend": { "level_1": 0, "level_2": 0, "level_3": 1 },
+    "infrastructure": { "level_1": 0, "level_2": 1, "level_3": 0 },
+    "ai": { "level_1": 0, "level_2": 1, "level_3": 0 }
   },
-  "github_repositories": ["https://github.com/bendingspoons/atlas-staffing"]
+  "github_repositories": ["https://github.com/bendingspoons/evernote-core"]
 }
 ```
 
@@ -130,7 +160,7 @@ List endpoints accept `limit` (default `100`, max `500`) and `offset` query para
 {
   "name": "Marco Bianchi",
   "role": "Backend engineer",
-  "current_project": "Atlas Staffing",
+  "current_project_ids": [1, 2],
   "skills": {
     "android": 0,
     "ios": 0,
@@ -139,7 +169,7 @@ List endpoints accept `limit` (default `100`, max `500`) and `offset` query para
     "infrastructure": 2,
     "ai": 1
   },
-  "preferences": ["Atlas Staffing"],
+  "preferences": ["Evernote"],
   "interests": ["platform reliability", "internal tools"]
 }
 ```
@@ -168,9 +198,9 @@ Move-request responses include joined names (`employee_name`, `from_project_name
 python scripts/init_db.py
 ```
 
-This applies [db/schema.sql](db/schema.sql). Statements are idempotent (`CREATE TABLE IF NOT EXISTS`), so running it on an already-initialized database is a no-op.
+This applies [db/schema.sql](db/schema.sql). Statements are idempotent (`CREATE TABLE IF NOT EXISTS`), so running it on an already-initialized database adds missing tables without resetting existing data.
 
-To wipe and recreate the demo tables (drops `move_requests`, `employees`, `projects` in FK-safe order):
+To wipe and recreate the demo tables (drops matching persistence tables, `move_requests`, `project_assignments`, `employees`, and `projects` in FK-safe order):
 
 ```bash
 python scripts/init_db.py --reset
@@ -182,13 +212,13 @@ python scripts/init_db.py --reset
 python scripts/generate_fixtures.py
 ```
 
-Calls the model defined by `OPENAI_MODEL` and writes a validated dataset to `db-rest-api/fixtures/seed_data.json`. The `fixtures/` directory is created automatically. The script:
+Calls the model defined by `OPENAI_MODEL` and writes a validated dataset to `db-rest-api/fixtures/seed_data.json`. By default, it generates 20 employees, 8 projects, and 12 move requests. The `fixtures/` directory is created automatically. The script:
 
 - Uses the OpenAI SDK's structured-output parsing with Pydantic models, so the response is guaranteed to match the fixture schema or the script exits with the model's refusal.
-- Re-validates cross-references (every `current_project`, every `current_team_members` entry, every move-request name) and ensures all four `move_requests.status` values are present.
+- Uses a curated real-product project catalog, then re-validates cross-references (every `current_projects` entry, every employee preference, every move-request name), checks each project has staffing, and ensures all project phases plus all four `move_requests.status` values are present.
 - Exits non-zero on any validation failure without writing the file.
 
-Use `--output PATH` to write somewhere other than the default.
+Use `--employees`, `--projects`, `--move-requests`, `--attempts`, `--model`, `--timeout`, and `--output PATH` to override the defaults.
 
 ### 3. Load fixtures into MySQL
 
@@ -196,7 +226,7 @@ Use `--output PATH` to write somewhere other than the default.
 python scripts/load_fixtures.py
 ```
 
-Reads `db-rest-api/fixtures/seed_data.json` and inserts in dependency order: `projects` -> `employees` -> `move_requests`. Move-request `employee_name`, `from_project_name`, and `to_project_name` are resolved to numeric IDs using the rows just inserted. The whole load runs inside one transaction; failures roll back.
+Reads `db-rest-api/fixtures/seed_data.json` and inserts in dependency order: `projects` -> `employees` -> `project_assignments` -> `move_requests`. Employee `current_projects` plus move-request `employee_name`, `from_project_name`, and `to_project_name` are resolved to numeric IDs using the rows just inserted. The whole load runs inside one transaction; failures roll back.
 
 Use `--fixture PATH` to load a different file.
 
@@ -213,11 +243,23 @@ You only need to re-run `generate_fixtures.py` when you want a new dataset; the 
 
 See [db/schema.sql](db/schema.sql) for the source of truth. Summary:
 
-- `projects(id, project_name, project_description, project_phase, current_team_members, required_people_amount, required_skills, github_repositories)`
-- `employees(id, name, role, current_project, skills, preferences, interests)`
+- `projects(id, project_name, project_description, project_phase, icon_url, poster_url, required_people_amount, required_skills, github_repositories)`
+- `employees(id, name, role, skills, preferences, interests)`
+- `project_assignments(employee_id FK, project_id FK)`
 - `move_requests(id, employee_id FK, from_project_id FK nullable, to_project_id FK, reason, expected_role, current_project_impact, status, created_at, responded_at)`
+- `policies(id, name, description, config, is_active, created_at, updated_at, activated_at)`
+- `matching_runs(id, use_case, target_project_id FK nullable, status, requested_by, rule_config, input_snapshot, counts, selected_candidate_plan_id, summary, error_message, timestamps)`
+- `matching_candidates(id, run_id FK, candidate_plan_id, strict_score, hard_rule_summary, plan_payload, rejected_reason, created_at)`
+- `matching_recommendations(id, run_id FK, candidate_plan_id, recommendation_rank, fit_score, summary, explanation, risks, ramp_up_estimate, suggested_moves, model_metadata, created_at)`
+- `matching_hiring_recommendations(id, run_id FK, candidate_plan_id, project_id FK nullable, role_title, count, required_skills, reason, urgency, suggested_assignment, created_at)`
+- `matching_run_events(id, run_id FK, level, stage, event_type, message, metadata, created_at)`
 
-`skills` and `required_skills` use the brief's six keys exactly: `android`, `ios`, `web`, `backend`, `infrastructure`, `ai`. Levels are integers 0-3.
+`skills` uses the brief's six keys exactly: `android`, `ios`, `web`, `backend`, `infrastructure`, `ai`. Employee skill levels are integers 0-3. Project `required_skills` uses the same skill keys, but each value is a per-level headcount bucket with `level_1`, `level_2`, and `level_3` non-negative integer counts.
+
+Matching persistence is storage-only. The backend matching pipeline creates runs,
+candidates, recommendations, hiring recommendations, and events through this
+API. The action endpoint can turn a selected recommendation's `suggested_moves`
+into `move_requests`, but it does not update `project_assignments`.
 
 For agent-facing context (conventions, JSON column rules, when to add new tables), see [CLAUDE.md](CLAUDE.md).
 
