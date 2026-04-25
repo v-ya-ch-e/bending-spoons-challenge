@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 
 DEFAULT_FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "seed_data.json"
 SKILL_KEYS = ("android", "ios", "web", "backend", "infrastructure", "ai")
+PROJECT_SKILL_LEVEL_KEYS = ("level_1", "level_2", "level_3")
 
 
 def get_connection():
@@ -44,12 +45,18 @@ def load_fixture(path: Path) -> dict[str, list[dict[str, Any]]]:
 
 def validate_fixture_contract(data: dict[str, list[dict[str, Any]]]) -> None:
     for project in data["projects"]:
-        validate_skill_map(project.get("required_skills"), f"project {project.get('project_name')!r}")
+        validate_project_skill_requirements(
+            project.get("required_skills"),
+            f"project {project.get('project_name')!r}",
+        )
     for employee in data["employees"]:
-        validate_skill_map(employee.get("skills"), f"employee {employee.get('name')!r}")
+        validate_employee_skill_map(
+            employee.get("skills"),
+            f"employee {employee.get('name')!r}",
+        )
 
 
-def validate_skill_map(value: Any, label: str) -> None:
+def validate_employee_skill_map(value: Any, label: str) -> None:
     if not isinstance(value, dict):
         sys.exit(f"{label} skills must be an object with canonical skill keys")
     if set(value) != set(SKILL_KEYS):
@@ -62,6 +69,40 @@ def validate_skill_map(value: Any, label: str) -> None:
     if invalid:
         sys.exit(
             f"{label} skill levels must be integers from 0 to 3: {', '.join(invalid)}"
+        )
+
+
+def validate_project_skill_requirements(value: Any, label: str) -> None:
+    if not isinstance(value, dict):
+        sys.exit(f"{label} required_skills must be an object with canonical skill keys")
+    if set(value) != set(SKILL_KEYS):
+        sys.exit(
+            f"{label} required_skills must use exactly these keys: {', '.join(SKILL_KEYS)}"
+        )
+
+    invalid_skills = []
+    invalid_levels = []
+    for skill in SKILL_KEYS:
+        requirement = value[skill]
+        if not isinstance(requirement, dict):
+            invalid_skills.append(skill)
+            continue
+        if set(requirement) != set(PROJECT_SKILL_LEVEL_KEYS):
+            invalid_skills.append(skill)
+            continue
+        for level_key in PROJECT_SKILL_LEVEL_KEYS:
+            if not isinstance(requirement[level_key], int) or requirement[level_key] < 0:
+                invalid_levels.append(f"{skill}.{level_key}")
+
+    if invalid_skills:
+        sys.exit(
+            f"{label} required_skills values must contain level_1, level_2, and level_3: "
+            f"{', '.join(invalid_skills)}"
+        )
+    if invalid_levels:
+        sys.exit(
+            f"{label} required_skills counts must be non-negative integers: "
+            f"{', '.join(invalid_levels)}"
         )
 
 

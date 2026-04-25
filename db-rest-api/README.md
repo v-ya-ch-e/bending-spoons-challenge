@@ -143,12 +143,12 @@ For frontend work, use `current_team_member_ids` and `current_project_ids` as th
   "current_team_member_ids": [1],
   "required_people_amount": 3,
   "required_skills": {
-    "android": 0,
-    "ios": 0,
-    "web": 2,
-    "backend": 3,
-    "infrastructure": 2,
-    "ai": 1
+    "android": { "level_1": 0, "level_2": 0, "level_3": 0 },
+    "ios": { "level_1": 0, "level_2": 0, "level_3": 0 },
+    "web": { "level_1": 0, "level_2": 2, "level_3": 0 },
+    "backend": { "level_1": 0, "level_2": 0, "level_3": 1 },
+    "infrastructure": { "level_1": 0, "level_2": 1, "level_3": 0 },
+    "ai": { "level_1": 0, "level_2": 1, "level_3": 0 }
   },
   "github_repositories": ["https://github.com/bendingspoons/evernote-core"]
 }
@@ -254,7 +254,7 @@ See [db/schema.sql](db/schema.sql) for the source of truth. Summary:
 - `matching_hiring_recommendations(id, run_id FK, candidate_plan_id, project_id FK nullable, role_title, count, required_skills, reason, urgency, suggested_assignment, created_at)`
 - `matching_run_events(id, run_id FK, level, stage, event_type, message, metadata, created_at)`
 
-`skills` uses the brief's six keys exactly: `android`, `ios`, `web`, `backend`, `infrastructure`, `ai`. Employee skill levels are integers 0-3. Project `required_skills` uses the same keys with per-level count buckets: `level_1`, `level_2`, and `level_3`.
+`skills` uses the brief's six keys exactly: `android`, `ios`, `web`, `backend`, `infrastructure`, `ai`. Employee skill levels are integers 0-3. Project `required_skills` uses the same skill keys, but each value is a per-level headcount bucket with `level_1`, `level_2`, and `level_3` non-negative integer counts.
 
 Matching persistence is storage-only. The backend matching pipeline creates runs,
 candidates, recommendations, hiring recommendations, and events through this

@@ -23,6 +23,14 @@ SKILLS = {
     "infrastructure": 1,
     "ai": 1,
 }
+PROJECT_SKILL_REQUIREMENTS = {
+    "android": {"level_1": 0, "level_2": 0, "level_3": 0},
+    "ios": {"level_1": 0, "level_2": 0, "level_3": 0},
+    "web": {"level_1": 0, "level_2": 1, "level_3": 0},
+    "backend": {"level_1": 0, "level_2": 0, "level_3": 1},
+    "infrastructure": {"level_1": 1, "level_2": 0, "level_3": 0},
+    "ai": {"level_1": 1, "level_2": 0, "level_3": 0},
+}
 
 DEFAULT_POLICY_CONFIG = {
     "max_candidate_plans": 25,
@@ -63,7 +71,7 @@ def project_payload(name: str = "Atlas Staffing") -> dict[str, Any]:
         "icon_url": "https://www.google.com/s2/favicons?domain=evernote.com&sz=128",
         "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://evernote.com",
         "required_people_amount": 3,
-        "required_skills": deepcopy(SKILLS),
+        "required_skills": deepcopy(PROJECT_SKILL_REQUIREMENTS),
         "github_repositories": ["https://github.com/bendingspoons/atlas-staffing"],
     }
 
@@ -809,7 +817,7 @@ def test_project_crud_and_validation(client: TestClient) -> None:
     assert create_response.status_code == 201
     project = create_response.json()
     assert project["id"] == 1
-    assert project["required_skills"] == SKILLS
+    assert project["required_skills"] == PROJECT_SKILL_REQUIREMENTS
 
     assert client.get("/projects").json() == [project]
     assert client.get("/projects/1").json() == project

@@ -154,8 +154,8 @@ Skill levels:
 - `2`: strong working capability, can work independently.
 - `3`: expert, can lead, review, and onboard others.
 
-`projects.required_skills` uses the same six keys, but each value describes how
-many engineers need that skill at each minimum acceptable level:
+`projects.required_skills` uses the same six keys, but each value is stored as
+the minimum number of engineers required at each skill level:
 
 ```json
 {
@@ -168,11 +168,11 @@ many engineers need that skill at each minimum acceptable level:
 }
 ```
 
-Each level bucket is a count of engineers whose minimum acceptable level for that
-skill is that bucket. This supports requirements like one Backend engineer at L1
-and another at L2. Older stored project rows with integer skill values or the
-previous `{ "count": n, "minimum_level": level }` shape are normalized on read
-into the matching `level_n` bucket.
+Each `level_n` bucket is a non-negative headcount requirement for that skill at
+that level. This supports requirements like one Backend engineer at L2 and one
+Backend engineer at L3. Older stored project rows with integer skill values or
+the previous `{ "count": n, "minimum_level": level }` shape are normalized on
+read into the matching `level_n` bucket.
 
 ## Projects
 

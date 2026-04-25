@@ -60,13 +60,25 @@ should use `DbApiClient`.
 
 ### Skill JSON keys (do not change)
 
-The brief defines six skill categories. Both `employees.skills` and `projects.required_skills` MUST use these keys exactly:
+The brief defines six skill categories. `employees.skills` and `projects.required_skills` MUST use these keys exactly:
 
 ```json
 { "android": 0, "ios": 0, "web": 0, "backend": 0, "infrastructure": 0, "ai": 0 }
 ```
 
-Levels are integers 0-3 as defined in the brief.
+Employee skill values are integers 0-3 as defined in the brief. Project
+`required_skills` values are per-level headcount buckets:
+
+```json
+{
+  "android": { "level_1": 0, "level_2": 0, "level_3": 0 },
+  "ios": { "level_1": 0, "level_2": 0, "level_3": 0 },
+  "web": { "level_1": 0, "level_2": 0, "level_3": 0 },
+  "backend": { "level_1": 0, "level_2": 0, "level_3": 0 },
+  "infrastructure": { "level_1": 0, "level_2": 0, "level_3": 0 },
+  "ai": { "level_1": 0, "level_2": 0, "level_3": 0 }
+}
+```
 
 ### Project assignment source of truth
 
