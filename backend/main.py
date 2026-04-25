@@ -48,11 +48,11 @@ def update_project(project_id: int, payload: ProjectUpdate) -> Project:
 
 
 @app.post("/projects/{project_id}/skill-profile:suggest", response_model=StaffingSuggestion)
-def suggest_skill_profile(
+async def suggest_skill_profile(
     project_id: int, payload: SkillProfileSuggestRequest
 ) -> StaffingSuggestion:
     try:
-        return skill_profile_service.suggest_skill_profile(project_id, payload)
+        return await skill_profile_service.suggest_skill_profile(project_id, payload)
     except NotImplementedError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
 

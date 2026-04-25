@@ -8,5 +8,5 @@ class ProjectStatus(str, Enum):
     MAINTENANCE = "MAINTENANCE"
 
 
-SkillCategory = Literal["android", "ios", "web", "backend", "infrastructure", "ai"]
+SkillCategory = Literal["Android", "iOS", "Backend", "Web", "Infrastructure", "AI/ML"]
 SkillLevel = Literal[0, 1, 2, 3]

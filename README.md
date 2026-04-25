@@ -6,7 +6,7 @@ See `docs/bending_spoons_internal_platform_brief.md` for the product brief.
 
 ## Services
 
-- `backend/`: FastAPI orchestration API for project skill profiles and matching.
+- `backend/`: FastAPI orchestration API. Features LLM-powered staffing analysis using GitHub repository metadata and project-specific heuristics.
 - `db-rest-api/`: FastAPI service for database-facing endpoints and health checks.
 - `frontend/`: Frontend application workspace.
 
