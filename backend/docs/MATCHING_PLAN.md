@@ -26,8 +26,9 @@ The repository already has the right high-level boundaries:
 
 - `backend/main.py` is the FastAPI orchestration API. It already exposes
   `POST /projects/{project_id}/matching:run` and
-  `GET /projects/{project_id}/matching/latest` placeholders.
-- `backend/services/matching_service.py` is the current matching service stub.
+  `POST /matching/portfolio:rebalance` for synchronous Step 1 runs.
+- `backend/services/matching_service.py` delegates matching runs to the shared
+  pipeline in `backend/services/matching/pipeline.py`.
 - `backend/clients/db_client.py` is the backend's DB API client. Matching should
   use this client instead of opening database connections directly.
 - `backend/clients/llm_client.py` provides the OpenAI client.
@@ -37,6 +38,17 @@ The repository already has the right high-level boundaries:
 The database now stores projects, employees, assignments, move requests, and
 matching persistence records in `db-rest-api`: runs, strict-rule candidates,
 ranked recommendations, hiring recommendations, and frontend-visible run events.
+
+Implemented Step 1 behavior:
+
+- Strict rules load projects, employees, and move requests from `DbApiClient`.
+- The effective rule config and input snapshot are saved on `matching_runs`.
+- Deterministic candidate plans are saved to `matching_candidates` with
+  `strict_score`, `hard_rule_summary`, and rich `plan_payload` data.
+- Hiring gaps are saved to `matching_hiring_recommendations`.
+- Frontend-visible strict-rule progress is saved to `matching_run_events`.
+- `matching_recommendations` remains reserved for the later LLM ranking step, so
+  Step 1 runs complete with `recommendation_count = 0`.
 
 ## Design Principles
 
@@ -536,19 +548,23 @@ DB API tests:
 ## Rollout
 
 1. Add persistence tables and DB API endpoints. Done in `db-rest-api`.
-2. Extend backend schemas and `DbApiClient`. `DbApiClient` now has matching
-   persistence helpers; backend orchestration schemas/routes remain next.
-3. Implement strict-rule generation with deterministic recommendations only.
+2. Extend backend schemas and `DbApiClient`. Done: backend now has
+   `MatchingRunRequest`/`MatchingRunResponse`, public run routes, and existing
+   matching persistence helpers.
+3. Implement strict-rule generation with deterministic candidate evaluation.
+   Done: Step 1 writes `matching_candidates`, hiring gaps, run counts, and run
+   events. These candidates are the handoff to the LLM step.
 4. Add frontend display for run result and run events.
-5. Add hiring-gap recommendations for uncovered capacity.
-6. Add OpenAI ranking behind a feature flag.
-7. Add move-request creation from selected recommendations.
-8. Add optional direct assignment-application flow later.
+5. Add OpenAI ranking behind a feature flag and persist final
+   `matching_recommendations`.
+6. Add move-request creation from selected recommendations.
+7. Add optional direct assignment-application flow later.
 
 ## Open Questions For Implementation
 
-- Whether matching runs should be synchronous for the demo or backgrounded for
-  longer searches.
+- Matching runs are synchronous for the current Step 1 implementation. If search
+  grows beyond the bounded strict-rule step, move the pipeline behind a
+  background worker while keeping the same persistence tables and events.
 - Whether accepted move requests should trigger automatic assignment mutation in
   a future workflow.
 - Hiring recommendations are persisted in the separate

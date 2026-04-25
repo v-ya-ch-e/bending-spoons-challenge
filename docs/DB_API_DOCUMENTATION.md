@@ -513,14 +513,62 @@ Create candidate payload:
   "candidate_plan_id": "plan_01",
   "strict_score": 0.82,
   "hard_rule_summary": {
-    "valid": true
+    "valid": true,
+    "target_project_id": 7,
+    "move_count": 1,
+    "target_gap_before": 2.0,
+    "target_gap_after": 0.0,
+    "rules_checked": [
+      "identity",
+      "skill_contract",
+      "headcount",
+      "source_project_protection",
+      "pending_requests",
+      "reasonable_disruption"
+    ]
   },
   "plan_payload": {
-    "moves": []
+    "summary": "Move 3 toward Project 7 to reduce headcount or skill gaps.",
+    "moves": [
+      {
+        "employee_id": 3,
+        "from_project_id": 2,
+        "to_project_id": 7,
+        "action": "move",
+        "suggested_role": "Backend/platform engineer",
+        "current_project_impact": "low",
+        "hard_rule_reasons": [
+          "Employee and target project exist in the DB snapshot.",
+          "Move improves or preserves target coverage.",
+          "Source project remains above strict minimums."
+        ],
+        "reason": "Employee covers target backend gaps."
+      }
+    ],
+    "risks": [],
+    "project_coverage_after": {
+      "7": {
+        "headcount_gap": 0,
+        "skill_gap": {
+          "android": 0,
+          "ios": 0,
+          "web": 0,
+          "backend": 0,
+          "infrastructure": 0,
+          "ai": 0
+        },
+        "coverage_ratio": 1.0
+      }
+    }
   },
   "rejected_reason": null
 }
 ```
+
+The backend strict-rule pipeline stores deterministic Step 1 output in
+`matching_candidates`. The later LLM ranking step reads these rows and creates
+final `matching_recommendations`; until then, strict-rule runs can complete with
+`recommendation_count` set to `0`.
 
 Create recommendation payload:
 
