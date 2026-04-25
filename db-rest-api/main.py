@@ -9,10 +9,7 @@ import pymysql
 from pymysql.connections import Connection
 from pymysql.cursors import DictCursor
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.openapi.docs import get_swagger_ui_html
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, HTTPException
 
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -22,8 +19,6 @@ SERVICE_NAME = "db-rest-api"
 APP_VERSION = os.getenv("APP_VERSION", "0.1.0")
 ROOT_PATH = os.getenv("ROOT_PATH", "/db-api")
 REQUIRED_DB_ENV_VARS = ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD")
-STATIC_DIR = Path(__file__).resolve().parent / "static"
-FAVICON_PATH = STATIC_DIR / "favicon.png"
 
 
 @dataclass(frozen=True)
@@ -87,24 +82,7 @@ app = FastAPI(
     title="DB REST API",
     version=APP_VERSION,
     root_path=ROOT_PATH,
-    docs_url=None,
 )
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
-
-@app.get("/docs", include_in_schema=False)
-def swagger_ui_html(request: Request) -> HTMLResponse:
-    root_path = request.scope.get("root_path", "").rstrip("/")
-    return get_swagger_ui_html(
-        openapi_url=f"{root_path}{app.openapi_url}",
-        title=f"{app.title} - Swagger UI",
-        swagger_favicon_url=f"{root_path}/static/favicon.png",
-    )
-
-
-@app.get("/favicon.ico", include_in_schema=False)
-def favicon() -> FileResponse:
-    return FileResponse(FAVICON_PATH, media_type="image/png")
 
 
 @app.get("/")
