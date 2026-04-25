@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import Link from "next/link"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   BookOpen01Icon,
@@ -29,7 +30,6 @@ type SidebarNavProps = {
   role: AppRole
   workspace: RoleWorkspace
   activeItem: string
-  onActiveItemChange: (value: string) => void
   onRoleChange: (role: AppRole) => void
   user: {
     name: string
@@ -59,7 +59,6 @@ export function SidebarNav({
   role,
   workspace,
   activeItem,
-  onActiveItemChange,
   onRoleChange,
   user,
   collapsed,
@@ -69,7 +68,7 @@ export function SidebarNav({
   return (
     <aside
       className={cn(
-        "flex min-h-svh shrink-0 flex-col overflow-hidden border-r border-border bg-sidebar py-5 text-sidebar-foreground transition-[width,padding] duration-200 ease-out",
+        "flex h-svh shrink-0 flex-col overflow-hidden border-r border-border bg-sidebar py-5 text-sidebar-foreground transition-[width,padding] duration-200 ease-out",
         collapsed ? "w-18 px-3" : "w-64 px-4"
       )}
     >
@@ -133,16 +132,15 @@ export function SidebarNav({
         />
       </div>
 
-      <nav className="mt-7 flex flex-1 flex-col gap-0.5" aria-label="Primary">
+      <nav className="mt-7 flex min-h-0 flex-1 flex-col gap-0.5" aria-label="Primary">
         {workspace.navItems.map((item) => {
           const isActive = item.value === activeItem
           const icon = navIcons[item.value as keyof typeof navIcons]
 
           const navButton = (
-            <button
+            <Link
               key={item.value}
-              type="button"
-              onClick={() => onActiveItemChange(item.value)}
+              href={item.href}
               className={cn(
                 "group flex h-10 items-center rounded-2xl text-left text-sm transition-[background-color,color,padding,gap,width] duration-200 ease-out",
                 collapsed ? "w-10 justify-center gap-0 px-0" : "w-full gap-3 px-3",
@@ -181,7 +179,7 @@ export function SidebarNav({
                   {item.count}
                 </span>
               )}
-            </button>
+            </Link>
           )
 
           if (!collapsed) {
@@ -199,7 +197,7 @@ export function SidebarNav({
         })}
       </nav>
 
-      <div className="mt-6">
+      <div className="mt-auto pt-6">
         <ProfileMenu
           user={user}
           role={role}
