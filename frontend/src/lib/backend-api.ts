@@ -1,4 +1,5 @@
 import type {
+  ProjectDocumentation,
   ProjectPhase,
   ProjectSkillRequirements,
   SkillKey,
@@ -25,6 +26,22 @@ export type SkillProfileSuggestInput = {
   github_repo_urls: string[]
   project_phase: ProjectPhase
   task_description?: string | null
+}
+
+export type DocumentationChatMessage = {
+  role: "user" | "assistant"
+  content: string
+}
+
+export type DocumentationChatInput = {
+  message: string
+  history?: DocumentationChatMessage[]
+  mode?: "ask" | "edit"
+}
+
+export type DocumentationChatResponse = {
+  answer: string
+  updated_content_markdown: string | null
 }
 
 const backendApiBasePath = "/api"
@@ -174,6 +191,35 @@ export function suggestProjectRequirementsFromRepoRoute(
   input: SkillProfileSuggestInput
 ) {
   return suggestProjectRequirements(input)
+}
+
+export function refreshProjectDocumentation(projectId: number) {
+  return fetchBackendApi<ProjectDocumentation>(
+    `/projects/${projectId}/documentation:refresh`,
+    {
+      method: "POST",
+    }
+  )
+}
+
+export function chatWithProjectDocumentation(
+  projectId: number,
+  input: DocumentationChatInput
+) {
+  return fetchBackendApi<DocumentationChatResponse>(
+    `/projects/${projectId}/documentation:chat`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: input.message,
+        history: input.history ?? [],
+        mode: input.mode ?? "ask",
+      }),
+    }
+  )
 }
 
 export const skillKeys = backendSkillKeys
