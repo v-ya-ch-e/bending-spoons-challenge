@@ -64,6 +64,24 @@ export type ProjectCreateInput = Omit<
 
 export type ProjectUpdateInput = Partial<ProjectCreateInput>
 
+export type MatchingRunStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+
+export type MatchingRunUseCase =
+  | "portfolio_rebalance"
+  | "project_rebalance"
+  | "project_staffing"
+
+export type MatchingRun = {
+  id: number
+  use_case: MatchingRunUseCase
+  status: MatchingRunStatus
+  target_project_id: number | null
+}
+
 const dbApiBasePath = process.env.NEXT_PUBLIC_DB_API_BASE_URL ?? "/db-api"
 const listCacheTtlMs = 5 * 60 * 1000
 
@@ -75,6 +93,7 @@ type ListCacheEntry<T> = {
 
 let employeesCache: ListCacheEntry<Employee[]> | null = null
 let projectsCache: ListCacheEntry<Project[]> | null = null
+let matchingRunsCache: ListCacheEntry<MatchingRun[]> | null = null
 
 export class DbApiError extends Error {
   constructor(
@@ -252,6 +271,10 @@ export function getCachedProjects() {
   return isCacheFresh(projectsCache) ? projectsCache?.data : undefined
 }
 
+export function getCachedMatchingRuns() {
+  return isCacheFresh(matchingRunsCache) ? matchingRunsCache?.data : undefined
+}
+
 export async function listEmployees() {
   if (isCacheFresh(employeesCache)) {
     return employeesCache!.data
@@ -313,6 +336,38 @@ export async function listProjects() {
     projectsCache =
       projectsCache.data.length > 0
         ? { data: projectsCache.data, fetchedAt: projectsCache.fetchedAt }
+        : null
+    throw error
+  }
+}
+
+export async function listMatchingRuns() {
+  if (isCacheFresh(matchingRunsCache)) {
+    return matchingRunsCache!.data
+  }
+
+  if (matchingRunsCache?.promise) {
+    return matchingRunsCache.promise
+  }
+
+  const promise = fetchDbApi<MatchingRun[]>("/matching-runs?limit=500")
+  matchingRunsCache = {
+    data: matchingRunsCache?.data ?? [],
+    fetchedAt: matchingRunsCache?.fetchedAt ?? 0,
+    promise,
+  }
+
+  try {
+    const matchingRuns = await promise
+    matchingRunsCache = {
+      data: matchingRuns,
+      fetchedAt: Date.now(),
+    }
+    return matchingRuns
+  } catch (error) {
+    matchingRunsCache =
+      matchingRunsCache.data.length > 0
+        ? { data: matchingRunsCache.data, fetchedAt: matchingRunsCache.fetchedAt }
         : null
     throw error
   }
