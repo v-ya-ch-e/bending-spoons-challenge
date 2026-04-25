@@ -321,7 +321,7 @@ export function ProjectsScreen() {
         />
       )}
       <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 sm:p-6">
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -330,66 +330,62 @@ export function ProjectsScreen() {
             </p>
           </div>
 
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <InputGroup className="w-full sm:w-96">
-                <InputGroupAddon>
-                  <span>Search</span>
-                </InputGroupAddon>
-                <InputGroupInput
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Product, phase, skill, team member..."
-                  aria-label="Search projects"
-                />
-              </InputGroup>
-            </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <InputGroup className="w-full sm:w-80">
+              <InputGroupAddon>
+                <span>Search</span>
+              </InputGroupAddon>
+              <InputGroupInput
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Product, phase, skill, team..."
+                aria-label="Search projects"
+              />
+            </InputGroup>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-              <Select
-                value={sort}
-                onValueChange={(value) => setSort(value as SortKey)}
+            <Select
+              value={sort}
+              onValueChange={(value) => setSort(value as SortKey)}
+            >
+              <SelectTrigger
+                size="sm"
+                aria-label="Sort projects"
+                className="min-w-36"
               >
-                <SelectTrigger
-                  size="sm"
-                  aria-label="Sort projects"
-                  className="min-w-40"
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="name">Sort: Name</SelectItem>
+                  <SelectItem value="phase">Sort: Phase</SelectItem>
+                  <SelectItem value="team">Sort: Team size</SelectItem>
+                  <SelectItem value="gap">Sort: Staffing gap</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+
+            <Tabs
+              value={viewMode}
+              onValueChange={(value) => setViewMode(value as ViewMode)}
+              className="shrink-0"
+            >
+              <TabsList>
+                <TabsTrigger
+                  value="list"
+                  aria-label="List view"
+                  className="px-3"
                 >
-                  <SelectValue placeholder="Sort" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="name">Sort: Name</SelectItem>
-                    <SelectItem value="phase">Sort: Phase</SelectItem>
-                    <SelectItem value="team">Sort: Team size</SelectItem>
-                    <SelectItem value="gap">Sort: Staffing gap</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-
-              <Tabs
-                value={viewMode}
-                onValueChange={(value) => setViewMode(value as ViewMode)}
-                className="shrink-0"
-              >
-                <TabsList>
-                  <TabsTrigger
-                    value="list"
-                    aria-label="List view"
-                    className="px-3"
-                  >
-                    <HugeiconsIcon icon={ListViewIcon} strokeWidth={2} className="size-4" />
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="cards"
-                    aria-label="Grid view"
-                    className="px-3"
-                  >
-                    <HugeiconsIcon icon={GridViewIcon} strokeWidth={2} className="size-4" />
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
+                  <HugeiconsIcon icon={ListViewIcon} strokeWidth={2} className="size-4" />
+                </TabsTrigger>
+                <TabsTrigger
+                  value="cards"
+                  aria-label="Grid view"
+                  className="px-3"
+                >
+                  <HugeiconsIcon icon={GridViewIcon} strokeWidth={2} className="size-4" />
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
         </div>
 
