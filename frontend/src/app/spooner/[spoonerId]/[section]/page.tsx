@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation"
 
 import { roleWorkspaces } from "@/data/mock-navigation"
-import { WorkspacePlaceholder } from "@/components/workspace-placeholder"
+import { SpoonerWorkspace } from "@/components/spooner/spooner-workspace"
 
 type SpoonerSectionPageProps = {
   params: Promise<{
+    spoonerId: string
     section: string
   }>
 }
@@ -12,14 +13,18 @@ type SpoonerSectionPageProps = {
 export default async function SpoonerSectionPage({
   params,
 }: SpoonerSectionPageProps) {
-  const { section } = await params
+  const { spoonerId, section } = await params
   const item = roleWorkspaces.spooner.navItems.find(
     (navItem) => navItem.value === section
   )
 
-  if (!item) {
+  const parsedSpoonerId = Number.parseInt(spoonerId, 10)
+
+  if (!item || !Number.isFinite(parsedSpoonerId) || parsedSpoonerId <= 0) {
     notFound()
   }
 
-  return <WorkspacePlaceholder role="spooner" title={item.label} />
+  return (
+    <SpoonerWorkspace spoonerId={parsedSpoonerId} sectionLabel={item.label} />
+  )
 }
