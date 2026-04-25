@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   async rewrites() {
     const dbApiBaseUrl = process.env.DB_API_BASE_URL;
+    const backendApiBaseUrl = process.env.BACKEND_API_BASE_URL;
 
     if (!dbApiBaseUrl) {
       console.warn(
@@ -10,14 +11,27 @@ const nextConfig: NextConfig = {
       );
     }
 
+    if (!backendApiBaseUrl) {
+      console.warn(
+        "BACKEND_API_BASE_URL is not set; falling back to https://dev.doubleu.team/api"
+      );
+    }
+
     const resolvedUrl = (
       dbApiBaseUrl ?? "https://dev.doubleu.team/db-api"
+    ).replace(/\/$/, "");
+    const resolvedBackendUrl = (
+      backendApiBaseUrl ?? "https://dev.doubleu.team/api"
     ).replace(/\/$/, "");
 
     return [
       {
         source: "/db-api/:path*",
         destination: `${resolvedUrl}/:path*`,
+      },
+      {
+        source: "/api/:path*",
+        destination: `${resolvedBackendUrl}/:path*`,
       },
     ];
   },

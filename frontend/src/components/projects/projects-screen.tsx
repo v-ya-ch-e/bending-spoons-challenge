@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import Image from "next/image"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Cancel01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { listProjects, type Project, type SkillKey, type Skills } from "@/lib/db-api"
+import { CreateProjectDialog } from "@/components/projects/create-project-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   Avatar,
@@ -73,6 +75,9 @@ const filterItems: Array<{
 ]
 
 export function ProjectsScreen() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [projects, setProjects] = useState<Project[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [filter, setFilter] = useState<FilterKey>("all")
@@ -80,6 +85,7 @@ export function ProjectsScreen() {
   const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const createDialogOpen = searchParams.get("create") === "1"
 
   useEffect(() => {
     let isMounted = true
@@ -218,8 +224,43 @@ export function ProjectsScreen() {
     setSelectedProjectId(undefined)
   }
 
+  function handleCreateDialogOpenChange(open: boolean) {
+    if (open) {
+      router.push("/cto/projects?create=1")
+      return
+    }
+
+    router.replace(pathname)
+  }
+
+  function handleProjectCreated(project: Project) {
+    setProjects((currentProjects) => {
+      const exists = currentProjects.some(
+        (currentProject) => currentProject.id === project.id
+      )
+
+      if (exists) {
+        return currentProjects.map((currentProject) =>
+          currentProject.id === project.id ? project : currentProject
+        )
+      }
+
+      return [...currentProjects, project]
+    })
+    setError(null)
+    setSelectedProjectId(project.id)
+    router.replace("/cto/projects")
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
+      {createDialogOpen && (
+        <CreateProjectDialog
+          open={createDialogOpen}
+          onOpenChange={handleCreateDialogOpenChange}
+          onCreated={handleProjectCreated}
+        />
+      )}
       <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">

@@ -8,6 +8,8 @@ export type SkillKey =
 
 export type Skills = Record<SkillKey, number>
 
+export type ProjectPhase = "new acquisition" | "growth" | "maintenance"
+
 export type Employee = {
   id: number
   name: string
@@ -33,7 +35,7 @@ export type Project = {
   id: number
   project_name: string
   project_description: string
-  project_phase: "new acquisition" | "growth" | "maintenance"
+  project_phase: ProjectPhase
   icon_url: string
   poster_url: string
   current_team_member_ids: number[]
@@ -41,6 +43,13 @@ export type Project = {
   required_people_amount: number
   required_skills: Skills
   github_repositories: string[]
+}
+
+export type ProjectCreateInput = Omit<
+  Project,
+  "id" | "current_team_members" | "current_team_member_ids"
+> & {
+  current_team_member_ids?: number[]
 }
 
 const dbApiBasePath = process.env.NEXT_PUBLIC_DB_API_BASE_URL ?? "/db-api"
@@ -83,6 +92,16 @@ export function listEmployees() {
 
 export function listProjects() {
   return fetchDbApi<Project[]>("/projects?limit=500")
+}
+
+export function createProject(project: ProjectCreateInput) {
+  return fetchDbApi<Project>("/projects", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(project),
+  })
 }
 
 export function createEmployee(employee: EmployeeCreateInput) {
