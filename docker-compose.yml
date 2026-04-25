@@ -1,0 +1,12 @@
+services:
+  db-rest-api:
+    build:
+      context: ./db-rest-api
+    env_file:
+      - .env
+    environment:
+      ROOT_PATH: /db-api
+      APP_VERSION: "0.1.0"
+    ports:
+      - "127.0.0.1:${DB_REST_API_PORT:-8001}:8000"
+    restart: unless-stopped

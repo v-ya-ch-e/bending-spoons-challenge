@@ -78,30 +78,21 @@ This should not be a static “skills matrix.” At Bending Spoons, engineers ar
 
 Employee profile data:
 
-- Name and role.
-- Employee source: internal Bending Spoons employee or acquired-company employee.
-- Internal status for Bending Spoons employees: active, onboarding, transitioning, unavailable, leaving, or inactive.
-- Acquisition status for acquired-company employees: mapped, knowledge-holder, integration contact, leaving, or inactive.
-- Current project or originating acquired product/company.
-- Current allocation.
-- Availability.
+- Name.
+- Role.
+- Current project.
 - Skills and capabilities, using the core skill categories and level scale below.
-- Interests and preferred areas.
-- Previous projects.
-- GitHub activity signals.
-- Documentation contributions.
-- Relevant Notion/Slack/project involvement.
-- Ramp-up indicators and domain exposure.
-- Acquisition-specific knowledge, such as ownership of legacy systems, product history, and undocumented decisions.
+- Preferences (top3 preferred projects)
+- Interests.
 
 Core skill categories:
 
 - Android
 - iOS
-- Web
 - Backend
+- Web
 - Infrastructure
-- AI
+- AI/ML
 
 Skill levels:
 
@@ -123,8 +114,6 @@ Each employee profile should store skill levels per category, for example:
 }
 ```
 
-Additional tags such as payments, growth, subscriptions, media processing, developer tooling, or product integration can still exist, but only as secondary domain/context tags rather than core skill categories.
-
 ---
 
 ## 2. Project registry
@@ -134,22 +123,11 @@ A central overview of all active projects, products, acquired companies, and int
 Project data:
 
 - Project name.
-- Product/company.
-- Project phase: new acquisition, integration, growth, maintenance, incident, internal tooling.
+- Project description.
+- Project phase: new acquisition, growth, maintenance.
 - Current team members.
-- Required capabilities, using the core skill categories: Android, iOS, Web, Backend, Infrastructure, and AI.
-- Required skill levels from 0–3 per category.
-- AI-inferred required capabilities based on connected GitHub repositories, Notion docs, and Slack/project context.
-- CTO-adjusted required capabilities after review.
-- Urgency.
-- Expected duration.
-- Project goals.
+- Required people amount + skill levels per core skill category (Android, iOS, Web, Backend, Infrastructure, and AI/ML).
 - GitHub repositories.
-- Notion pages.
-- Slack channels.
-- Documentation health.
-- Staffing health.
-- Open risks and known blockers.
 
 The project registry becomes the single source of truth for what exists, who works where, what needs help, and what knowledge is available.
 
@@ -458,4 +436,3 @@ The platform helps leadership dynamically assign employees to projects, especial
 The CTO can create a new project, receive team recommendations, and send move requests. Employees can accept or reject project moves, see onboarding/offboarding todos, and access all relevant project resources. The documentation engine keeps project knowledge up to date and helps employees generate handoff documentation when they leave a project.
 
 The goal is to reduce ramp-up time, preserve project knowledge, and make dynamic team allocation faster, clearer, and less dependent on informal communication.
-
