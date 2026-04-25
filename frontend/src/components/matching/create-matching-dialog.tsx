@@ -10,6 +10,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 
 import { runProjectMatching, type MatchingRunResponse } from "@/lib/backend-api"
 import {
+  createMatchingPolicy,
   getMatchingRun,
   updateMatchingRun,
   type ImpactLevel,
@@ -21,6 +22,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -78,6 +80,10 @@ type FormState = {
   planName: string
   goal: string
   policyId: string
+  avoidBreakingMinimums: boolean
+  excludeOpenMoveRequests: boolean
+  preferFewerMoves: boolean
+  maxMoves: string
 }
 
 type GeneratedPlan = {
@@ -91,7 +97,7 @@ const steps: Array<{
   description: string
 }> = [
   { id: "target", label: "Target", description: "Company and goal." },
-  { id: "constraints", label: "Constraints", description: "API-backed policy." },
+  { id: "constraints", label: "Constraints", description: "Matching rules." },
   { id: "generate", label: "Generate", description: "Run matching." },
   { id: "final", label: "Final", description: "Review and confirm." },
 ]
@@ -103,6 +109,7 @@ const generationStepLabels = [
   "Estimating employee transition impact",
   "Building proposed move plan",
 ]
+const CUSTOM_POLICY_VALUE = "__custom__"
 
 export function CreateMatchingDialog({
   open,
@@ -117,6 +124,8 @@ export function CreateMatchingDialog({
   const initialProject = projects.find(
     (project) => String(project.id) === initialTargetProjectId
   )
+  const initialPolicy = policies.find((policy) => String(policy.id) === initialPolicyId)
+  const initialConstraints = getPolicyConstraintState(initialPolicy)
   const [stepIndex, setStepIndex] = useState(0)
   const [formState, setFormState] = useState<FormState>(() => ({
     targetProjectId: initialTargetProjectId,
@@ -125,6 +134,7 @@ export function CreateMatchingDialog({
       ? `Reach minimum staffing requirements for ${initialProject.project_name}.`
       : "",
     policyId: initialPolicyId,
+    ...initialConstraints,
   }))
   const [validationError, setValidationError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -137,9 +147,10 @@ export function CreateMatchingDialog({
   const targetProject = projects.find(
     (project) => String(project.id) === formState.targetProjectId
   )
-  const selectedPolicy = policies.find(
-    (policy) => String(policy.id) === formState.policyId
-  )
+  const isCustomPolicy = formState.policyId === CUSTOM_POLICY_VALUE
+  const selectedPolicy = isCustomPolicy
+    ? undefined
+    : policies.find((policy) => String(policy.id) === formState.policyId)
   const generatedSuggestion = generatedPlan?.response.suggestions[0]
 
   const summary = useMemo(() => {
@@ -194,6 +205,14 @@ export function CreateMatchingDialog({
       return "Select a matching policy."
     }
 
+    if (
+      step === "constraints" &&
+      formState.preferFewerMoves &&
+      Number(formState.maxMoves) < 1
+    ) {
+      return "Set the maximum move count."
+    }
+
     return null
   }
 
@@ -237,6 +256,26 @@ export function CreateMatchingDialog({
     setStepIndex((current) => Math.max(current - 1, 0))
   }
 
+  function handlePolicyChange(policyId: string) {
+    if (policyId === CUSTOM_POLICY_VALUE) {
+      updateFormState({ policyId })
+      return
+    }
+
+    const nextPolicy = policies.find((policy) => String(policy.id) === policyId)
+    updateFormState({
+      policyId,
+      ...getPolicyConstraintState(nextPolicy),
+    })
+  }
+
+  function handleConstraintChange(nextState: Partial<FormState>) {
+    updateFormState({
+      ...nextState,
+      policyId: CUSTOM_POLICY_VALUE,
+    })
+  }
+
   async function handleGenerate() {
     const targetValidationError = validateStep("target")
     const constraintsValidationError = validateStep("constraints")
@@ -252,8 +291,18 @@ export function CreateMatchingDialog({
     setSubmitError(null)
 
     try {
+      const runPolicy = isCustomPolicy
+        ? await createMatchingPolicy({
+            name: getCustomPolicyName(formState.planName),
+            description:
+              "Plan-specific matching constraints created from the CTO move-plan flow.",
+            config: getCustomPolicyConfig(formState, initialPolicy ?? policies[0]),
+            is_active: false,
+          })
+        : selectedPolicy
+
       const response = await runProjectMatching(targetProject.id, {
-        policy_id: formState.policyId ? Number(formState.policyId) : undefined,
+        policy_id: runPolicy?.id,
         requested_by: requestedBy,
       })
       const candidatePlanId =
@@ -266,16 +315,17 @@ export function CreateMatchingDialog({
         goal: formState.goal.trim(),
         targetProjectId: targetProject.id,
         targetProjectName: targetProject.project_name,
-        policyId: selectedPolicy?.id,
-        policyName: selectedPolicy?.name,
+        policyId: runPolicy?.id,
+        policyName: runPolicy?.name,
+        policyPreset: isCustomPolicy ? "Custom" : "Saved preset",
         candidatePool: "All employees in API matching scope",
         moveTiming: "Requests sent after CTO starts the draft request",
-        impactTolerance: selectedPolicy?.name ?? "Active matching policy",
-        avoidBreakingMinimums: Boolean(
-          selectedPolicy?.config.allow_understaff_current_project === false
-        ),
+        impactTolerance: runPolicy?.name ?? "Selected matching policy",
+        avoidBreakingMinimums: formState.avoidBreakingMinimums,
+        excludeOpenMoveRequests: formState.excludeOpenMoveRequests,
         preferLowerTransitionEffort: true,
-        preferFewerMoves: Boolean(selectedPolicy?.config.max_moves),
+        preferFewerMoves: formState.preferFewerMoves,
+        maxMoves: formState.preferFewerMoves ? Number(formState.maxMoves) : undefined,
         createdAt: new Date().toISOString(),
       }
 
@@ -353,16 +403,20 @@ export function CreateMatchingDialog({
                   <ConstraintsStep
                     policyId={formState.policyId}
                     policies={policies}
-                    selectedPolicy={selectedPolicy}
-                    onPolicyChange={(nextPolicyId) =>
-                      updateFormState({ policyId: nextPolicyId })
-                    }
+                    formState={formState}
+                    isCustomPolicy={isCustomPolicy}
+                    onPolicyChange={handlePolicyChange}
+                    onConstraintChange={handleConstraintChange}
                   />
                 )}
                 {currentStep.id === "generate" && (
                   <GenerateStep
                     targetProject={targetProject}
-                    selectedPolicy={selectedPolicy}
+                    policyLabel={
+                      isCustomPolicy
+                        ? "Custom impact tolerance"
+                        : selectedPolicy?.name ?? "Selected matching policy"
+                    }
                     isGenerating={isGenerating}
                   />
                 )}
@@ -549,23 +603,23 @@ function TargetStep({
 function ConstraintsStep({
   policyId,
   policies,
-  selectedPolicy,
+  formState,
+  isCustomPolicy,
   onPolicyChange,
+  onConstraintChange,
 }: {
   policyId: string
   policies: MatchingPolicy[]
-  selectedPolicy?: MatchingPolicy
+  formState: FormState
+  isCustomPolicy: boolean
   onPolicyChange: (policyId: string) => void
+  onConstraintChange: (nextState: Partial<FormState>) => void
 }) {
-  const maxMoves = selectedPolicy?.config.max_moves
-  const avoidUnderstaff = selectedPolicy?.config.allow_understaff_current_project === false
-  const pendingExcluded = selectedPolicy?.config.exclude_pending_move_requests !== false
-
   return (
     <section className="animate-in fade-in-0 slide-in-from-right-2 flex flex-col gap-6 duration-200">
       <StepHeading
         title="2. Constraints"
-        description="Choose how the API matching policy should search for possible moves."
+        description="Choose how the platform should search for possible moves."
       />
 
       <div className="grid gap-4 md:grid-cols-[14rem_1fr] md:items-center">
@@ -576,7 +630,7 @@ function ConstraintsStep({
         <FieldLabel>Impact tolerance</FieldLabel>
         <Select value={policyId} onValueChange={onPolicyChange}>
           <SelectTrigger>
-            <SelectValue placeholder="Select policy" />
+            <SelectValue placeholder="Select preset" />
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
@@ -585,6 +639,9 @@ function ConstraintsStep({
                   {policy.name}
                 </SelectItem>
               ))}
+              <SelectItem value={CUSTOM_POLICY_VALUE}>
+                Custom impact tolerance
+              </SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>
@@ -593,35 +650,75 @@ function ConstraintsStep({
       <div className="overflow-hidden rounded-3xl border bg-muted/40">
         <ConstraintRow
           label="Avoid breaking source company minimum requirements"
-          enabled={avoidUnderstaff}
+          description="Protect source teams from dropping below their staffing threshold."
+          checked={formState.avoidBreakingMinimums}
+          onCheckedChange={(checked) =>
+            onConstraintChange({ avoidBreakingMinimums: checked })
+          }
         />
-        <ConstraintRow label="Exclude employees with open move requests" enabled={pendingExcluded} />
+        <ConstraintRow
+          label="Exclude employees with open move requests"
+          description="Keep employees with unresolved transitions out of the candidate pool."
+          checked={formState.excludeOpenMoveRequests}
+          onCheckedChange={(checked) =>
+            onConstraintChange({ excludeOpenMoveRequests: checked })
+          }
+        />
         <ConstraintRow
           label="Prefer fewer company-to-company moves"
-          enabled={typeof maxMoves === "number"}
-          value={typeof maxMoves === "number" ? `Max ${maxMoves} moves` : undefined}
-        />
+          description="Limit disruption by capping the number of proposed moves."
+          checked={formState.preferFewerMoves}
+          onCheckedChange={(checked) =>
+            onConstraintChange({ preferFewerMoves: checked })
+          }
+        >
+          <Select
+            value={formState.maxMoves}
+            disabled={!formState.preferFewerMoves}
+            onValueChange={(maxMoves) => onConstraintChange({ maxMoves })}
+          >
+            <SelectTrigger size="sm" className="w-32">
+              <SelectValue placeholder="Max moves" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {[1, 2, 3, 4, 5].map((count) => (
+                  <SelectItem key={count} value={String(count)}>
+                    Max {count} {count === 1 ? "move" : "moves"}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </ConstraintRow>
       </div>
 
       <Alert>
         <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
-        <AlertTitle>API-backed constraints</AlertTitle>
+        <AlertTitle>Matching constraints</AlertTitle>
         <AlertDescription>
-          Candidate exclusions and timing are controlled by the selected matching policy.
-          The flow stores your plan metadata, then calls the existing matching runner.
+          These settings shape the matching policy for this plan. Saved presets reuse
+          existing platform rules, while custom changes are saved as a plan-specific
+          preset before recommendations are generated.
         </AlertDescription>
       </Alert>
+      {isCustomPolicy && (
+        <p className="text-xs text-muted-foreground">
+          Custom impact tolerance selected. This preset will be saved with the plan
+          when you generate recommendations.
+        </p>
+      )}
     </section>
   )
 }
 
 function GenerateStep({
   targetProject,
-  selectedPolicy,
+  policyLabel,
   isGenerating,
 }: {
   targetProject?: Project
-  selectedPolicy?: MatchingPolicy
+  policyLabel: string
   isGenerating: boolean
 }) {
   return (
@@ -685,7 +782,7 @@ function GenerateStep({
         />
         <SummaryRow
           label="Matching policy"
-          value={selectedPolicy?.name ?? "Active API policy"}
+          value={policyLabel}
         />
       </div>
     </section>
@@ -859,26 +956,33 @@ function ReadOnlyField({ children }: { children: ReactNode }) {
 
 function ConstraintRow({
   label,
-  enabled,
-  value,
+  description,
+  checked,
+  onCheckedChange,
+  children,
 }: {
   label: string
-  enabled: boolean
-  value?: string
+  description: string
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+  children?: ReactNode
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b px-4 py-3 last:border-b-0">
-      <span>{label}</span>
-      <Badge
-        variant="outline"
-        className={
-          enabled
-            ? "border-green-500/25 bg-green-500/10 text-green-700 dark:text-green-300"
-            : "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300"
-        }
-      >
-        {value ?? (enabled ? "On" : "Off")}
-      </Badge>
+    <div className="flex flex-col gap-3 border-b px-4 py-3 last:border-b-0 sm:flex-row sm:items-center sm:justify-between">
+      <label className="flex min-w-0 items-start gap-3">
+        <Checkbox
+          checked={checked}
+          onCheckedChange={(value) => onCheckedChange(value === true)}
+          className="mt-0.5"
+        />
+        <span className="min-w-0">
+          <span className="block font-medium">{label}</span>
+          <span className="mt-0.5 block text-xs text-muted-foreground">
+            {description}
+          </span>
+        </span>
+      </label>
+      {children ? <div className="shrink-0 sm:ml-4">{children}</div> : null}
     </div>
   )
 }
@@ -932,6 +1036,44 @@ function getSuggestionCoveragePercent(suggestion: MatchingRunResponse["suggestio
 function impactRank(impact: "low" | "medium" | "high") {
   const ranks = { low: 1, medium: 2, high: 3 }
   return ranks[impact]
+}
+
+function getPolicyConstraintState(policy?: MatchingPolicy): Pick<
+  FormState,
+  | "avoidBreakingMinimums"
+  | "excludeOpenMoveRequests"
+  | "preferFewerMoves"
+  | "maxMoves"
+> {
+  const maxMoves = Number(policy?.config.max_moves ?? 3)
+
+  return {
+    avoidBreakingMinimums:
+      policy?.config.allow_understaff_current_project === undefined
+        ? true
+        : policy.config.allow_understaff_current_project === false,
+    excludeOpenMoveRequests: policy?.config.exclude_pending_move_requests !== false,
+    preferFewerMoves: Number.isFinite(maxMoves),
+    maxMoves: String(Number.isFinite(maxMoves) ? maxMoves : 3),
+  }
+}
+
+function getCustomPolicyConfig(formState: FormState, basePolicy?: MatchingPolicy) {
+  return {
+    ...(basePolicy?.config ?? {}),
+    allow_understaff_current_project: !formState.avoidBreakingMinimums,
+    exclude_pending_move_requests: formState.excludeOpenMoveRequests,
+    max_moves: formState.preferFewerMoves ? Number(formState.maxMoves) : 5,
+  }
+}
+
+function getCustomPolicyName(planName: string) {
+  const suffix = Date.now()
+  const prefix = "Custom matching preset"
+  const cleanPlanName = planName.trim() || "Untitled move plan"
+  const maxPlanNameLength = 255 - prefix.length - String(suffix).length - 6
+
+  return `${prefix} - ${cleanPlanName.slice(0, maxPlanNameLength)} - ${suffix}`
 }
 
 function getInitials(value: string) {

@@ -127,6 +127,13 @@ export type MatchingPolicy = {
   activated_at: string | null
 }
 
+export type MatchingPolicyCreateInput = {
+  name: string
+  description?: string | null
+  config: Record<string, unknown>
+  is_active?: boolean
+}
+
 export type MatchingRun = {
   id: number
   use_case: MatchingRunUseCase
@@ -606,6 +613,16 @@ export function listMatchingPolicies() {
 
 export function getActiveMatchingPolicy() {
   return fetchDbApi<MatchingPolicy>("/policies/active")
+}
+
+export function createMatchingPolicy(policy: MatchingPolicyCreateInput) {
+  return fetchDbApi<MatchingPolicy>("/policies", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(policy),
+  })
 }
 
 export function listMatchingRuns() {

@@ -89,12 +89,15 @@ export type MatchingCreateFlowMetadata = {
   targetProjectName?: string
   policyId?: number
   policyName?: string
+  policyPreset?: string
   candidatePool?: string
   moveTiming?: string
   impactTolerance?: string
   avoidBreakingMinimums?: boolean
+  excludeOpenMoveRequests?: boolean
   preferLowerTransitionEffort?: boolean
   preferFewerMoves?: boolean
+  maxMoves?: number
   createdAt?: string
 }
 

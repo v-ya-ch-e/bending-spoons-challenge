@@ -109,16 +109,14 @@ export function MatchingScreen() {
   const [activeTab, setActiveTab] = useState<MatchingLifecycleState>("draft")
   const [createTargetProjectId, setCreateTargetProjectId] = useState("")
   const [detail, setDetail] = useState<DetailSelection>(null)
-  const [isLoading, setIsLoading] = useState(() => !cachedEmployees || !cachedProjects)
+  const [isLoading, setIsLoading] = useState(true)
   const [actionPlanId, setActionPlanId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const createDialogOpen = searchParams.get("create") === "1"
 
   const loadWorkspace = useCallback(async () => {
     try {
-      if (!getCachedEmployees() || !getCachedProjects()) {
-        setIsLoading(true)
-      }
+      setIsLoading(true)
       setError(null)
 
       const [
@@ -201,18 +199,6 @@ export function MatchingScreen() {
     String(policies.find((policy) => policy.is_active)?.id ?? "")
   const effectiveCreateTargetProjectId =
     createTargetProjectId || String(projects[0]?.id ?? "")
-
-  const metrics = useMemo(() => {
-    return {
-      drafts: plans.filter((plan) => plan.lifecycle === "draft").length,
-      active: plans.filter((plan) => plan.lifecycle === "active").length,
-      pendingApprovals: plans.reduce(
-        (sum, plan) => sum + plan.pendingApprovalCount,
-        0
-      ),
-      risky: plans.filter((plan) => plan.highestImpact !== "low").length,
-    }
-  }, [plans])
 
   function closeCreateDialog() {
     router.replace(pathname)
@@ -383,8 +369,6 @@ export function MatchingScreen() {
         </div>
       </div>
 
-      <MetricsStrip metrics={metrics} />
-
       {error && (
         <Alert variant="destructive">
           <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
@@ -393,21 +377,12 @@ export function MatchingScreen() {
         </Alert>
       )}
 
-      <Tabs
-        value={activeTab}
-        onValueChange={(value) => setActiveTab(value as MatchingLifecycleState)}
-      >
-        <TabsList>
-          {lifecycleTabs.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value}>
-              {tab.label}
-              <Badge variant="secondary">
-                {plans.filter((plan) => plan.lifecycle === tab.value).length}
-              </Badge>
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <LifecycleTabs
+        activeTab={activeTab}
+        isLoading={isLoading}
+        plans={plans}
+        onTabChange={setActiveTab}
+      />
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[21rem_minmax(0,1fr)]">
         <MovePlanList
@@ -467,32 +442,43 @@ export function MatchingScreen() {
   )
 }
 
-function MetricsStrip({
-  metrics,
+function LifecycleTabs({
+  activeTab,
+  isLoading,
+  plans,
+  onTabChange,
 }: {
-  metrics: {
-    drafts: number
-    active: number
-    pendingApprovals: number
-    risky: number
-  }
+  activeTab: MatchingLifecycleState
+  isLoading: boolean
+  plans: MovePlan[]
+  onTabChange: (tab: MatchingLifecycleState) => void
 }) {
-  const items = [
-    { label: "draft plans", value: metrics.drafts },
-    { label: "active requests", value: metrics.active },
-    { label: "pending approvals", value: metrics.pendingApprovals },
-    { label: "medium-risk plans", value: metrics.risky },
-  ]
+  if (isLoading) {
+    return (
+      <div className="flex gap-2 overflow-x-auto">
+        {lifecycleTabs.map((tab) => (
+          <Skeleton key={tab.value} className="h-9 w-36 shrink-0 rounded-3xl" />
+        ))}
+      </div>
+    )
+  }
 
   return (
-    <div className="grid gap-2 rounded-3xl border bg-card p-2 text-sm sm:grid-cols-2 xl:grid-cols-4">
-      {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-2 rounded-2xl px-3 py-2">
-          <span className="font-semibold">{item.value}</span>
-          <span className="text-muted-foreground">{item.label}</span>
-        </div>
-      ))}
-    </div>
+    <Tabs
+      value={activeTab}
+      onValueChange={(value) => onTabChange(value as MatchingLifecycleState)}
+    >
+      <TabsList>
+        {lifecycleTabs.map((tab) => (
+          <TabsTrigger key={tab.value} value={tab.value}>
+            {tab.label}
+            <Badge variant="secondary">
+              {plans.filter((plan) => plan.lifecycle === tab.value).length}
+            </Badge>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   )
 }
 
@@ -508,13 +494,22 @@ function MovePlanList({
   onSelectPlan: (planId: string) => void
 }) {
   return (
-    <Card className="min-h-0 shadow-none" size="sm">
+    <Card className="h-full min-h-0 shadow-none" size="sm">
       <CardHeader>
-        <CardTitle>Move plans</CardTitle>
-        <CardDescription>Select a plan to review coverage and impact.</CardDescription>
+        {isLoading ? (
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-5 w-28 rounded-full" />
+            <Skeleton className="h-4 w-64 max-w-full rounded-full" />
+          </div>
+        ) : (
+          <>
+            <CardTitle>Move plans</CardTitle>
+            <CardDescription>Select a plan to review coverage and impact.</CardDescription>
+          </>
+        )}
       </CardHeader>
-      <CardContent className="min-h-0 px-4">
-        <ScrollArea className="h-[34rem]">
+      <CardContent className="min-h-0 flex-1 px-4">
+        <ScrollArea className="h-full min-h-0">
           {isLoading ? (
             <div className="flex w-full flex-col gap-2">
               {Array.from({ length: 5 }).map((_, index) => (
@@ -1239,12 +1234,51 @@ function EmptyWorkspace({ onCreate }: { onCreate: () => void }) {
 
 function WorkspaceSkeleton() {
   return (
-    <div className="flex flex-col gap-4 rounded-4xl border bg-card p-4">
-      <Skeleton className="h-20 rounded-3xl" />
-      <Skeleton className="h-24 rounded-3xl" />
-      <div className="grid gap-4 xl:grid-cols-2">
+    <div className="flex min-w-0 flex-col gap-4 rounded-4xl border bg-card p-4">
+      <div className="flex flex-col gap-4 border-b pb-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <Skeleton className="size-12 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-6 w-72 max-w-full rounded-full" />
+            <Skeleton className="h-4 w-[28rem] max-w-full rounded-full" />
+            <Skeleton className="h-4 w-80 max-w-full rounded-full" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-28 rounded-3xl" />
+          <Skeleton className="h-9 w-32 rounded-3xl" />
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, index) => (
-          <Skeleton key={index} className="h-52 rounded-3xl" />
+          <Skeleton key={index} className="h-20 rounded-3xl" />
+        ))}
+      </div>
+
+      <div className="grid min-h-0 gap-4 2xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
+        <SectionSkeleton rows={6} />
+        <SectionSkeleton rows={5} />
+        <SectionSkeleton rows={4} />
+        <SectionSkeleton rows={4} />
+      </div>
+    </div>
+  )
+}
+
+function SectionSkeleton({ rows }: { rows: number }) {
+  return (
+    <div className="rounded-3xl border p-4">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-40 rounded-full" />
+          <Skeleton className="h-4 w-56 rounded-full" />
+        </div>
+        <Skeleton className="h-8 w-20 rounded-3xl" />
+      </div>
+      <div className="space-y-2">
+        {Array.from({ length: rows }).map((_, index) => (
+          <Skeleton key={index} className="h-10 rounded-2xl" />
         ))}
       </div>
     </div>
