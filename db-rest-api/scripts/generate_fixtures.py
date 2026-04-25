@@ -39,6 +39,21 @@ class Skills(StrictBaseModel):
     ai: int = Field(ge=0, le=3)
 
 
+class ProjectSkillRequirement(StrictBaseModel):
+    level_1: int = Field(ge=0)
+    level_2: int = Field(ge=0)
+    level_3: int = Field(ge=0)
+
+
+class ProjectSkillRequirements(StrictBaseModel):
+    android: ProjectSkillRequirement
+    ios: ProjectSkillRequirement
+    web: ProjectSkillRequirement
+    backend: ProjectSkillRequirement
+    infrastructure: ProjectSkillRequirement
+    ai: ProjectSkillRequirement
+
+
 class Employee(StrictBaseModel):
     name: str
     role: str
@@ -55,7 +70,7 @@ class Project(StrictBaseModel):
     icon_url: str
     poster_url: str
     required_people_amount: int = Field(ge=0)
-    required_skills: Skills
+    required_skills: ProjectSkillRequirements
     github_repositories: list[str] = Field(min_length=1, max_length=3)
 
 
@@ -231,6 +246,17 @@ PRODUCT_CATALOG: list[dict[str, Any]] = [
 ]
 
 
+def project_skill_requirements(levels: dict[str, int]) -> dict[str, dict[str, int]]:
+    return {
+        skill: {
+            "level_1": 1 if level == 1 else 0,
+            "level_2": 1 if level == 2 else 0,
+            "level_3": 1 if level == 3 else 0,
+        }
+        for skill, level in levels.items()
+    }
+
+
 def build_curated_projects(project_count: int) -> list[Project]:
     selected_products = PRODUCT_CATALOG[:project_count]
     return [
@@ -241,7 +267,9 @@ def build_curated_projects(project_count: int) -> list[Project]:
             icon_url=favicon_url(product["domain"]),
             poster_url=poster_url(product["product_url"]),
             required_people_amount=product["required_people_amount"],
-            required_skills=Skills(**product["required_skills"]),
+            required_skills=ProjectSkillRequirements(
+                **project_skill_requirements(product["required_skills"])
+            ),
             github_repositories=product["github_repositories"],
         )
         for product in selected_products

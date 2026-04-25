@@ -89,8 +89,8 @@ export function AppShell({
 
   return (
     <TooltipProvider>
-      <div className="min-h-svh bg-background text-foreground">
-        <div className="flex min-h-svh">
+      <div className="h-svh overflow-hidden bg-background text-foreground">
+        <div className="flex h-full min-h-0">
           <SidebarNav
             workspace={workspace}
             activeItem={activeNavItem.value}
@@ -102,7 +102,7 @@ export function AppShell({
             onThemeModeChange={handleThemeModeChange}
           />
 
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <Topbar
               workspace={workspace}
               activeLabel={activeNavItem.label}
@@ -112,7 +112,7 @@ export function AppShell({
               onSidebarCollapsedChange={handleSidebarCollapsedChange}
             />
 
-            <main className="flex-1 overflow-hidden">{children}</main>
+            <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
           </div>
         </div>
       </div>

@@ -38,6 +38,8 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
         value: "projects",
         href: "/cto/projects",
         count: "12",
+        primaryAction: "Add company",
+        primaryActionHref: "/cto/projects?create=1",
       },
       {
         label: "Employees",

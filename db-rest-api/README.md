@@ -254,7 +254,7 @@ See [db/schema.sql](db/schema.sql) for the source of truth. Summary:
 - `matching_hiring_recommendations(id, run_id FK, candidate_plan_id, project_id FK nullable, role_title, count, required_skills, reason, urgency, suggested_assignment, created_at)`
 - `matching_run_events(id, run_id FK, level, stage, event_type, message, metadata, created_at)`
 
-`skills` and `required_skills` use the brief's six keys exactly: `android`, `ios`, `web`, `backend`, `infrastructure`, `ai`. Levels are integers 0-3.
+`skills` uses the brief's six keys exactly: `android`, `ios`, `web`, `backend`, `infrastructure`, `ai`. Employee skill levels are integers 0-3. Project `required_skills` uses the same keys with per-level count buckets: `level_1`, `level_2`, and `level_3`.
 
 Matching persistence is storage-only. The backend matching pipeline creates runs,
 candidates, recommendations, hiring recommendations, and events through this

@@ -108,6 +108,16 @@ def test_serializers_expose_canonical_ids_and_legacy_names() -> None:
 
     assert project["current_team_member_ids"] == [10, 11]
     assert project["current_team_members"] == ["Giulia Rossi", "Marco Bianchi"]
+    assert project["required_skills"]["backend"] == {
+        "level_1": 0,
+        "level_2": 0,
+        "level_3": 1,
+    }
+    assert project["required_skills"]["android"] == {
+        "level_1": 1,
+        "level_2": 0,
+        "level_3": 0,
+    }
     assert employee["current_project_ids"] == [1, 2]
     assert employee["current_project_names"] == ["Evernote", "Remini"]
     assert employee["current_project"] == "Evernote"

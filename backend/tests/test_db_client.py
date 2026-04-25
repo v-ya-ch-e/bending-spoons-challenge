@@ -34,6 +34,17 @@ SKILL_ZERO = {
 }
 
 
+def project_requirements(levels: dict[str, int]) -> dict[str, dict[str, int]]:
+    return {
+        skill: {
+            "level_1": 1 if level == 1 else 0,
+            "level_2": 1 if level == 2 else 0,
+            "level_3": 1 if level == 3 else 0,
+        }
+        for skill, level in levels.items()
+    }
+
+
 def _unique(label: str) -> str:
     return f"bsc-test-{label}-{uuid.uuid4().hex[:8]}"
 
@@ -120,7 +131,7 @@ class TestDbApiClientProjects(unittest.TestCase):
             "poster_url": "https://example.com/poster.png",
             "current_team_member_ids": [],
             "required_people_amount": 2,
-            "required_skills": {**SKILL_ZERO, "backend": 2, "web": 1},
+            "required_skills": project_requirements({**SKILL_ZERO, "backend": 2, "web": 1}),
             "github_repositories": ["https://github.com/example/repo"],
         }
 
@@ -136,7 +147,10 @@ class TestDbApiClientProjects(unittest.TestCase):
 
         self.assertEqual(created["project_name"], payload["project_name"])
         self.assertEqual(created["project_phase"], "growth")
-        self.assertEqual(created["required_skills"]["backend"], 2)
+        self.assertEqual(
+            created["required_skills"]["backend"],
+            {"level_1": 0, "level_2": 1, "level_3": 0},
+        )
         self.assertEqual(created["icon_url"], payload["icon_url"])
         self.assertEqual(created["poster_url"], payload["poster_url"])
         self.assertEqual(created["current_team_member_ids"], [])
@@ -267,7 +281,7 @@ class TestDbApiClientMoveRequests(unittest.TestCase):
                 "poster_url": "https://example.com/poster.png",
                 "current_team_member_ids": [],
                 "required_people_amount": 1,
-                "required_skills": SKILL_ZERO,
+                "required_skills": project_requirements(SKILL_ZERO),
                 "github_repositories": [],
             }
         )
@@ -280,7 +294,7 @@ class TestDbApiClientMoveRequests(unittest.TestCase):
                 "poster_url": "https://example.com/poster.png",
                 "current_team_member_ids": [],
                 "required_people_amount": 2,
-                "required_skills": {**SKILL_ZERO, "backend": 2},
+                "required_skills": project_requirements({**SKILL_ZERO, "backend": 2}),
                 "github_repositories": [],
             }
         )
