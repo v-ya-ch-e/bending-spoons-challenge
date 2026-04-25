@@ -1,15 +1,15 @@
 "use client"
 
+import type { ReactNode } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
-  Briefcase01Icon,
-  CrownIcon,
   Logout03Icon,
   Settings01Icon,
   UnfoldMoreIcon,
 } from "@hugeicons/core-free-icons"
 
 import type { AppRole } from "@/data/mock-navigation"
+import type { ThemeMode } from "@/lib/ui-preferences"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,22 +31,34 @@ type ProfileMenuProps = {
   }
   role: AppRole
   onRoleChange: (role: AppRole) => void
+  themeMode: ThemeMode
+  onThemeModeChange: (mode: ThemeMode) => void
   compact?: boolean
 }
 
 const roleItems: Array<{
   value: AppRole
   label: string
-  icon: typeof CrownIcon
 }> = [
-  { value: "cto", label: "CTO", icon: CrownIcon },
-  { value: "spooner", label: "Spooner", icon: Briefcase01Icon },
+  { value: "cto", label: "CTO" },
+  { value: "spooner", label: "Spooner" },
+]
+
+const themeItems: Array<{
+  value: ThemeMode
+  label: string
+}> = [
+  { value: "auto", label: "Auto" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
 ]
 
 export function ProfileMenu({
   user,
   role,
   onRoleChange,
+  themeMode,
+  onThemeModeChange,
   compact,
 }: ProfileMenuProps) {
   return (
@@ -55,13 +67,15 @@ export function ProfileMenu({
         <Button
           variant="ghost"
           className={cn(
-            "pointer-events-auto h-auto rounded-3xl px-2 py-2",
-            compact ? "gap-2" : "w-full justify-between gap-3"
+            "pointer-events-auto rounded-3xl bg-muted/50",
+            compact
+              ? "size-10 justify-center rounded-2xl p-0"
+              : "min-h-16 w-full justify-between gap-3 px-4 py-3"
           )}
           aria-label="Open profile menu"
         >
           <span className="flex min-w-0 items-center gap-3">
-            <Avatar>
+            <Avatar size={compact ? "default" : "lg"}>
               <AvatarFallback>{user.initials}</AvatarFallback>
             </Avatar>
             {!compact && (
@@ -75,14 +89,16 @@ export function ProfileMenu({
               </span>
             )}
           </span>
-          <HugeiconsIcon
-            icon={UnfoldMoreIcon}
-            strokeWidth={2}
-            className="size-4 text-muted-foreground"
-          />
+          {!compact && (
+            <HugeiconsIcon
+              icon={UnfoldMoreIcon}
+              strokeWidth={2}
+              className="size-4 text-muted-foreground"
+            />
+          )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" className="w-72 p-2">
         <DropdownMenuLabel>
           <span className="block text-sm font-medium text-foreground">
             {user.name}
@@ -90,30 +106,32 @@ export function ProfileMenu({
           <span className="block truncate text-xs">{user.email}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>View</DropdownMenuLabel>
-        <div className="grid grid-cols-2 gap-1 rounded-3xl bg-muted p-1">
-          {roleItems.map((item) => {
-            const isActive = item.value === role
-
-            return (
-              <button
+        <SwitchRow label="View">
+          <SegmentedControl>
+            {roleItems.map((item) => (
+              <SegmentButton
                 key={item.value}
-                type="button"
-                aria-pressed={isActive}
+                active={item.value === role}
                 onClick={() => onRoleChange(item.value)}
-                className={cn(
-                  "flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-2xl text-xs font-medium transition-colors",
-                  isActive
-                    ? "bg-background text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
               >
-                <HugeiconsIcon icon={item.icon} strokeWidth={2} />
                 {item.label}
-              </button>
-            )
-          })}
-        </div>
+              </SegmentButton>
+            ))}
+          </SegmentedControl>
+        </SwitchRow>
+        <SwitchRow label="Theme">
+          <SegmentedControl>
+            {themeItems.map((item) => (
+              <SegmentButton
+                key={item.value}
+                active={item.value === themeMode}
+                onClick={() => onThemeModeChange(item.value)}
+              >
+                {item.label}
+              </SegmentButton>
+            ))}
+          </SegmentedControl>
+        </SwitchRow>
         <DropdownMenuSeparator />
         <DropdownMenuItem>
           <HugeiconsIcon icon={Settings01Icon} strokeWidth={2} />
@@ -126,5 +144,56 @@ export function ProfileMenu({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+function SwitchRow({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-3 py-1.5">
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </div>
+  )
+}
+
+function SegmentedControl({ children }: { children: ReactNode }) {
+  return (
+    <div className="inline-flex shrink-0 rounded-full bg-muted p-1">
+      {children}
+    </div>
+  )
+}
+
+function SegmentButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "h-7 min-w-14 cursor-pointer rounded-full px-2.5 text-xs font-medium transition-colors",
+        active
+          ? "bg-background text-foreground shadow-xs"
+          : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {children}
+    </button>
   )
 }

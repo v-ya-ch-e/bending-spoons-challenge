@@ -10,12 +10,29 @@ import {
 import { SidebarNav } from "@/components/sidebar-nav"
 import { Topbar } from "@/components/topbar"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import {
+  preferenceCookieMaxAge,
+  sidebarCollapsedCookieName,
+  themeModeCookieName,
+  type ThemeMode,
+} from "@/lib/ui-preferences"
 
-const sidebarStorageKey = "talent-os-sidebar-collapsed"
+type AppShellProps = {
+  initialSidebarCollapsed: boolean
+  initialThemeMode: ThemeMode
+}
 
-export function AppShell() {
+function writePreferenceCookie(name: string, value: string) {
+  document.cookie = `${name}=${value}; path=/; max-age=${preferenceCookieMaxAge}; samesite=lax`
+}
+
+export function AppShell({
+  initialSidebarCollapsed,
+  initialThemeMode,
+}: AppShellProps) {
   const [role, setRole] = useState<AppRole>("cto")
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed)
+  const [themeMode, setThemeMode] = useState<ThemeMode>(initialThemeMode)
   const [activeByRole, setActiveByRole] = useState<Record<AppRole, string>>({
     cto: roleWorkspaces.cto.navItems[0].value,
     spooner: roleWorkspaces.spooner.navItems[0].value,
@@ -32,14 +49,21 @@ export function AppShell() {
   )
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      setSidebarCollapsed(
-        window.localStorage.getItem(sidebarStorageKey) === "true"
-      )
-    })
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
 
-    return () => window.cancelAnimationFrame(frame)
-  }, [])
+    function applyTheme() {
+      const shouldUseDark =
+        themeMode === "dark" ||
+        (themeMode === "auto" && mediaQuery.matches)
+
+      document.documentElement.classList.toggle("dark", shouldUseDark)
+    }
+
+    applyTheme()
+    mediaQuery.addEventListener("change", applyTheme)
+
+    return () => mediaQuery.removeEventListener("change", applyTheme)
+  }, [themeMode])
 
   function handleRoleChange(nextRole: AppRole) {
     setRole(nextRole)
@@ -51,7 +75,14 @@ export function AppShell() {
 
   function handleSidebarCollapsedChange(collapsed: boolean) {
     setSidebarCollapsed(collapsed)
-    window.localStorage.setItem(sidebarStorageKey, String(collapsed))
+    window.localStorage.setItem(sidebarCollapsedCookieName, String(collapsed))
+    writePreferenceCookie(sidebarCollapsedCookieName, String(collapsed))
+  }
+
+  function handleThemeModeChange(mode: ThemeMode) {
+    setThemeMode(mode)
+    window.localStorage.setItem(themeModeCookieName, mode)
+    writePreferenceCookie(themeModeCookieName, mode)
   }
 
   return (
@@ -66,6 +97,8 @@ export function AppShell() {
             onRoleChange={handleRoleChange}
             user={currentUser}
             collapsed={sidebarCollapsed}
+            themeMode={themeMode}
+            onThemeModeChange={handleThemeModeChange}
           />
 
           <div className="flex min-w-0 flex-1 flex-col">

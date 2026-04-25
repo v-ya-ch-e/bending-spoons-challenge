@@ -16,7 +16,7 @@ import {
 } from "@hugeicons/core-free-icons"
 
 import type { AppRole, RoleWorkspace } from "@/data/mock-navigation"
-import { Separator } from "@/components/ui/separator"
+import type { ThemeMode } from "@/lib/ui-preferences"
 import {
   Tooltip,
   TooltipContent,
@@ -38,6 +38,8 @@ type SidebarNavProps = {
     team: string
   }
   collapsed: boolean
+  themeMode: ThemeMode
+  onThemeModeChange: (mode: ThemeMode) => void
 }
 
 const navIcons = {
@@ -61,6 +63,8 @@ export function SidebarNav({
   onRoleChange,
   user,
   collapsed,
+  themeMode,
+  onThemeModeChange,
 }: SidebarNavProps) {
   return (
     <aside
@@ -82,7 +86,20 @@ export function SidebarNav({
           height={190}
           priority
           className={cn(
-            "h-11 w-auto origin-left transition-[opacity,transform] duration-300 ease-out",
+            "h-11 w-auto origin-left transition-[opacity,transform] duration-300 ease-out dark:hidden",
+            collapsed
+              ? "pointer-events-none scale-95 opacity-0"
+              : "scale-100 opacity-100"
+          )}
+        />
+        <Image
+          src="/logo_bending_spoons_dark.svg"
+          alt="Bending Spoons"
+          width={410}
+          height={190}
+          priority
+          className={cn(
+            "hidden h-11 w-auto origin-left transition-[opacity,transform] duration-300 ease-out dark:block",
             collapsed
               ? "pointer-events-none scale-95 opacity-0"
               : "scale-100 opacity-100"
@@ -95,7 +112,20 @@ export function SidebarNav({
           height={57}
           priority
           className={cn(
-            "absolute left-1/2 h-8 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out",
+            "absolute left-1/2 h-5 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out dark:hidden",
+            collapsed
+              ? "scale-100 opacity-100"
+              : "pointer-events-none scale-90 opacity-0"
+          )}
+        />
+        <Image
+          src="/logo_bending_spoons_icon_dark.svg"
+          alt="Bending Spoons"
+          width={107}
+          height={57}
+          priority
+          className={cn(
+            "absolute left-1/2 hidden h-5 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out dark:block",
             collapsed
               ? "scale-100 opacity-100"
               : "pointer-events-none scale-90 opacity-0"
@@ -114,8 +144,8 @@ export function SidebarNav({
               type="button"
               onClick={() => onActiveItemChange(item.value)}
               className={cn(
-                "group flex h-10 w-full items-center rounded-2xl text-left text-sm transition-[background-color,color,padding,gap] duration-200 ease-out",
-                collapsed ? "justify-center gap-0 px-0" : "gap-3 px-3",
+                "group flex h-10 items-center rounded-2xl text-left text-sm transition-[background-color,color,padding,gap,width] duration-200 ease-out",
+                collapsed ? "w-10 justify-center gap-0 px-0" : "w-full gap-3 px-3",
                 isActive
                   ? "bg-muted text-foreground"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -131,8 +161,10 @@ export function SidebarNav({
               </span>
               <span
                 className={cn(
-                  "min-w-0 flex-1 overflow-hidden transition-[opacity,width] duration-150 ease-out",
-                  collapsed ? "w-0 opacity-0" : "w-auto opacity-100"
+                  "min-w-0 overflow-hidden transition-[opacity,width] duration-150 ease-out",
+                  collapsed
+                    ? "w-0 flex-none opacity-0"
+                    : "w-auto flex-1 opacity-100"
                 )}
               >
                 <span className="block truncate text-sm font-medium">
@@ -168,20 +200,14 @@ export function SidebarNav({
       </nav>
 
       <div className="mt-6">
-        <Separator className="mb-3" />
-        <div
-          className={cn(
-            "rounded-3xl bg-muted/50 p-1.5 transition-colors",
-            collapsed && "bg-transparent p-0"
-          )}
-        >
-          <ProfileMenu
-            user={user}
-            role={role}
-            onRoleChange={onRoleChange}
-            compact={collapsed}
-          />
-        </div>
+        <ProfileMenu
+          user={user}
+          role={role}
+          onRoleChange={onRoleChange}
+          compact={collapsed}
+          themeMode={themeMode}
+          onThemeModeChange={onThemeModeChange}
+        />
       </div>
     </aside>
   )
