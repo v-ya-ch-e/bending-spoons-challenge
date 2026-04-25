@@ -276,7 +276,10 @@ export async function listEmployees() {
     }
     return employees
   } catch (error) {
-    employeesCache = employeesCache.data.length > 0 ? employeesCache : null
+    employeesCache =
+      employeesCache.data.length > 0
+        ? { data: employeesCache.data, fetchedAt: employeesCache.fetchedAt }
+        : null
     throw error
   }
 }
@@ -307,7 +310,10 @@ export async function listProjects() {
     }
     return normalizedProjects
   } catch (error) {
-    projectsCache = projectsCache.data.length > 0 ? projectsCache : null
+    projectsCache =
+      projectsCache.data.length > 0
+        ? { data: projectsCache.data, fetchedAt: projectsCache.fetchedAt }
+        : null
     throw error
   }
 }
