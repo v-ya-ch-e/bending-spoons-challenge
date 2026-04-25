@@ -13,18 +13,30 @@ export type Employee = {
   name: string
   role: string
   current_project: string | null
+  current_project_ids: number[]
+  current_project_names: string[]
   skills: Skills
   preferences: string[]
   interests: string[]
 }
 
-export type EmployeeCreateInput = Omit<Employee, "id">
+export type EmployeeCreateInput = {
+  name: string
+  role: string
+  current_project: string | null
+  skills: Skills
+  preferences: string[]
+  interests: string[]
+}
 
 export type Project = {
   id: number
   project_name: string
   project_description: string
   project_phase: "new acquisition" | "growth" | "maintenance"
+  icon_url: string
+  poster_url: string
+  current_team_member_ids: number[]
   current_team_members: string[]
   required_people_amount: number
   required_skills: Skills
