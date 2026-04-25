@@ -20,14 +20,14 @@ export function Topbar({
   onSidebarCollapsedChange,
 }: TopbarProps) {
   return (
-    <header className="sticky top-0 z-20 border-b border-border bg-background/85 px-4 backdrop-blur-xl sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-20 border-b border-border bg-background/85 px-3 backdrop-blur-xl sm:px-4 lg:px-4">
       <div className="flex h-14 min-w-0 items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="rounded-2xl"
+            className="-ml-1 rounded-2xl"
             aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-pressed={sidebarCollapsed}
             onClick={() => onSidebarCollapsedChange(!sidebarCollapsed)}
