@@ -31,16 +31,14 @@ jobs:
         username: ${{ secrets.EC2_USERNAME }}
         key: ${{ secrets.EC2_SSH_KEY }}
         envs: GH_TOKEN,REPO,BRANCH,DEPLOY_PATH,COMPOSE_PROJECT_NAME,DB_REST_API_PORT
-        script_stop: true
+        script_stop: false
         script: |
+          set -euo pipefail
+
           if [ -z "$DEPLOY_PATH" ] || [ -z "$COMPOSE_PROJECT_NAME" ] || [ -z "$DB_REST_API_PORT" ]; then
             echo "Missing required deployment configuration"
             exit 1
           fi
-
-          case "$DEPLOY_PATH" in
-            "~"*) DEPLOY_PATH="${HOME}${DEPLOY_PATH#\~}" ;;
-          esac
 
           mkdir -p "$DEPLOY_PATH"
           cd "$DEPLOY_PATH"
