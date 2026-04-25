@@ -99,7 +99,13 @@ Common DB error mapping:
 `move_requests.status`:
 
 ```json
-["pending", "accepted", "rejected", "clarification_requested"]
+["pending", "accepted", "rejected", "clarification_requested", "transition_started", "completed"]
+```
+
+`approval_status`:
+
+```json
+["pending", "approved", "rejected"]
 ```
 
 `matching_runs.use_case`:
@@ -118,6 +124,18 @@ Common DB error mapping:
 
 ```json
 ["pending", "running", "ready", "failed"]
+```
+
+`move_request_transition_instructions.instruction_type`:
+
+```json
+["onboarding", "offboarding"]
+```
+
+`move_request_transition_instructions.status`:
+
+```json
+["pending", "running", "ready", "failed", "solved"]
 ```
 
 `matching_run_events.level`:
@@ -346,6 +364,7 @@ Stored fields:
 - `id`: integer primary key, auto-incremented.
 - `name`: required string, unique, maximum 255 characters.
 - `role`: required string, maximum 255 characters.
+- `github_username`: required unique GitHub username, maximum 39 characters.
 - `skills`: required JSON object matching the skill contract.
 - `preferences`: required JSON array of project-name strings.
 - `interests`: required JSON array of short interest strings.
@@ -369,6 +388,7 @@ Endpoints:
 - `POST /employees`
 - `GET /employees/{employee_id}`
 - `PUT /employees/{employee_id}`
+- `GET /employees/{employee_id}/transition-instructions`
 - `DELETE /employees/{employee_id}`
 
 Create payload:
@@ -377,6 +397,7 @@ Create payload:
 {
   "name": "Marco Bianchi",
   "role": "Backend engineer",
+  "github_username": "marco-bianchi",
   "current_project_ids": [1, 2],
   "skills": {
     "android": 0,
@@ -398,6 +419,7 @@ Response shape:
   "id": 1,
   "name": "Marco Bianchi",
   "role": "Backend engineer",
+  "github_username": "marco-bianchi",
   "current_project_ids": [1, 2],
   "current_project_names": ["Evernote", "Remini"],
   "current_project": "Evernote",
@@ -432,7 +454,11 @@ Stored fields:
 - `reason`: required text.
 - `expected_role`: required string, maximum 255 characters.
 - `current_project_impact`: required enum, one of `low`, `medium`, `high`.
-- `status`: required enum, one of `pending`, `accepted`, `rejected`, `clarification_requested`.
+- `status`: required enum, one of `pending`, `accepted`, `rejected`, `clarification_requested`, `transition_started`, `completed`.
+- `cto_approval_status`: required approval enum, defaults to `pending`.
+- `cto_approved_at`: nullable datetime set when the CTO approves.
+- `employee_approval_status`: required approval enum, defaults to `pending`.
+- `employee_approved_at`: nullable datetime set when the employee approves.
 - `created_at`: required datetime, defaults to current timestamp in MySQL.
 - `responded_at`: nullable datetime.
 
@@ -448,6 +474,9 @@ Endpoints:
 - `POST /move-requests`
 - `GET /move-requests/{request_id}`
 - `PUT /move-requests/{request_id}`
+- `POST /move-requests/{request_id}/approval`
+- `POST /move-requests/{request_id}:start-transition`
+- `POST /move-requests/{request_id}:complete`
 - `DELETE /move-requests/{request_id}`
 
 Create payload:
@@ -460,7 +489,9 @@ Create payload:
   "reason": "Backend and infrastructure experience match the target project's needs.",
   "expected_role": "Backend/platform engineer",
   "current_project_impact": "low",
-  "status": "pending"
+  "status": "pending",
+  "cto_approval_status": "pending",
+  "employee_approval_status": "pending"
 }
 ```
 
@@ -479,6 +510,10 @@ Response shape:
   "expected_role": "Backend/platform engineer",
   "current_project_impact": "low",
   "status": "pending",
+  "cto_approval_status": "pending",
+  "cto_approved_at": null,
+  "employee_approval_status": "pending",
+  "employee_approved_at": null,
   "created_at": "2026-04-25T12:00:00",
   "responded_at": null
 }
@@ -487,15 +522,80 @@ Response shape:
 Status behavior:
 
 - New move requests default to `pending` if `status` is omitted.
-- Updating `status` to `accepted`, `rejected`, or `clarification_requested` sets `responded_at` to the API server's current UTC time stored as a naive MySQL datetime.
+- Updating `status` to any non-`pending` value sets `responded_at` to the API server's current UTC time stored as a naive MySQL datetime.
 - Updating `status` back to `pending` clears `responded_at`.
 - Updating other fields without `status` leaves `responded_at` unchanged.
+- `POST /move-requests/{request_id}/approval` accepts `{ "approver": "cto" | "employee", "approval_status": "approved" | "rejected" | "pending" }`. A single approval moves a pending request to `accepted`; both approvals move it to `transition_started`; any rejection moves it to `rejected`.
+- `POST /move-requests/{request_id}:start-transition` requires both approvals and sets `status` to `transition_started`.
+- `POST /move-requests/{request_id}:complete` requires both transition instruction rows to be `solved` and sets `status` to `completed`.
 
 Foreign-key behavior:
 
 - `employee_id` must reference an existing employee.
 - `to_project_id` must reference an existing project.
 - `from_project_id` may be `null`, but a non-null value must reference an existing project.
+
+## Move Request Transition Instructions
+
+Database table: `move_request_transition_instructions`
+
+Stored fields:
+
+- `id`: integer primary key, auto-incremented.
+- `move_request_id`: required integer foreign key to `move_requests.id`.
+- `instruction_type`: required enum, either `onboarding` or `offboarding`.
+- `status`: required enum, one of `pending`, `running`, `ready`, `failed`, `solved`.
+- `content_markdown`: required Markdown content.
+- `input_snapshot`: nullable JSON object containing generation inputs.
+- `source_documentation_id`: nullable foreign key to `project_documentation.id`.
+- `source_documentation_updated_at`: nullable datetime copied from the source documentation row.
+- `model_metadata`: nullable JSON object.
+- `last_error`: nullable text.
+- `solved_at`: nullable datetime set when the employee marks the instruction solved.
+- `solved_by_employee_id`: nullable foreign key to `employees.id`.
+- `created_at`: datetime set by MySQL.
+- `updated_at`: datetime set by MySQL and updated on row changes.
+
+Uniqueness:
+
+- There can be only one row per `(move_request_id, instruction_type)`.
+
+Endpoints:
+
+- `GET /move-request-transition-instructions`
+- `POST /move-request-transition-instructions`
+- `GET /move-request-transition-instructions/{instruction_id}`
+- `PUT /move-request-transition-instructions/{instruction_id}`
+- `DELETE /move-request-transition-instructions/{instruction_id}`
+- `GET /employees/{employee_id}/transition-instructions`
+- `GET /move-requests/{request_id}/transition-instructions/{instruction_type}`
+- `PUT /move-requests/{request_id}/transition-instructions/{instruction_type}`
+- `POST /move-requests/{request_id}/transition-instructions/{instruction_type}:solve`
+- `GET /move-requests/{request_id}/instructions/{instruction_type}`
+- `PUT /move-requests/{request_id}/instructions/{instruction_type}`
+- `POST /move-requests/{request_id}/instructions/{instruction_type}:solve`
+
+Create payload:
+
+```json
+{
+  "move_request_id": 1,
+  "instruction_type": "onboarding",
+  "status": "ready",
+  "content_markdown": "# Onboarding\n\n- Read the architecture overview.",
+  "input_snapshot": { "project_id": 2 },
+  "source_documentation_id": 5,
+  "source_documentation_updated_at": "2026-04-25T12:00:00",
+  "model_metadata": { "model": "gpt-4o", "prompt_version": "transition_instruction_v1" }
+}
+```
+
+Solve behavior:
+
+- `GET /employees/{employee_id}/transition-instructions` accepts optional `instruction_type` plus `limit` and `offset`, and returns instructions joined with move-request employee/project display fields.
+- `POST /move-requests/{request_id}/transition-instructions/{instruction_type}:solve` marks the selected instruction as `solved`; `/instructions/...:solve` is kept as a compatibility alias.
+- If `solved_by_employee_id` is omitted, the API uses the employee from the parent move request.
+- If both onboarding and offboarding rows for the same move request are `solved`, the API marks the parent move request `completed`.
 
 ## Policies
 

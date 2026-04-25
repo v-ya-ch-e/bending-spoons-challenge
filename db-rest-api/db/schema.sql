@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS employees (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     role VARCHAR(255) NOT NULL,
+    github_username VARCHAR(39) NOT NULL UNIQUE,
     skills JSON NOT NULL,
     preferences JSON NOT NULL,
     interests JSON NOT NULL
@@ -55,12 +56,39 @@ CREATE TABLE IF NOT EXISTS move_requests (
     reason TEXT NOT NULL,
     expected_role VARCHAR(255) NOT NULL,
     current_project_impact ENUM('low', 'medium', 'high') NOT NULL,
-    status ENUM('pending', 'accepted', 'rejected', 'clarification_requested') NOT NULL,
+    status ENUM('pending', 'accepted', 'rejected', 'clarification_requested', 'transition_started', 'completed') NOT NULL,
+    cto_approval_status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+    cto_approved_at DATETIME,
+    employee_approval_status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+    employee_approved_at DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     responded_at DATETIME,
     FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
     FOREIGN KEY (from_project_id) REFERENCES projects(id) ON DELETE SET NULL,
     FOREIGN KEY (to_project_id) REFERENCES projects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS move_request_transition_instructions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    move_request_id INT NOT NULL,
+    instruction_type ENUM('onboarding', 'offboarding') NOT NULL,
+    status ENUM('pending', 'running', 'ready', 'failed', 'solved') NOT NULL DEFAULT 'pending',
+    content_markdown MEDIUMTEXT NOT NULL,
+    input_snapshot JSON,
+    source_documentation_id INT,
+    source_documentation_updated_at DATETIME,
+    model_metadata JSON,
+    last_error TEXT,
+    solved_at DATETIME,
+    solved_by_employee_id INT,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (move_request_id) REFERENCES move_requests(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_documentation_id) REFERENCES project_documentation(id) ON DELETE SET NULL,
+    FOREIGN KEY (solved_by_employee_id) REFERENCES employees(id) ON DELETE SET NULL,
+    UNIQUE KEY uq_transition_instruction_move_type (move_request_id, instruction_type),
+    INDEX idx_transition_instruction_status (status),
+    INDEX idx_transition_instruction_updated (updated_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS policies (

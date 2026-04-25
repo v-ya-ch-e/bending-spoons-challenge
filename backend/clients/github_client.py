@@ -8,6 +8,8 @@ DOC_CONTEXT_MAX_TREE_PATHS = 200
 DOC_CONTEXT_MAX_FILES = 12
 DOC_CONTEXT_MAX_FILE_BYTES = 20_000
 DOC_CONTEXT_MAX_TOTAL_CHARS = 60_000
+COMMIT_CONTEXT_MAX_COMMITS = 8
+COMMIT_CONTEXT_MAX_FILES = 12
 
 
 class GitHubClient:
@@ -118,6 +120,58 @@ class GitHubClient:
                 "readme": readme_content[:20_000],
                 "file_tree": file_tree,
                 "sampled_files": sampled_files,
+            }
+
+    async def get_user_commit_context(
+        self,
+        owner: str,
+        repo: str,
+        username: str,
+    ) -> Dict[str, Any]:
+        """Fetch a capped commit summary for a user's public work in a repository."""
+        async with httpx.AsyncClient(headers=self.headers) as client:
+            commits_resp = await client.get(
+                f"{self.base_url}/repos/{owner}/{repo}/commits",
+                params={"author": username, "per_page": COMMIT_CONTEXT_MAX_COMMITS},
+            )
+            commits_resp.raise_for_status()
+            commits = []
+            for commit_summary in commits_resp.json()[:COMMIT_CONTEXT_MAX_COMMITS]:
+                sha = commit_summary.get("sha")
+                if not sha:
+                    continue
+                detail_resp = await client.get(
+                    f"{self.base_url}/repos/{owner}/{repo}/commits/{sha}"
+                )
+                if detail_resp.status_code != 200:
+                    continue
+                detail = detail_resp.json()
+                commit = detail.get("commit") or {}
+                author = commit.get("author") or {}
+                files = [
+                    {
+                        "filename": file.get("filename"),
+                        "status": file.get("status"),
+                        "additions": file.get("additions"),
+                        "deletions": file.get("deletions"),
+                        "changes": file.get("changes"),
+                    }
+                    for file in (detail.get("files") or [])[:COMMIT_CONTEXT_MAX_FILES]
+                ]
+                commits.append(
+                    {
+                        "sha": sha[:12],
+                        "html_url": detail.get("html_url"),
+                        "message": (commit.get("message") or "").splitlines()[0],
+                        "author_date": author.get("date"),
+                        "files": files,
+                    }
+                )
+
+            return {
+                "repository": f"{owner}/{repo}",
+                "author": username,
+                "commits": commits,
             }
 
     async def _fetch_file_content(

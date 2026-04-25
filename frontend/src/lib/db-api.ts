@@ -22,6 +22,7 @@ export type Employee = {
   id: number
   name: string
   role: string
+  github_username: string
   current_project: string | null
   current_project_ids: number[]
   current_project_names: string[]
@@ -33,6 +34,7 @@ export type Employee = {
 export type EmployeeCreateInput = {
   name: string
   role: string
+  github_username: string
   current_project: string | null
   skills: Skills
   preferences: string[]
@@ -93,6 +95,68 @@ export type ProjectDocumentationUpdateInput = Partial<
     | "last_generated_at"
   >
 >
+
+export type MoveRequestStatus =
+  | "pending"
+  | "accepted"
+  | "rejected"
+  | "clarification_requested"
+  | "transition_started"
+  | "completed"
+
+export type MoveRequestApprovalStatus = "pending" | "approved" | "rejected"
+
+export type MoveRequest = {
+  id: number
+  employee_id: number
+  employee_name: string
+  from_project_id: number | null
+  from_project_name: string | null
+  to_project_id: number
+  to_project_name: string
+  reason: string
+  expected_role: string
+  current_project_impact: "low" | "medium" | "high"
+  status: MoveRequestStatus
+  cto_approval_status: MoveRequestApprovalStatus
+  cto_approved_at: string | null
+  employee_approval_status: MoveRequestApprovalStatus
+  employee_approved_at: string | null
+  created_at: string
+  responded_at: string | null
+}
+
+export type TransitionInstructionType = "onboarding" | "offboarding"
+
+export type TransitionInstructionStatus =
+  | "pending"
+  | "running"
+  | "ready"
+  | "failed"
+  | "solved"
+
+export type TransitionInstruction = {
+  id: number
+  move_request_id: number
+  instruction_type: TransitionInstructionType
+  status: TransitionInstructionStatus
+  content_markdown: string
+  input_snapshot: Record<string, unknown> | null
+  source_documentation_id: number | null
+  source_documentation_updated_at: string | null
+  model_metadata: Record<string, unknown> | null
+  last_error: string | null
+  solved_at: string | null
+  solved_by_employee_id: number | null
+  employee_id: number
+  employee_name: string
+  from_project_id: number | null
+  from_project_name: string | null
+  to_project_id: number
+  to_project_name: string
+  created_at: string
+  updated_at: string
+}
 
 export type MatchingRunStatus =
   | "pending"
@@ -454,6 +518,39 @@ export function updateProjectDocumentationByProject(
     },
     body: JSON.stringify(documentation),
   })
+}
+
+export function listEmployeeTransitionInstructions(
+  employeeId: number,
+  instructionType?: TransitionInstructionType
+) {
+  const params = new URLSearchParams({ limit: "500" })
+  if (instructionType) {
+    params.set("instruction_type", instructionType)
+  }
+
+  return fetchDbApi<TransitionInstruction[]>(
+    `/employees/${employeeId}/transition-instructions?${params.toString()}`
+  )
+}
+
+export function markTransitionInstructionSolved(
+  moveRequestId: number,
+  instructionType: TransitionInstructionType,
+  employeeId: number
+) {
+  return fetchDbApi<TransitionInstruction>(
+    `/move-requests/${moveRequestId}/transition-instructions/${instructionType}:solve`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        solved_by_employee_id: employeeId,
+      }),
+    }
+  )
 }
 
 export function createEmployee(employee: EmployeeCreateInput) {

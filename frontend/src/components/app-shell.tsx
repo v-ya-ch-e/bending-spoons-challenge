@@ -64,22 +64,35 @@ export function AppShell({
       ? "cto"
       : initialRole
   const baseWorkspace = roleWorkspaces[role]
+  const spoonerEmployeeId = extractSpoonerEmployeeId(pathname)
 
   const workspace = useMemo(() => {
     const navItems: NavItem[] = baseWorkspace.navItems.map((item) => {
+      const nextItem =
+        role === "spooner" && spoonerEmployeeId
+          ? { ...item, href: `/spooner/${spoonerEmployeeId}/${item.value}` }
+          : item
+
       if (item.value === "projects" && projectCount !== undefined) {
-        return { ...item, count: String(projectCount) }
+        return { ...nextItem, count: String(projectCount) }
       }
       if (item.value === "employees" && employeeCount !== undefined) {
-        return { ...item, count: String(employeeCount) }
+        return { ...nextItem, count: String(employeeCount) }
       }
       if (item.value === "matching" && matchingRunCount !== undefined) {
-        return { ...item, count: String(matchingRunCount) }
+        return { ...nextItem, count: String(matchingRunCount) }
       }
-      return item
+      return nextItem
     })
     return { ...baseWorkspace, navItems }
-  }, [baseWorkspace, projectCount, employeeCount, matchingRunCount])
+  }, [
+    baseWorkspace,
+    employeeCount,
+    matchingRunCount,
+    projectCount,
+    role,
+    spoonerEmployeeId,
+  ])
 
   const activeNavItem = useMemo(() => {
     return (
@@ -178,4 +191,9 @@ export function AppShell({
       </div>
     </TooltipProvider>
   )
+}
+
+function extractSpoonerEmployeeId(pathname: string) {
+  const match = /^\/spooner\/([1-9]\d*)(?:\/|$)/.exec(pathname)
+  return match?.[1] ?? null
 }

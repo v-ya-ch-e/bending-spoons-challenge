@@ -88,9 +88,11 @@ def documentation_payload(project_id: int) -> dict[str, Any]:
 
 
 def employee_payload(name: str = "Marco Bianchi") -> dict[str, Any]:
+    username = name.lower().replace(" ", "-")
     return {
         "name": name,
         "role": "Backend engineer",
+        "github_username": username,
         "skills": deepcopy(SKILLS),
         "preferences": ["Atlas Staffing"],
         "interests": ["platform reliability", "internal tools"],
@@ -105,6 +107,20 @@ def move_request_payload(employee_id: int, to_project_id: int) -> dict[str, Any]
         "reason": "Backend and infrastructure experience match the project needs.",
         "expected_role": "Backend/platform engineer",
         "current_project_impact": "low",
+    }
+
+
+def transition_instruction_payload(
+    request_id: int,
+    instruction_type: str = "onboarding",
+) -> dict[str, Any]:
+    return {
+        "move_request_id": request_id,
+        "instruction_type": instruction_type,
+        "status": "ready",
+        "content_markdown": "# Transition steps\n\n- Read the docs.",
+        "input_snapshot": {"source": "test"},
+        "model_metadata": {"model": "gpt-4o"},
     }
 
 
@@ -216,6 +232,7 @@ class InMemoryDatabase:
         self.employees: list[dict[str, Any]] = []
         self.project_assignments: list[dict[str, int]] = []
         self.move_requests: list[dict[str, Any]] = []
+        self.move_request_transition_instructions: list[dict[str, Any]] = []
         self.matching_runs: list[dict[str, Any]] = []
         self.matching_candidates: list[dict[str, Any]] = []
         self.matching_recommendations: list[dict[str, Any]] = []
@@ -258,6 +275,7 @@ class InMemoryDatabase:
             "project_documentation": 1,
             "employees": 1,
             "move_requests": 1,
+            "move_request_transition_instructions": 1,
             "policies": 4,
             "matching_runs": 1,
             "matching_candidates": 1,
@@ -407,6 +425,87 @@ class InMemoryDatabase:
             return
         if normalized.startswith("delete from move_requests where id"):
             self._delete(cursor, params[0], self.move_requests)
+            return
+
+        if "from move_request_transition_instructions as instruction" in normalized:
+            if "where instruction.id" in normalized:
+                cursor._one = self._transition_instruction_row(
+                    next(
+                        (
+                            row
+                            for row in self.move_request_transition_instructions
+                            if row["id"] == params[0]
+                        ),
+                        None,
+                    )
+                )
+            elif "where mr.employee_id" in normalized:
+                employee_id = params[0]
+                instruction_type = params[1] if "instruction.instruction_type" in normalized else None
+                limit_params = params[2:] if instruction_type is not None else params[1:]
+                rows = [
+                    row
+                    for row in (
+                        self._transition_instruction_row(instruction)
+                        for instruction in self.move_request_transition_instructions
+                    )
+                    if row is not None
+                    and row["employee_id"] == employee_id
+                    and (
+                        instruction_type is None
+                        or row["instruction_type"] == instruction_type
+                    )
+                ]
+                cursor._many = self._limited(rows, limit_params)
+            elif "where instruction.move_request_id" in normalized:
+                cursor._one = self._transition_instruction_row(
+                    next(
+                        (
+                            row
+                            for row in self.move_request_transition_instructions
+                            if row["move_request_id"] == params[0]
+                            and row["instruction_type"] == params[1]
+                        ),
+                        None,
+                    )
+                )
+            else:
+                cursor._many = self._limited(
+                    [
+                        row
+                        for row in (
+                            self._transition_instruction_row(instruction)
+                            for instruction in self.move_request_transition_instructions
+                        )
+                        if row is not None
+                    ],
+                    params,
+                )
+            return
+        if normalized.startswith("select instruction_type, status from move_request_transition_instructions"):
+            cursor._many = [
+                {
+                    "instruction_type": row["instruction_type"],
+                    "status": row["status"],
+                }
+                for row in self.move_request_transition_instructions
+                if row["move_request_id"] == params[0]
+            ]
+            return
+        if normalized.startswith("insert into move_request_transition_instructions"):
+            self._insert_transition_instruction(cursor, sql, params)
+            return
+        if (
+            normalized.startswith("update move_request_transition_instructions set")
+            and "where move_request_id" in normalized
+        ):
+            self._update_transition_instruction_by_move_request(cursor, sql, params)
+            return
+        if normalized.startswith("update move_request_transition_instructions set"):
+            self._update(cursor, sql, params, self.move_request_transition_instructions)
+            return
+        if normalized.startswith("delete from move_request_transition_instructions where id"):
+            self._delete(cursor, params[0], self.move_request_transition_instructions)
             return
 
         if normalized.startswith("select * from policies where is_active"):
@@ -561,6 +660,11 @@ class InMemoryDatabase:
         row = dict(zip(columns, params, strict=True))
         if any(existing[unique_field] == row[unique_field] for existing in getattr(self, table)):
             raise pymysql.err.IntegrityError(1062, "Duplicate entry")
+        if table == "employees" and any(
+            existing["github_username"] == row["github_username"]
+            for existing in self.employees
+        ):
+            raise pymysql.err.IntegrityError(1062, "Duplicate entry")
         row["id"] = self.next_ids[table]
         self.next_ids[table] += 1
         getattr(self, table).append(row)
@@ -603,11 +707,48 @@ class InMemoryDatabase:
             raise pymysql.err.IntegrityError(1452, "Missing source project")
         if self._find(self.projects, row["to_project_id"]) is None:
             raise pymysql.err.IntegrityError(1452, "Missing target project")
+        row.setdefault("cto_approval_status", "pending")
+        row.setdefault("cto_approved_at", None)
+        row.setdefault("employee_approval_status", "pending")
+        row.setdefault("employee_approved_at", None)
         row.setdefault("created_at", datetime(2026, 4, 25, 12, 0, 0))
         row.setdefault("responded_at", None)
         row["id"] = self.next_ids["move_requests"]
         self.next_ids["move_requests"] += 1
         self.move_requests.append(row)
+        cursor.lastrowid = row["id"]
+        cursor.rowcount = 1
+
+    def _insert_transition_instruction(
+        self,
+        cursor: FakeCursor,
+        sql: str,
+        params: list[Any],
+    ) -> None:
+        columns = self._insert_columns(sql)
+        row = dict(zip(columns, params, strict=True))
+        if self._find(self.move_requests, row["move_request_id"]) is None:
+            raise pymysql.err.IntegrityError(1452, "Missing move request")
+        if any(
+            existing["move_request_id"] == row["move_request_id"]
+            and existing["instruction_type"] == row["instruction_type"]
+            for existing in self.move_request_transition_instructions
+        ):
+            raise pymysql.err.IntegrityError(1062, "Duplicate entry")
+        row.setdefault("status", "pending")
+        row.setdefault("content_markdown", "")
+        row.setdefault("input_snapshot", None)
+        row.setdefault("source_documentation_id", None)
+        row.setdefault("source_documentation_updated_at", None)
+        row.setdefault("model_metadata", None)
+        row.setdefault("last_error", None)
+        row.setdefault("solved_at", None)
+        row.setdefault("solved_by_employee_id", None)
+        row.setdefault("created_at", datetime(2026, 4, 25, 12, 0, 0))
+        row.setdefault("updated_at", datetime(2026, 4, 25, 12, 0, 0))
+        row["id"] = self.next_ids["move_request_transition_instructions"]
+        self.next_ids["move_request_transition_instructions"] += 1
+        self.move_request_transition_instructions.append(row)
         cursor.lastrowid = row["id"]
         cursor.rowcount = 1
 
@@ -711,6 +852,31 @@ class InMemoryDatabase:
             row[column] = value
         cursor.rowcount = 1
 
+    def _update_transition_instruction_by_move_request(
+        self,
+        cursor: FakeCursor,
+        sql: str,
+        params: list[Any],
+    ) -> None:
+        move_request_id = params[-2]
+        instruction_type = params[-1]
+        row = next(
+            (
+                item
+                for item in self.move_request_transition_instructions
+                if item["move_request_id"] == move_request_id
+                and item["instruction_type"] == instruction_type
+            ),
+            None,
+        )
+        if row is None:
+            cursor.rowcount = 0
+            return
+        columns = self._update_columns(sql)
+        for column, value in zip(columns, params[:-2], strict=True):
+            row[column] = value
+        cursor.rowcount = 1
+
     def _delete(self, cursor: FakeCursor, row_id: int, rows: list[dict[str, Any]]) -> None:
         original_count = len(rows)
         rows[:] = [row for row in rows if row["id"] != row_id]
@@ -808,6 +974,25 @@ class InMemoryDatabase:
             "project_name": project["project_name"],
         }
 
+    def _transition_instruction_row(
+        self,
+        instruction: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if instruction is None:
+            return None
+        move_request = self._move_request_row(instruction["move_request_id"])
+        if move_request is None:
+            return None
+        return {
+            **deepcopy(instruction),
+            "employee_id": move_request["employee_id"],
+            "employee_name": move_request["employee_name"],
+            "from_project_id": move_request["from_project_id"],
+            "from_project_name": move_request["from_project_name"],
+            "to_project_id": move_request["to_project_id"],
+            "to_project_name": move_request["to_project_name"],
+        }
+
     def _insert_columns(self, sql: str) -> list[str]:
         start = sql.index("(") + 1
         end = sql.index(")", start)
@@ -858,7 +1043,12 @@ def test_metadata_and_openapi_endpoints(client: TestClient) -> None:
         "/project-documentation",
         "/projects/{project_id}/documentation",
         "/employees",
+        "/employees/{employee_id}/transition-instructions",
         "/move-requests",
+        "/move-requests/{request_id}/approval",
+        "/move-request-transition-instructions",
+        "/move-requests/{request_id}/transition-instructions/{instruction_type}",
+        "/move-requests/{request_id}/transition-instructions/{instruction_type}:solve",
         "/policies",
         "/policies/active",
         "/matching-runs",
@@ -1021,6 +1211,7 @@ def test_employee_crud_and_validation(client: TestClient) -> None:
     assert create_response.status_code == 201
     employee = create_response.json()
     assert employee["id"] == 1
+    assert employee["github_username"] == "marco-bianchi"
     assert employee["skills"] == SKILLS
 
     assert client.get("/employees").json() == [employee]
@@ -1030,11 +1221,22 @@ def test_employee_crud_and_validation(client: TestClient) -> None:
     assert update_response.status_code == 200
     assert update_response.json()["current_project"] is None
 
+    username_update = client.put("/employees/1", json={"github_username": "marco-platform"})
+    assert username_update.status_code == 200
+    assert username_update.json()["github_username"] == "marco-platform"
+
     invalid_skills = employee_payload("Giulia Rossi")
     invalid_skills["skills"]["backend"] = 4
     assert client.post("/employees", json=invalid_skills).status_code == 422
 
-    duplicate = client.post("/employees", json=employee_payload())
+    invalid_username = employee_payload("Giulia Rossi")
+    invalid_username["github_username"] = "-bad-username"
+    assert client.post("/employees", json=invalid_username).status_code == 422
+
+    duplicate = client.post(
+        "/employees",
+        json={**employee_payload(), "github_username": "marco-platform"},
+    )
     assert duplicate.status_code == 409
 
     delete_response = client.delete("/employees/1")
@@ -1054,6 +1256,8 @@ def test_move_request_crud_joined_response_and_status_timestamps(client: TestCli
     move_request = create_response.json()
     assert move_request["status"] == "pending"
     assert move_request["responded_at"] is None
+    assert move_request["cto_approval_status"] == "pending"
+    assert move_request["employee_approval_status"] == "pending"
     assert move_request["employee_name"] == "Marco Bianchi"
     assert move_request["to_project_name"] == "Atlas Staffing"
 
@@ -1070,6 +1274,27 @@ def test_move_request_crud_joined_response_and_status_timestamps(client: TestCli
     assert pending.json()["status"] == "pending"
     assert pending.json()["responded_at"] is None
 
+    cto_approval = client.post(
+        "/move-requests/1/approval",
+        json={"approver": "cto", "approval_status": "approved"},
+    )
+    assert cto_approval.status_code == 200
+    assert cto_approval.json()["status"] == "accepted"
+    assert cto_approval.json()["cto_approval_status"] == "approved"
+    assert cto_approval.json()["cto_approved_at"] is not None
+
+    employee_approval = client.post(
+        "/move-requests/1/approval",
+        json={"approver": "employee", "approval_status": "approved"},
+    )
+    assert employee_approval.status_code == 200
+    assert employee_approval.json()["status"] == "transition_started"
+    assert employee_approval.json()["employee_approval_status"] == "approved"
+
+    start_response = client.post("/move-requests/1:start-transition")
+    assert start_response.status_code == 200
+    assert start_response.json()["status"] == "transition_started"
+
     delete_response = client.delete("/move-requests/1")
     assert delete_response.status_code == 204
     assert client.get("/move-requests/1").status_code == 404
@@ -1082,6 +1307,91 @@ def test_move_request_rejects_missing_foreign_keys(client: TestClient) -> None:
     )
     assert response.status_code == 400
     assert response.json() == {"detail": "Referenced record does not exist."}
+
+
+def test_transition_instruction_crud_solve_and_completion(client: TestClient) -> None:
+    employee_id = client.post("/employees", json=employee_payload()).json()["id"]
+    project_id = client.post("/projects", json=project_payload()).json()["id"]
+    request_id = client.post(
+        "/move-requests",
+        json=move_request_payload(employee_id, project_id),
+    ).json()["id"]
+
+    create_response = client.post(
+        "/move-request-transition-instructions",
+        json=transition_instruction_payload(request_id, "onboarding"),
+    )
+    assert create_response.status_code == 201
+    onboarding = create_response.json()
+    assert onboarding["id"] == 1
+    assert onboarding["move_request_id"] == request_id
+    assert onboarding["employee_name"] == "Marco Bianchi"
+    assert onboarding["to_project_name"] == "Atlas Staffing"
+    assert onboarding["input_snapshot"] == {"source": "test"}
+
+    assert client.get("/move-request-transition-instructions").json() == [onboarding]
+    assert client.get("/move-request-transition-instructions/1").json() == onboarding
+    employee_instructions = client.get(
+        f"/employees/{employee_id}/transition-instructions",
+        params={"instruction_type": "onboarding"},
+    )
+    assert employee_instructions.status_code == 200
+    assert employee_instructions.json() == [onboarding]
+    assert (
+        client.get(f"/move-requests/{request_id}/instructions/onboarding").json()
+        == onboarding
+    )
+    assert (
+        client.get(
+            f"/move-requests/{request_id}/transition-instructions/onboarding"
+        ).json()
+        == onboarding
+    )
+
+    duplicate = client.post(
+        "/move-request-transition-instructions",
+        json=transition_instruction_payload(request_id, "onboarding"),
+    )
+    assert duplicate.status_code == 409
+
+    offboarding_create = client.put(
+        f"/move-requests/{request_id}/transition-instructions/offboarding",
+        json={
+            "status": "ready",
+            "content_markdown": "# Offboarding\n\n- Handoff ownership.",
+        },
+    )
+    assert offboarding_create.status_code == 201
+    offboarding = offboarding_create.json()
+    assert offboarding["instruction_type"] == "offboarding"
+
+    updated = client.put(
+        f"/move-requests/{request_id}/instructions/onboarding",
+        json={"content_markdown": "# Updated onboarding"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["content_markdown"] == "# Updated onboarding"
+
+    solve_onboarding = client.post(
+        f"/move-requests/{request_id}/transition-instructions/onboarding:solve"
+    )
+    assert solve_onboarding.status_code == 200
+    assert solve_onboarding.json()["status"] == "solved"
+    assert solve_onboarding.json()["solved_by_employee_id"] == employee_id
+    assert client.get(f"/move-requests/{request_id}").json()["status"] == "pending"
+
+    incomplete_complete = client.post(f"/move-requests/{request_id}:complete")
+    assert incomplete_complete.status_code == 409
+
+    solve_offboarding = client.post(
+        f"/move-requests/{request_id}/instructions/offboarding:solve"
+    )
+    assert solve_offboarding.status_code == 200
+    assert client.get(f"/move-requests/{request_id}").json()["status"] == "completed"
+
+    delete_response = client.delete("/move-request-transition-instructions/2")
+    assert delete_response.status_code == 204
+    assert client.get("/move-request-transition-instructions/2").status_code == 404
 
 
 def test_matching_run_crud_latest_and_cascade(client: TestClient, fake_db: InMemoryDatabase) -> None:

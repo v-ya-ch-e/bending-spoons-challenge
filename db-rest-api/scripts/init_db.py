@@ -18,6 +18,7 @@ TABLES_IN_DROP_ORDER = [
     "matching_candidates",
     "matching_runs",
     "policies",
+    "move_request_transition_instructions",
     "move_requests",
     "project_documentation",
     "project_assignments",

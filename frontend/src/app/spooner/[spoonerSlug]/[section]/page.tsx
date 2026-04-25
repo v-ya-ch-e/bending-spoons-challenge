@@ -1,18 +1,24 @@
 import { notFound } from "next/navigation"
 
-import { roleWorkspaces } from "@/data/mock-navigation"
 import { WorkspacePlaceholder } from "@/components/workspace-placeholder"
+import { roleWorkspaces } from "@/data/mock-navigation"
 
-type SpoonerSectionPageProps = {
+type EmployeeSpoonerSectionPageProps = {
   params: Promise<{
+    spoonerSlug: string
     section: string
   }>
 }
 
-export default async function SpoonerSectionPage({
+export default async function EmployeeSpoonerSectionPage({
   params,
-}: SpoonerSectionPageProps) {
-  const { section } = await params
+}: EmployeeSpoonerSectionPageProps) {
+  const { spoonerSlug, section } = await params
+
+  if (!/^[1-9]\d*$/.test(spoonerSlug)) {
+    notFound()
+  }
+
   const item = roleWorkspaces.spooner.navItems.find(
     (navItem) => navItem.value === section
   )

@@ -14,8 +14,14 @@ from schemas import (
     ProjectDocumentationResponse,
     SkillProfileRequest,
     SkillProfileResponse,
+    TransitionInstructionResponse,
 )
-from services import matching_service, project_documentation_service, skill_profile_service
+from services import (
+    matching_service,
+    project_documentation_service,
+    skill_profile_service,
+    transition_instruction_service,
+)
 from services.matching_llm_service import MatchingLlmError
 
 
@@ -75,6 +81,34 @@ async def chat_with_project_documentation(
             project_id,
             payload,
         )
+    except DbApiError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post(
+    "/move-requests/{request_id}/instructions/{instruction_type}:generate",
+    response_model=TransitionInstructionResponse,
+)
+async def generate_move_request_transition_instruction(
+    request_id: int,
+    instruction_type: str,
+    background_tasks: BackgroundTasks,
+) -> dict:
+    try:
+        instruction = await asyncio.to_thread(
+            transition_instruction_service.start_transition_instruction_generation,
+            request_id,
+            instruction_type,
+        )
+        if instruction["status"] == "running":
+            background_tasks.add_task(
+                transition_instruction_service.generate_transition_instruction,
+                request_id,
+                instruction_type,
+            )
+        return instruction
     except DbApiError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     except ValueError as exc:

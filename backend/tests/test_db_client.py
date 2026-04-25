@@ -215,9 +215,11 @@ class TestDbApiClientEmployees(unittest.TestCase):
         cls.client.close()
 
     def _make_payload(self, name: str | None = None) -> dict:
+        employee_name = name or _unique("emp")
         return {
-            "name": name or _unique("emp"),
+            "name": employee_name,
             "role": "Backend engineer",
+            "github_username": employee_name.lower(),
             "current_project_ids": [],
             "skills": {**SKILL_ZERO, "backend": 3, "infrastructure": 2},
             "preferences": [],
@@ -300,8 +302,9 @@ class TestDbApiClientMoveRequests(unittest.TestCase):
         )
         cls.employee = cls.client.create_employee(
             {
-                "name": _unique("mr-emp"),
+                "name": (employee_name := _unique("mr-emp")),
                 "role": "Backend engineer",
+                "github_username": employee_name.lower(),
                 "current_project_ids": [cls.project_a["id"]],
                 "skills": {**SKILL_ZERO, "backend": 3},
                 "preferences": [cls.project_b["project_name"]],
@@ -475,10 +478,12 @@ class TestDbApiClientMatchingPersistence(unittest.TestCase):
                 "github_repositories": [],
             }
         )
+        employee_name = _unique("match-emp")
         cls.employee = cls.client.create_employee(
             {
-                "name": _unique("match-emp"),
+                "name": employee_name,
                 "role": "Backend engineer",
+                "github_username": employee_name.lower(),
                 "current_project_ids": [],
                 "skills": {**SKILL_ZERO, "backend": 3},
                 "preferences": [cls.project["project_name"]],

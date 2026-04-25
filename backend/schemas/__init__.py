@@ -25,6 +25,11 @@ from schemas.project_documentation import (
     ProjectDocumentationResponse,
 )
 from schemas.skill_profiles import SkillProfileRequest, SkillProfileResponse
+from schemas.transition_instructions import (
+    TransitionInstructionResponse,
+    TransitionInstructionStatus,
+    TransitionInstructionType,
+)
 
 __all__ = [
     "DocumentationChatMessage",
@@ -49,4 +54,7 @@ __all__ = [
     "SkillProfileRequest",
     "SkillProfileResponse",
     "Skills",
+    "TransitionInstructionResponse",
+    "TransitionInstructionStatus",
+    "TransitionInstructionType",
 ]
