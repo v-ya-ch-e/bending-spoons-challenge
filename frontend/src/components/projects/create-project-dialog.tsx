@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo, useState, type ReactNode } from "react"
+import Image from "next/image"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Briefcase01Icon,
@@ -23,9 +24,11 @@ import {
 import {
   createProject,
   DbApiError,
+  updateProject,
   type Project,
   type ProjectCreateInput,
   type ProjectPhase,
+  type ProjectUpdateInput,
   type SkillKey,
   type Skills,
 } from "@/lib/db-api"
@@ -33,7 +36,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -57,6 +59,8 @@ import { cn } from "@/lib/utils"
 
 type CreateProjectDialogProps = {
   open: boolean
+  project?: Project
+  mode?: "create" | "edit"
   onOpenChange: (open: boolean) => void
   onCreated: (project: Project) => void
 }
@@ -146,31 +150,59 @@ const emptySkills: Skills = {
   ai: 0,
 }
 
-const initialFormState: FormState = {
-  projectName: "",
-  websiteUrl: "",
-  projectPhase: "new acquisition",
-  description: "",
-  iconUrl: "",
-  posterUrl: "",
-  githubRepoDraft: "",
-  githubRepoUrls: [],
-  notionSource: "",
-  slackSource: "",
-  includeNotion: true,
-  includeSlack: false,
+function getInitialFormState(project?: Project): FormState {
+  if (!project) {
+    return {
+      projectName: "",
+      websiteUrl: "",
+      projectPhase: "new acquisition",
+      description: "",
+      iconUrl: "",
+      posterUrl: "",
+      githubRepoDraft: "",
+      githubRepoUrls: [],
+      notionSource: "",
+      slackSource: "",
+      includeNotion: false,
+      includeSlack: false,
+    }
+  }
+
+  return {
+    projectName: project.project_name,
+    websiteUrl: getProjectWebsite(project),
+    projectPhase: project.project_phase,
+    description: project.project_description,
+    iconUrl: project.icon_url,
+    posterUrl: project.poster_url,
+    githubRepoDraft: "",
+    githubRepoUrls: project.github_repositories,
+    notionSource: "",
+    slackSource: "",
+    includeNotion: false,
+    includeSlack: false,
+  }
 }
 
 export function CreateProjectDialog({
   open,
+  project,
+  mode = "create",
   onOpenChange,
   onCreated,
 }: CreateProjectDialogProps) {
+  const isEditMode = mode === "edit" && project
   const [stepIndex, setStepIndex] = useState(0)
-  const [formState, setFormState] = useState<FormState>(initialFormState)
+  const [formState, setFormState] = useState<FormState>(() =>
+    getInitialFormState(project)
+  )
   const [suggestion, setSuggestion] = useState<StaffingSuggestion | null>(null)
-  const [requirements, setRequirements] = useState<Skills>(emptySkills)
-  const [requiredPeopleAmount, setRequiredPeopleAmount] = useState(0)
+  const [requirements, setRequirements] = useState<Skills>(
+    () => project?.required_skills ?? emptySkills
+  )
+  const [requiredPeopleAmount, setRequiredPeopleAmount] = useState(
+    () => project?.required_people_amount ?? 0
+  )
   const [validationError, setValidationError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
@@ -180,6 +212,7 @@ export function CreateProjectDialog({
   const isFirstStep = stepIndex === 0
   const isReviewStep = currentStep.id === "review"
   const isRequirementsStep = currentStep.id === "requirements"
+  const hasRequirements = Boolean(suggestion) || Boolean(isEditMode)
 
   const media = useMemo(
     () => getProjectMedia(formState.websiteUrl),
@@ -231,7 +264,7 @@ export function CreateProjectDialog({
       return "Add at least one GitHub repository URL or owner/repo path."
     }
 
-    if ((step === "requirements" || step === "review") && !suggestion) {
+    if ((step === "requirements" || step === "review") && !hasRequirements) {
       return "Extract requirements before continuing."
     }
 
@@ -271,7 +304,7 @@ export function CreateProjectDialog({
       return
     }
 
-    if (currentStep.id === "sources" && !suggestion) {
+    if (currentStep.id === "sources" && !suggestion && !isEditMode) {
       await handleExtractRequirements()
       return
     }
@@ -324,7 +357,7 @@ export function CreateProjectDialog({
     }
   }
 
-  async function handleCreate() {
+  async function handleSave() {
     const validationErrors = steps
       .map((step) => validateStep(step.id))
       .filter((error): error is string => Boolean(error))
@@ -334,13 +367,13 @@ export function CreateProjectDialog({
       return
     }
 
-    const payload: ProjectCreateInput = {
+    const payload: ProjectCreateInput | ProjectUpdateInput = {
       project_name: formState.projectName.trim(),
       project_description: formState.description.trim(),
       project_phase: formState.projectPhase,
       icon_url: resolvedIconUrl,
       poster_url: resolvedPosterUrl,
-      current_team_member_ids: [],
+      current_team_member_ids: project?.current_team_member_ids ?? [],
       required_people_amount: requiredPeopleAmount,
       required_skills: requirements,
       github_repositories: normalizedGithubRepoUrls,
@@ -349,14 +382,19 @@ export function CreateProjectDialog({
     try {
       setIsSubmitting(true)
       setSubmitError(null)
-      const project = await createProject(payload)
-      onCreated(project)
+      const savedProject =
+        isEditMode && project
+          ? await updateProject(project.id, payload)
+          : await createProject(payload as ProjectCreateInput)
+      onCreated(savedProject)
     } catch (error) {
       if (error instanceof DbApiError && error.status === 409) {
         setSubmitError("A project with this name already exists.")
       } else {
         setSubmitError(
-          error instanceof Error ? error.message : "Unable to create the project."
+          error instanceof Error
+            ? error.message
+            : `Unable to ${isEditMode ? "save" : "create"} the project.`
         )
       }
     } finally {
@@ -368,9 +406,13 @@ export function CreateProjectDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[min(47rem,calc(100svh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl">
         <DialogHeader className="border-b border-border px-6 py-5">
-          <DialogTitle className="text-lg">Add company</DialogTitle>
+          <DialogTitle className="text-lg">
+            {isEditMode ? "Edit company" : "Add company"}
+          </DialogTitle>
           <DialogDescription className="sr-only">
-            Create a project workspace and extract initial staffing requirements.
+            {isEditMode
+              ? "Edit a project workspace and its staffing requirements."
+              : "Create a project workspace and extract initial staffing requirements."}
           </DialogDescription>
         </DialogHeader>
 
@@ -418,6 +460,7 @@ export function CreateProjectDialog({
                 {currentStep.id === "requirements" && (
                   <RequirementsStep
                     isExtracting={isExtracting}
+                    hasRequirements={hasRequirements}
                     suggestion={suggestion}
                     requirements={requirements}
                     requiredPeopleAmount={requiredPeopleAmount}
@@ -462,17 +505,25 @@ export function CreateProjectDialog({
               Back
             </Button>
             {isReviewStep ? (
-              <Button type="button" onClick={handleCreate} disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create company"}
+              <Button type="button" onClick={handleSave} disabled={isSubmitting}>
+                {isSubmitting
+                  ? isEditMode
+                    ? "Saving..."
+                    : "Creating..."
+                  : isEditMode
+                    ? "Save changes"
+                    : "Create company"}
               </Button>
             ) : (
               <Button
                 type="button"
                 onClick={handleNext}
-                disabled={isExtracting || (isRequirementsStep && !suggestion)}
+                disabled={isExtracting || (isRequirementsStep && !hasRequirements)}
               >
                 {currentStep.id === "sources"
-                  ? isExtracting
+                  ? isEditMode
+                    ? "Continue"
+                    : isExtracting
                     ? "Extracting..."
                     : "Extract requirements"
                   : "Continue"}
@@ -527,14 +578,14 @@ function StepNavigation({
               )}
             >
               {isCompleted ? (
-                <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />
+                <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="size-3.5" />
               ) : (
                 index + 1
               )}
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2 truncate font-medium">
-                <HugeiconsIcon icon={step.icon} strokeWidth={2} />
+                <HugeiconsIcon icon={step.icon} strokeWidth={2} className="size-3.5" />
                 {step.label}
               </span>
               <span className="block truncate text-xs text-muted-foreground">
@@ -737,7 +788,7 @@ function SourcesStep({
       />
       <div className="flex flex-col gap-3">
         <SourceCard
-          logo={<GitHubLogo />}
+          logoSrc="/logo_github.png"
           title="GitHub"
           description="Required for extracting technical requirements."
           status={
@@ -764,10 +815,12 @@ function SourcesStep({
               <Button
                 type="button"
                 variant="outline"
+                size="icon-sm"
                 onClick={handleAddRepository}
                 disabled={!normalizedDraftRepoUrl}
+                aria-label="Add GitHub repository"
               >
-                Add
+                +
               </Button>
             </div>
             {normalizedGithubRepoUrls.length > 0 && (
@@ -794,7 +847,7 @@ function SourcesStep({
         </SourceCard>
 
         <SourceCard
-          logo={<NotionLogo />}
+          logoSrc="/logo_notion.png"
           title="Notion"
           description="Optional, improves business and documentation context."
           status={formState.includeNotion ? "Selected" : "Optional"}
@@ -811,7 +864,7 @@ function SourcesStep({
         </SourceCard>
 
         <SourceCard
-          logo={<SlackLogo />}
+          logoSrc="/logo_slack.png"
           title="Slack"
           description="Optional, adds operational context for the demo."
           status={formState.includeSlack ? "Selected" : "Optional"}
@@ -841,6 +894,7 @@ function SourcesStep({
 
 function RequirementsStep({
   isExtracting,
+  hasRequirements,
   suggestion,
   requirements,
   requiredPeopleAmount,
@@ -849,6 +903,7 @@ function RequirementsStep({
   onRequirementChange,
 }: {
   isExtracting: boolean
+  hasRequirements: boolean
   suggestion: StaffingSuggestion | null
   requirements: Skills
   requiredPeopleAmount: number
@@ -875,10 +930,10 @@ function RequirementsStep({
           </div>
           <ExtractionChecklist />
         </div>
-      ) : suggestion ? (
+      ) : hasRequirements ? (
         <>
           <div className="grid gap-3 sm:grid-cols-3">
-            <MiniStat label="Suggested roles" value={`${suggestion.roles.length}`} />
+            <MiniStat label="Suggested roles" value={`${suggestion?.roles.length ?? 0}`} />
             <MiniStat label="Minimum team" value={`${requiredPeopleAmount} people`} />
             <MiniStat label="Required skills" value={`${countRequiredSkills(requirements)}`} />
           </div>
@@ -927,15 +982,17 @@ function RequirementsStep({
             </div>
           </section>
 
-          <section className="rounded-3xl border border-border p-4">
-            <h3 className="font-medium">Backend recommendation</h3>
-            <p className="mt-2 text-sm text-muted-foreground">{suggestion.summary}</p>
-            <div className="mt-4 flex flex-col gap-3">
-              {suggestion.roles.map((role, index) => (
-                <RoleCard key={`${role.role_name}-${index}`} role={role} />
-              ))}
-            </div>
-          </section>
+          {suggestion && (
+            <section className="rounded-3xl border border-border p-4">
+              <h3 className="font-medium">Backend recommendation</h3>
+              <p className="mt-2 text-sm text-muted-foreground">{suggestion.summary}</p>
+              <div className="mt-4 flex flex-col gap-3">
+                {suggestion.roles.map((role, index) => (
+                  <RoleCard key={`${role.role_name}-${index}`} role={role} />
+                ))}
+              </div>
+            </section>
+          )}
         </>
       ) : (
         <div className="flex min-h-72 flex-col items-center justify-center gap-4 rounded-3xl border border-border p-8 text-center">
@@ -1045,68 +1102,8 @@ function ReviewStep({
   )
 }
 
-function GitHubLogo() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="size-6 fill-foreground"
-    >
-      <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2.14c-3.2.7-3.87-1.36-3.87-1.36-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.47.11-3.06 0 0 .97-.31 3.17 1.18a10.9 10.9 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.77.11 3.06.74.81 1.19 1.84 1.19 3.1 0 4.43-2.7 5.4-5.27 5.69.42.36.78 1.07.78 2.16v3.2c0 .31.21.67.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" />
-    </svg>
-  )
-}
-
-function NotionLogo() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 32 32"
-      className="size-7"
-    >
-      <rect x="5" y="5" width="22" height="22" rx="3" fill="white" />
-      <rect
-        x="5"
-        y="5"
-        width="22"
-        height="22"
-        rx="3"
-        fill="none"
-        stroke="black"
-        strokeWidth="2"
-      />
-      <text
-        x="16"
-        y="22.5"
-        fill="black"
-        fontFamily="Georgia, serif"
-        fontSize="18"
-        fontWeight="700"
-        textAnchor="middle"
-      >
-        N
-      </text>
-    </svg>
-  )
-}
-
-function SlackLogo() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 32 32" className="size-7">
-      <path fill="#36C5F0" d="M13 4a3 3 0 0 1 6 0v8h-6V4Z" />
-      <path fill="#2EB67D" d="M28 13a3 3 0 0 1 0 6h-8v-6h8Z" />
-      <path fill="#ECB22E" d="M19 28a3 3 0 0 1-6 0v-8h6v8Z" />
-      <path fill="#E01E5A" d="M4 19a3 3 0 0 1 0-6h8v6H4Z" />
-      <path fill="#ECB22E" d="M13 13H8a3 3 0 1 1 3-3v3h2Z" />
-      <path fill="#36C5F0" d="M19 13V8a3 3 0 1 1 3 3h-3v2Z" />
-      <path fill="#2EB67D" d="M19 19h5a3 3 0 1 1-3 3v-3h-2Z" />
-      <path fill="#E01E5A" d="M13 19v5a3 3 0 1 1-3-3h3v-2Z" />
-    </svg>
-  )
-}
-
 function SourceCard({
-  logo,
+  logoSrc,
   title,
   description,
   status,
@@ -1114,7 +1111,7 @@ function SourceCard({
   onCheckedChange,
   children,
 }: {
-  logo: ReactNode
+  logoSrc: string
   title: string
   description: string
   status: string
@@ -1126,18 +1123,28 @@ function SourceCard({
     <div className="grid gap-4 rounded-3xl border border-border p-4 md:grid-cols-[1fr_20rem] md:items-center">
       <div className="flex items-start gap-3">
         <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-background ring-1 ring-border">
-          {logo}
+          <Image
+            src={logoSrc}
+            alt=""
+            width={24}
+            height={24}
+            className="size-6 object-contain"
+          />
         </div>
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            {onCheckedChange && (
-              <Checkbox
-                checked={checked}
-                onCheckedChange={(value) => onCheckedChange(Boolean(value))}
-                aria-label={`Use ${title}`}
-              />
-            )}
+          <div className="flex items-center justify-between gap-3">
             <h3 className="font-medium">{title}</h3>
+            {onCheckedChange && (
+              <Button
+                type="button"
+                variant={checked ? "ghost" : "outline"}
+                size={checked ? "xs" : "icon-sm"}
+                onClick={() => onCheckedChange(!checked)}
+                aria-label={`${checked ? "Remove" : "Add"} ${title}`}
+              >
+                {checked ? "Remove" : "+"}
+              </Button>
+            )}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">{description}</p>
           <Badge className="mt-3" variant={checked ? "secondary" : "outline"}>
@@ -1395,6 +1402,26 @@ function getProjectMedia(websiteUrl: string) {
     iconUrl: `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
     posterUrl: `https://image.thum.io/get/width/1200/crop/630/https://${domain}`,
   }
+}
+
+function getProjectWebsite(project: Project) {
+  const posterMatch = project.poster_url.match(/\/https:\/\/([^/]+)$/)
+  if (posterMatch?.[1]) {
+    return posterMatch[1]
+  }
+
+  try {
+    const iconUrl = new URL(project.icon_url)
+    const domain = iconUrl.searchParams.get("domain")
+
+    if (domain) {
+      return domain
+    }
+  } catch {
+    return ""
+  }
+
+  return ""
 }
 
 function normalizeDomain(value: string) {

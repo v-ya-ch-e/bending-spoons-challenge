@@ -31,6 +31,8 @@ export type EmployeeCreateInput = {
   interests: string[]
 }
 
+export type EmployeeUpdateInput = Partial<EmployeeCreateInput>
+
 export type Project = {
   id: number
   project_name: string
@@ -51,6 +53,8 @@ export type ProjectCreateInput = Omit<
 > & {
   current_team_member_ids?: number[]
 }
+
+export type ProjectUpdateInput = Partial<ProjectCreateInput>
 
 const dbApiBasePath = process.env.NEXT_PUBLIC_DB_API_BASE_URL ?? "/db-api"
 
@@ -104,9 +108,29 @@ export function createProject(project: ProjectCreateInput) {
   })
 }
 
+export function updateProject(projectId: number, project: ProjectUpdateInput) {
+  return fetchDbApi<Project>(`/projects/${projectId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(project),
+  })
+}
+
 export function createEmployee(employee: EmployeeCreateInput) {
   return fetchDbApi<Employee>("/employees", {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(employee),
+  })
+}
+
+export function updateEmployee(employeeId: number, employee: EmployeeUpdateInput) {
+  return fetchDbApi<Employee>(`/employees/${employeeId}`, {
+    method: "PUT",
     headers: {
       "Content-Type": "application/json",
     },

@@ -82,6 +82,7 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeEmployeeId, setActiveEmployeeId] = useState(selectedEmployeeId)
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   const createDialogOpen = searchParams.get("create") === "1"
 
   useEffect(() => {
@@ -230,6 +231,19 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
   }
 
   function handleEmployeeCreated(employee: Employee) {
+    upsertEmployee(employee)
+    setError(null)
+    openEmployeeProfile(employee.id, "replace")
+  }
+
+  function handleEmployeeSaved(employee: Employee) {
+    upsertEmployee(employee)
+    setError(null)
+    setEditingEmployee(null)
+    openEmployeeProfile(employee.id, "replace")
+  }
+
+  function upsertEmployee(employee: Employee) {
     setEmployees((currentEmployees) => {
       const exists = currentEmployees.some(
         (currentEmployee) => currentEmployee.id === employee.id
@@ -243,8 +257,6 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
 
       return [...currentEmployees, employee]
     })
-    setError(null)
-    openEmployeeProfile(employee.id, "replace")
   }
 
   function openEmployeeProfile(employeeId: number, mode: "push" | "replace" = "push") {
@@ -272,6 +284,20 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
           projects={projects}
           onOpenChange={handleCreateDialogOpenChange}
           onCreated={handleEmployeeCreated}
+        />
+      )}
+      {editingEmployee && (
+        <CreateEmployeeDialog
+          open={Boolean(editingEmployee)}
+          mode="edit"
+          employee={editingEmployee}
+          projects={projects}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingEmployee(null)
+            }
+          }}
+          onCreated={handleEmployeeSaved}
         />
       )}
       <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 sm:p-6">
@@ -352,18 +378,20 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
           </Alert>
         ) : (
           <div className="relative flex min-h-0 flex-1">
-            <section className="min-w-0 flex-1 rounded-3xl border border-border bg-card">
-              {isLoading ? (
-                <EmployeesTableSkeleton />
-              ) : filteredEmployees.length > 0 ? (
-                <EmployeesTable
-                  employees={filteredEmployees}
-                  selectedEmployeeId={activeEmployeeId}
-                  onRowOpen={openEmployeeProfile}
-                />
-              ) : (
-                <EmployeesEmptyState />
-              )}
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-border bg-card">
+              <ScrollArea className="min-h-0 flex-1">
+                {isLoading ? (
+                  <EmployeesTableSkeleton />
+                ) : filteredEmployees.length > 0 ? (
+                  <EmployeesTable
+                    employees={filteredEmployees}
+                    selectedEmployeeId={activeEmployeeId}
+                    onRowOpen={openEmployeeProfile}
+                  />
+                ) : (
+                  <EmployeesEmptyState />
+                )}
+              </ScrollArea>
 
               {!isLoading && filteredEmployees.length > 0 && (
                 <div className="border-t border-border px-4 py-3 text-sm text-muted-foreground">
@@ -377,6 +405,7 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
                 employee={selectedEmployee}
                 project={selectedProject}
                 isLoading={isLoading}
+                onEdit={(employee) => setEditingEmployee(employee)}
                 onClose={closeEmployeeProfile}
               />
             )}
@@ -477,11 +506,13 @@ function EmployeeDetailPanel({
   employee,
   project,
   isLoading,
+  onEdit,
   onClose,
 }: {
   employee?: Employee
   project?: Project
   isLoading: boolean
+  onEdit: (employee: Employee) => void
   onClose: () => void
 }) {
   return (
@@ -495,33 +526,40 @@ function EmployeeDetailPanel({
         width: "min(100vw, 32rem)",
       }}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-border p-4">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-5">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Employee detail
           </p>
           <h2 className="mt-1 font-semibold">Profile</h2>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          aria-label="Close employee detail"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
-        </Button>
+        <div className="flex items-center gap-2">
+          {employee && (
+            <Button type="button" variant="outline" size="sm" onClick={() => onEdit(employee)}>
+              Edit
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            aria-label="Close employee detail"
+          >
+            <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col gap-4 p-4">
+        <div className="flex flex-col gap-4 px-6 pt-5 pb-8">
           <Skeleton className="h-16" />
           <Skeleton className="h-32" />
           <Skeleton className="h-44" />
         </div>
       ) : employee ? (
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-5 p-4">
+          <div className="flex flex-col gap-5 px-6 pt-5 pb-8">
             <div className="flex items-center gap-3">
               <Avatar size="lg">
                 <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
@@ -626,7 +664,7 @@ function EmployeeDetailPanel({
           </div>
         </ScrollArea>
       ) : (
-        <div className="p-4">
+        <div className="px-6 pt-5 pb-8">
           <Alert>
             <AlertTitle>Employee not found</AlertTitle>
             <AlertDescription>

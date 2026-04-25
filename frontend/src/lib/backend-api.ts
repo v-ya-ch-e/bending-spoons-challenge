@@ -76,18 +76,35 @@ export function suggestProjectRequirements(input: SkillProfileSuggestInput) {
     input.projectId === undefined
       ? "/skill-profile:suggest"
       : `/projects/${input.projectId}/skill-profile:suggest`
+  const payload = {
+    github_repo_url: input.github_repo_url ?? input.github_repo_urls[0],
+    github_repo_urls: input.github_repo_urls,
+    project_phase: input.project_phase,
+    task_description: input.task_description,
+  }
 
   return fetchBackendApi<StaffingSuggestion>(path, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      github_repo_url: input.github_repo_url ?? input.github_repo_urls[0],
-      github_repo_urls: input.github_repo_urls,
-      project_phase: input.project_phase,
-      task_description: input.task_description,
-    }),
+    body: JSON.stringify(payload),
+  }).catch((error) => {
+    if (input.projectId !== undefined || !(error instanceof BackendApiError)) {
+      throw error
+    }
+
+    if (error.status !== 404) {
+      throw error
+    }
+
+    return fetchBackendApi<StaffingSuggestion>("/projects/0/skill-profile:suggest", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
   })
 }
 

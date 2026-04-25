@@ -3,11 +3,17 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react"
 import Image from "next/image"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Cancel01Icon } from "@hugeicons/core-free-icons"
+import { Cancel01Icon, GridViewIcon, ListViewIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { listProjects, type Project, type SkillKey, type Skills } from "@/lib/db-api"
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   Avatar,
@@ -20,10 +26,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -94,6 +98,7 @@ export function ProjectsScreen() {
   const [sort, setSort] = useState<SortKey>("name")
   const [viewMode, setViewMode] = useState<ViewMode>("list")
   const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>()
+  const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const createDialogOpen = searchParams.get("create") === "1"
@@ -245,6 +250,20 @@ export function ProjectsScreen() {
   }
 
   function handleProjectCreated(project: Project) {
+    upsertProject(project)
+    setError(null)
+    setSelectedProjectId(project.id)
+    router.replace("/cto/projects")
+  }
+
+  function handleProjectSaved(project: Project) {
+    upsertProject(project)
+    setError(null)
+    setEditingProject(null)
+    setSelectedProjectId(project.id)
+  }
+
+  function upsertProject(project: Project) {
     setProjects((currentProjects) => {
       const exists = currentProjects.some(
         (currentProject) => currentProject.id === project.id
@@ -258,9 +277,6 @@ export function ProjectsScreen() {
 
       return [...currentProjects, project]
     })
-    setError(null)
-    setSelectedProjectId(project.id)
-    router.replace("/cto/projects")
   }
 
   return (
@@ -270,6 +286,19 @@ export function ProjectsScreen() {
           open={createDialogOpen}
           onOpenChange={handleCreateDialogOpenChange}
           onCreated={handleProjectCreated}
+        />
+      )}
+      {editingProject && (
+        <CreateProjectDialog
+          open={Boolean(editingProject)}
+          mode="edit"
+          project={editingProject}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingProject(null)
+            }
+          }}
+          onCreated={handleProjectSaved}
         />
       )}
       <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 sm:p-6">
@@ -283,17 +312,19 @@ export function ProjectsScreen() {
           </div>
 
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <InputGroup className="w-full lg:max-w-md">
-              <InputGroupAddon>
-                <span>Search</span>
-              </InputGroupAddon>
-              <InputGroupInput
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Product, phase, skill, team member..."
-                aria-label="Search projects"
-              />
-            </InputGroup>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <InputGroup className="w-full sm:w-96">
+                <InputGroupAddon>
+                  <span>Search</span>
+                </InputGroupAddon>
+                <InputGroupInput
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Product, phase, skill, team member..."
+                  aria-label="Search projects"
+                />
+              </InputGroup>
+            </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
               <Select
@@ -323,8 +354,20 @@ export function ProjectsScreen() {
                 className="shrink-0"
               >
                 <TabsList>
-                  <TabsTrigger value="list">List</TabsTrigger>
-                  <TabsTrigger value="cards">Cards</TabsTrigger>
+                  <TabsTrigger
+                    value="list"
+                    aria-label="List view"
+                    className="px-3"
+                  >
+                    <HugeiconsIcon icon={ListViewIcon} strokeWidth={2} className="size-4" />
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="cards"
+                    aria-label="Grid view"
+                    className="px-3"
+                  >
+                    <HugeiconsIcon icon={GridViewIcon} strokeWidth={2} className="size-4" />
+                  </TabsTrigger>
                 </TabsList>
               </Tabs>
             </div>
@@ -347,19 +390,25 @@ export function ProjectsScreen() {
           ))}
         </div>
 
-        <Tabs
-          value={filter}
-          onValueChange={(value) => setFilter(value as FilterKey)}
-          className="shrink-0"
-        >
-          <TabsList>
-            {filterItems.map((item) => (
-              <TabsTrigger key={item.value} value={item.value}>
-                {item.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <Tabs
+            value={filter}
+            onValueChange={(value) => setFilter(value as FilterKey)}
+          >
+            <TabsList>
+              {filterItems.map((item) => (
+                <TabsTrigger key={item.value} value={item.value}>
+                  {item.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          {!isLoading && filteredProjects.length > 0 && (
+            <span className="shrink-0 text-sm text-muted-foreground">
+              Showing {filteredProjects.length} of {projects.length} projects
+            </span>
+          )}
+        </div>
 
         {error ? (
           <Alert variant="destructive">
@@ -396,23 +445,13 @@ export function ProjectsScreen() {
                   <ProjectsEmptyState />
                 )}
               </ScrollArea>
-
-              {!isLoading && filteredProjects.length > 0 && (
-                <div
-                  className={cn(
-                    "px-4 py-3 text-sm text-muted-foreground",
-                    viewMode === "list" && "border-t border-border"
-                  )}
-                >
-                  Showing {filteredProjects.length} of {projects.length} projects
-                </div>
-              )}
             </section>
 
             {selectedProjectId && (
               <ProjectDetailPanel
                 project={selectedProject}
                 isLoading={isLoading}
+                onEdit={(project) => setEditingProject(project)}
                 onClose={closeProject}
               />
             )}
@@ -436,10 +475,10 @@ function ProjectsTable({
     <Table className="table-fixed">
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[24%]">Project</TableHead>
-          <TableHead className="w-[15%]">Phase</TableHead>
-          <TableHead className="w-[25%]">Required skills</TableHead>
-          <TableHead className="w-[14%]">Team</TableHead>
+          <TableHead className="w-[20%]">Project</TableHead>
+          <TableHead className="w-[14%]">Phase</TableHead>
+          <TableHead className="w-[24%]">Required skills</TableHead>
+          <TableHead className="w-[20%]">Team</TableHead>
           <TableHead className="w-[13%]">Staffing</TableHead>
           <TableHead className="w-[9%] text-right">Action</TableHead>
         </TableRow>
@@ -477,7 +516,8 @@ function ProjectsTable({
                 <SkillBadges skills={project.required_skills} compact />
               </TableCell>
               <TableCell className="min-w-0">
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <TeamAvatars members={project.current_team_members} compact />
                   <span className="text-sm text-muted-foreground">
                     {project.current_team_members.length} /{" "}
                     {project.required_people_amount}
@@ -518,7 +558,7 @@ function ProjectsCardGrid({
   onProjectOpen: (projectId: number) => void
 }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {projects.map((project) => {
         const gap = getStaffingGap(project)
         const isSelected = project.id === selectedProjectId
@@ -528,68 +568,58 @@ function ProjectsCardGrid({
             key={project.id}
             size="sm"
             className={cn(
-              "animate-in fade-in-0 slide-in-from-bottom-1 cursor-pointer duration-300",
-              isSelected && "ring-2 ring-ring"
+              "animate-in fade-in-0 slide-in-from-bottom-1 cursor-pointer gap-3 rounded-3xl border border-border/70 bg-card shadow-none ring-0 transition-colors duration-300 hover:border-border hover:bg-accent/30",
+              isSelected && "border-primary/50 bg-accent/40"
             )}
             onClick={() => onProjectOpen(project.id)}
           >
-            <div className="relative h-32 overflow-hidden bg-muted">
-              <Image
-                src={project.poster_url}
-                alt=""
-                width={1200}
-                height={630}
-                unoptimized
-                className="h-full w-full object-cover opacity-90 transition-transform duration-300 group-hover/card:scale-105"
-              />
-            </div>
-            <CardHeader>
-              <CardTitle className="flex min-w-0 items-center gap-3">
-                <Avatar>
-                  <AvatarImage src={project.icon_url} alt="" />
-                  <AvatarFallback>{getInitials(project.project_name)}</AvatarFallback>
-                </Avatar>
-                <span className="min-w-0 truncate">{project.project_name}</span>
-              </CardTitle>
-              <CardDescription className="line-clamp-2">
+            <CardHeader className="gap-2 pb-0">
+              <div className="flex items-start justify-between gap-3">
+                <CardTitle className="flex min-w-0 items-center gap-2.5 text-base">
+                  <Avatar size="sm">
+                    <AvatarImage src={project.icon_url} alt="" />
+                    <AvatarFallback>{getInitials(project.project_name)}</AvatarFallback>
+                  </Avatar>
+                  <span className="min-w-0 truncate">{project.project_name}</span>
+                </CardTitle>
+                <PhaseBadge phase={project.project_phase} />
+              </div>
+              <CardDescription className="line-clamp-2 text-xs leading-5">
                 {project.project_description}
               </CardDescription>
-              <CardAction>
-                <PhaseBadge phase={project.project_phase} />
-              </CardAction>
             </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="flex flex-wrap gap-1.5">
-                <StaffingBadge gap={gap} />
-                <Badge variant="outline">
-                  {project.current_team_members.length} /{" "}
-                  {project.required_people_amount} people
-                </Badge>
-                <Badge variant="outline">
-                  {project.github_repositories.length} repos
-                </Badge>
-              </div>
-              <SkillBadges skills={project.required_skills} compact />
+            <CardContent className="flex flex-col gap-3 pt-0">
               <div className="flex items-center justify-between gap-3">
-                <TeamAvatars members={project.current_team_members} compact />
-                <span className="text-xs text-muted-foreground">
-                  {getCoveragePercent(project)}% staffed
+                <div className="flex flex-wrap gap-1.5">
+                  <StaffingBadge gap={gap} />
+                  <Badge variant="outline">
+                    {project.current_team_members.length}/
+                    {project.required_people_amount} people
+                  </Badge>
+                  <Badge variant="outline">
+                    {project.github_repositories.length} repos
+                  </Badge>
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {getCoveragePercent(project)}%
                 </span>
               </div>
+              <SkillBadges skills={project.required_skills} compact />
+              <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                <TeamAvatars members={project.current_team_members} compact />
+                <Button
+                  type="button"
+                  size="xs"
+                  variant={isSelected ? "secondary" : "ghost"}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onProjectOpen(project.id)
+                  }}
+                >
+                  Open
+                </Button>
+              </div>
             </CardContent>
-            <CardFooter className="justify-end">
-              <Button
-                type="button"
-                size="sm"
-                variant={isSelected ? "secondary" : "outline"}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onProjectOpen(project.id)
-                }}
-              >
-                Open
-              </Button>
-            </CardFooter>
           </Card>
         )
       })}
@@ -600,10 +630,12 @@ function ProjectsCardGrid({
 function ProjectDetailPanel({
   project,
   isLoading,
+  onEdit,
   onClose,
 }: {
   project?: Project
   isLoading: boolean
+  onEdit: (project: Project) => void
   onClose: () => void
 }) {
   return (
@@ -617,33 +649,40 @@ function ProjectDetailPanel({
         width: "min(100vw, 34rem)",
       }}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-border p-4">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-5">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Project detail
           </p>
           <h2 className="mt-1 font-semibold">Company workspace</h2>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          aria-label="Close project detail"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
-        </Button>
+        <div className="flex items-center gap-2">
+          {project && (
+            <Button type="button" variant="outline" size="sm" onClick={() => onEdit(project)}>
+              Edit
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            aria-label="Close project detail"
+          >
+            <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col gap-4 p-4">
+        <div className="flex flex-col gap-4 px-6 pt-5 pb-8">
           <Skeleton className="h-36" />
           <Skeleton className="h-24" />
           <Skeleton className="h-44" />
         </div>
       ) : project ? (
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-5 p-4">
+          <div className="flex flex-col gap-5 px-6 pt-5 pb-8">
             <div className="overflow-hidden rounded-3xl bg-muted">
               <Image
                 src={project.poster_url}
@@ -698,13 +737,7 @@ function ProjectDetailPanel({
               </div>
             </DetailSection>
 
-            <DetailSection title="Required skills">
-              <div className="flex flex-col gap-3">
-                {skillEntries(project.required_skills).map(([skill, level]) => (
-                  <SkillLevel key={skill} skill={skill} level={level} />
-                ))}
-              </div>
-            </DetailSection>
+            <RequiredSkillsDistribution skills={project.required_skills} />
 
             <DetailSection title="Current team">
               {project.current_team_members.length > 0 ? (
@@ -752,7 +785,7 @@ function ProjectDetailPanel({
           </div>
         </ScrollArea>
       ) : (
-        <div className="p-4">
+        <div className="px-6 pt-5 pb-8">
           <Alert>
             <AlertTitle>Project not found</AlertTitle>
             <AlertDescription>
@@ -785,6 +818,37 @@ function ProjectsEmptyState() {
         </p>
       </div>
     </div>
+  )
+}
+
+function RequiredSkillsDistribution({ skills }: { skills: Skills }) {
+  const requiredSkillsCount = skillEntries(skills).filter(([, level]) => level > 0).length
+
+  return (
+    <DetailSection title="Required skills">
+      <Accordion type="single" collapsible defaultValue="skills">
+        <AccordionItem value="skills">
+          <AccordionTrigger>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span>Skill distribution</span>
+                <Badge variant="outline">{requiredSkillsCount} required</Badge>
+              </div>
+              <div className="mt-2">
+                <SkillBadges skills={skills} compact />
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="flex flex-col gap-3">
+              {skillEntries(skills).map(([skill, level]) => (
+                <SkillLevel key={skill} skill={skill} level={level} />
+              ))}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+    </DetailSection>
   )
 }
 

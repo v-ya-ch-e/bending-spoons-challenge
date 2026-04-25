@@ -5,8 +5,10 @@ import { useMemo, useState } from "react"
 import {
   createEmployee,
   DbApiError,
+  updateEmployee,
   type Employee,
   type EmployeeCreateInput,
+  type EmployeeUpdateInput,
   type Project,
   type SkillKey,
   type Skills,
@@ -37,6 +39,8 @@ import { cn } from "@/lib/utils"
 type CreateEmployeeDialogProps = {
   open: boolean
   projects: Project[]
+  employee?: Employee
+  mode?: "create" | "edit"
   onOpenChange: (open: boolean) => void
   onCreated: (employee: Employee) => void
 }
@@ -115,23 +119,41 @@ const emptySkills: Skills = {
   ai: 0,
 }
 
-const initialFormState: FormState = {
-  name: "",
-  role: "",
-  interestsText: "",
-  skills: emptySkills,
-  currentProject: "",
-  preferencesText: "",
+function getInitialFormState(employee?: Employee): FormState {
+  if (!employee) {
+    return {
+      name: "",
+      role: "",
+      interestsText: "",
+      skills: { ...emptySkills },
+      currentProject: "",
+      preferencesText: "",
+    }
+  }
+
+  return {
+    name: employee.name,
+    role: employee.role,
+    interestsText: employee.interests.join(", "),
+    skills: { ...employee.skills },
+    currentProject: employee.current_project ?? "",
+    preferencesText: employee.preferences.join(", "),
+  }
 }
 
 export function CreateEmployeeDialog({
   open,
   projects,
+  employee,
+  mode = "create",
   onOpenChange,
   onCreated,
 }: CreateEmployeeDialogProps) {
+  const isEditMode = mode === "edit" && employee
   const [stepIndex, setStepIndex] = useState(0)
-  const [formState, setFormState] = useState<FormState>(initialFormState)
+  const [formState, setFormState] = useState<FormState>(() =>
+    getInitialFormState(employee)
+  )
   const [validationError, setValidationError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -234,7 +256,7 @@ export function CreateEmployeeDialog({
     updateFormState({ preferencesText: Array.from(nextPreferences).join(", ") })
   }
 
-  async function handleCreate() {
+  async function handleSave() {
     const nextValidationError = validateStep("details")
 
     if (nextValidationError) {
@@ -243,7 +265,7 @@ export function CreateEmployeeDialog({
       return
     }
 
-    const payload: EmployeeCreateInput = {
+    const payload: EmployeeCreateInput | EmployeeUpdateInput = {
       name: formState.name.trim(),
       role: formState.role.trim(),
       current_project: formState.currentProject || null,
@@ -255,8 +277,11 @@ export function CreateEmployeeDialog({
     try {
       setIsSubmitting(true)
       setSubmitError(null)
-      const employee = await createEmployee(payload)
-      onCreated(employee)
+      const savedEmployee =
+        isEditMode && employee
+          ? await updateEmployee(employee.id, payload)
+          : await createEmployee(payload as EmployeeCreateInput)
+      onCreated(savedEmployee)
     } catch (error) {
       if (error instanceof DbApiError && error.status === 409) {
         setSubmitError("An employee with this name already exists.")
@@ -264,7 +289,7 @@ export function CreateEmployeeDialog({
         setSubmitError(
           error instanceof Error
             ? error.message
-            : "Unable to create the employee."
+            : `Unable to ${isEditMode ? "save" : "create"} the employee.`
         )
       }
     } finally {
@@ -276,9 +301,13 @@ export function CreateEmployeeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[min(44rem,calc(100svh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
         <DialogHeader className="border-b border-border px-6 py-5">
-          <DialogTitle className="text-lg">Add new employee</DialogTitle>
+          <DialogTitle className="text-lg">
+            {isEditMode ? "Edit employee" : "Add new employee"}
+          </DialogTitle>
           <DialogDescription className="sr-only">
-            Create a new internal employee using the current backend employee schema.
+            {isEditMode
+              ? "Edit an internal employee using the current backend employee schema."
+              : "Create a new internal employee using the current backend employee schema."}
           </DialogDescription>
         </DialogHeader>
 
@@ -301,7 +330,9 @@ export function CreateEmployeeDialog({
 
                 {submitError && (
                   <Alert variant="destructive" className="mb-5">
-                    <AlertTitle>Could not create employee</AlertTitle>
+                    <AlertTitle>
+                      Could not {isEditMode ? "save" : "create"} employee
+                    </AlertTitle>
                     <AlertDescription>{submitError}</AlertDescription>
                   </Alert>
                 )}
@@ -359,8 +390,14 @@ export function CreateEmployeeDialog({
               Back
             </Button>
             {isSummaryStep ? (
-              <Button type="button" onClick={handleCreate} disabled={isSubmitting}>
-                {isSubmitting ? "Creating..." : "Create employee"}
+              <Button type="button" onClick={handleSave} disabled={isSubmitting}>
+                {isSubmitting
+                  ? isEditMode
+                    ? "Saving..."
+                    : "Creating..."
+                  : isEditMode
+                    ? "Save changes"
+                    : "Create employee"}
               </Button>
             ) : (
               <Button type="button" onClick={handleNext}>
