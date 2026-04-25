@@ -31,6 +31,8 @@ db-rest-api/
     load_fixtures.py      # Insert seed_data.json into the database
   main.py                 # FastAPI application
   requirements.txt
+  requirements-dev.txt     # Test dependencies
+  tests/                   # Pytest suite for the FastAPI service
   README.md               # Setup + usage walkthrough
   CLAUDE.md               # This file
 docs/
@@ -96,6 +98,7 @@ Reads the fixture JSON and inserts in dependency order: `projects` -> `employees
 - Use `json.dumps(...)` when writing into a `JSON` column. `mysql-connector-python` does not auto-serialize dicts/lists.
 - Treat `seed_data.json` as the contract between generation and loading. Adding a column means: update SQL -> update Pydantic model -> update generator prompt -> update loader insert.
 - Keep `../docs/DB_API_DOCUMENTATION.md` up to date after every DB schema or public API change, including changes to fields, enums, payload shapes, endpoint behavior, error behavior, or foreign-key side effects.
+- Always run `python3 -m pytest db-rest-api/tests` at the end of changes that touch `db-rest-api`, and add or update tests when adding functionality or changing API/schema behavior.
 - Do not commit `.env`. The repo `.gitignore` already excludes it.
 
 ## What is NOT in scope here

@@ -62,6 +62,17 @@ Optional environment variables:
 
 Use `get_db_connection` as a FastAPI dependency or `open_db_connection()` as a context manager when adding MySQL-backed endpoints.
 
+## Tests
+
+Install test dependencies and run the service tests from the repository root:
+
+```bash
+python3 -m pip install -r db-rest-api/requirements-dev.txt
+python3 -m pytest db-rest-api/tests
+```
+
+The tests use an in-memory fake DB connection and do not touch RDS.
+
 ## API Usage
 
 The full CRUD contract is documented in [../docs/DB_API_DOCUMENTATION.md](../docs/DB_API_DOCUMENTATION.md). Keep that file in sync with any database schema or public API changes.
