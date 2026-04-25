@@ -54,6 +54,8 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
         value: "matching",
         href: "/cto/matching",
         count: "4",
+        primaryAction: "Create move plan",
+        primaryActionHref: "/cto/matching?create=1",
       },
       {
         label: "Documentation",
