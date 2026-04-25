@@ -66,6 +66,62 @@ class Skills(ApiModel):
     ai: int = Field(ge=0, le=3)
 
 
+class ProjectSkillRequirement(ApiModel):
+    level_1: int = Field(ge=0)
+    level_2: int = Field(ge=0)
+    level_3: int = Field(ge=0)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_requirement(cls, value: Any) -> Any:
+        if isinstance(value, ProjectSkillRequirement):
+            return value
+        if not isinstance(value, dict):
+            return value
+        if {"level_1", "level_2", "level_3"} & set(value):
+            return value
+
+        count = max(0, int(value.get("count") or 0))
+        minimum_level = min(3, max(0, int(value.get("minimum_level") or 0)))
+        normalized = {"level_1": 0, "level_2": 0, "level_3": 0}
+        if count > 0 and minimum_level > 0:
+            normalized[f"level_{minimum_level}"] = count
+        return normalized
+
+
+class ProjectSkillRequirements(ApiModel):
+    android: ProjectSkillRequirement
+    ios: ProjectSkillRequirement
+    web: ProjectSkillRequirement
+    backend: ProjectSkillRequirement
+    infrastructure: ProjectSkillRequirement
+    ai: ProjectSkillRequirement
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_levels(cls, value: Any) -> Any:
+        if isinstance(value, ProjectSkillRequirements):
+            return value
+        if not isinstance(value, dict):
+            return value
+
+        normalized: dict[str, Any] = {}
+        for skill in Skills.model_fields:
+            requirement = value.get(skill, 0)
+            if isinstance(requirement, dict):
+                normalized[skill] = requirement
+                continue
+
+            level = min(3, max(0, int(requirement or 0)))
+            normalized[skill] = {
+                "level_1": 1 if level == 1 else 0,
+                "level_2": 1 if level == 2 else 0,
+                "level_3": 1 if level == 3 else 0,
+            }
+
+        return normalized
+
+
 class ProjectBase(ApiModel):
     project_name: str = Field(min_length=1, max_length=255)
     project_description: str = Field(min_length=1)
@@ -73,7 +129,7 @@ class ProjectBase(ApiModel):
     icon_url: str = Field(min_length=1, max_length=2048, pattern=r"^https://")
     poster_url: str = Field(min_length=1, max_length=2048, pattern=r"^https://")
     required_people_amount: int = Field(ge=0)
-    required_skills: Skills
+    required_skills: ProjectSkillRequirements
     github_repositories: list[str]
 
 
@@ -91,7 +147,7 @@ class ProjectUpdate(UpdateModel):
     current_team_member_ids: list[int] | None = None
     current_team_members: list[str] | None = None
     required_people_amount: int = Field(default=None, ge=0)
-    required_skills: Skills = None
+    required_skills: ProjectSkillRequirements = None
     github_repositories: list[str] = None
 
 
@@ -282,6 +338,9 @@ def serialize_project(
     project = dict(row)
     for column in ("required_skills", "github_repositories"):
         project[column] = parse_json_column(project[column])
+    project["required_skills"] = ProjectSkillRequirements.model_validate(
+        project["required_skills"]
+    ).model_dump(mode="json")
     project["current_team_member_ids"] = current_team_member_ids or []
     project["current_team_members"] = current_team_members or []
     return project

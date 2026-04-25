@@ -222,7 +222,7 @@ See [db/schema.sql](db/schema.sql) for the source of truth. Summary:
 - `project_assignments(employee_id FK, project_id FK)`
 - `move_requests(id, employee_id FK, from_project_id FK nullable, to_project_id FK, reason, expected_role, current_project_impact, status, created_at, responded_at)`
 
-`skills` and `required_skills` use the brief's six keys exactly: `android`, `ios`, `web`, `backend`, `infrastructure`, `ai`. Levels are integers 0-3.
+`skills` uses the brief's six keys exactly: `android`, `ios`, `web`, `backend`, `infrastructure`, `ai`. Employee skill levels are integers 0-3. Project `required_skills` uses the same keys with per-level count buckets: `level_1`, `level_2`, and `level_3`.
 
 For agent-facing context (conventions, JSON column rules, when to add new tables), see [CLAUDE.md](CLAUDE.md).
 

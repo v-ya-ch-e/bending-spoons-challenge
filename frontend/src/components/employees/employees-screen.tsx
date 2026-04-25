@@ -2,14 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Cancel01Icon } from "@hugeicons/core-free-icons"
+import { Cancel01Icon, Edit02Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import {
+  getCachedEmployees,
+  getCachedProjects,
   listEmployees,
   listProjects,
   type Employee,
   type Project,
+  type ProjectSkillRequirements,
   type SkillKey,
   type Skills,
 } from "@/lib/db-api"
@@ -61,6 +64,9 @@ const skillLabels: Record<SkillKey, string> = {
   ai: "AI",
 }
 
+const skillRequirementLevels = [1, 2, 3] as const
+type SkillRequirementLevel = (typeof skillRequirementLevels)[number]
+
 const filterItems: Array<{
   value: FilterKey
   label: string
@@ -74,14 +80,19 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
+  const cachedEmployees = getCachedEmployees()
+  const cachedProjects = getCachedProjects()
+  const [employees, setEmployees] = useState<Employee[]>(() => cachedEmployees ?? [])
+  const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
   const [searchQuery, setSearchQuery] = useState("")
   const [filter, setFilter] = useState<FilterKey>("all")
   const [sort, setSort] = useState<SortKey>("name")
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(
+    () => !cachedEmployees || !cachedProjects
+  )
   const [error, setError] = useState<string | null>(null)
   const [activeEmployeeId, setActiveEmployeeId] = useState(selectedEmployeeId)
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   const createDialogOpen = searchParams.get("create") === "1"
 
   useEffect(() => {
@@ -89,7 +100,9 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
 
     async function loadEmployeesWorkspace() {
       try {
-        setIsLoading(true)
+        if (!getCachedEmployees() || !getCachedProjects()) {
+          setIsLoading(true)
+        }
         setError(null)
         const [nextEmployees, nextProjects] = await Promise.all([
           listEmployees(),
@@ -230,6 +243,19 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
   }
 
   function handleEmployeeCreated(employee: Employee) {
+    upsertEmployee(employee)
+    setError(null)
+    openEmployeeProfile(employee.id, "replace")
+  }
+
+  function handleEmployeeSaved(employee: Employee) {
+    upsertEmployee(employee)
+    setError(null)
+    setEditingEmployee(null)
+    openEmployeeProfile(employee.id, "replace")
+  }
+
+  function upsertEmployee(employee: Employee) {
     setEmployees((currentEmployees) => {
       const exists = currentEmployees.some(
         (currentEmployee) => currentEmployee.id === employee.id
@@ -243,8 +269,6 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
 
       return [...currentEmployees, employee]
     })
-    setError(null)
-    openEmployeeProfile(employee.id, "replace")
   }
 
   function openEmployeeProfile(employeeId: number, mode: "push" | "replace" = "push") {
@@ -272,6 +296,20 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
           projects={projects}
           onOpenChange={handleCreateDialogOpenChange}
           onCreated={handleEmployeeCreated}
+        />
+      )}
+      {editingEmployee && (
+        <CreateEmployeeDialog
+          open={Boolean(editingEmployee)}
+          mode="edit"
+          employee={editingEmployee}
+          projects={projects}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingEmployee(null)
+            }
+          }}
+          onCreated={handleEmployeeSaved}
         />
       )}
       <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 sm:p-6">
@@ -352,18 +390,20 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
           </Alert>
         ) : (
           <div className="relative flex min-h-0 flex-1">
-            <section className="min-w-0 flex-1 rounded-3xl border border-border bg-card">
-              {isLoading ? (
-                <EmployeesTableSkeleton />
-              ) : filteredEmployees.length > 0 ? (
-                <EmployeesTable
-                  employees={filteredEmployees}
-                  selectedEmployeeId={activeEmployeeId}
-                  onRowOpen={openEmployeeProfile}
-                />
-              ) : (
-                <EmployeesEmptyState />
-              )}
+            <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border border-border bg-card">
+              <ScrollArea className="min-h-0 flex-1">
+                {isLoading ? (
+                  <EmployeesTableSkeleton />
+                ) : filteredEmployees.length > 0 ? (
+                  <EmployeesTable
+                    employees={filteredEmployees}
+                    selectedEmployeeId={activeEmployeeId}
+                    onRowOpen={openEmployeeProfile}
+                  />
+                ) : (
+                  <EmployeesEmptyState />
+                )}
+              </ScrollArea>
 
               {!isLoading && filteredEmployees.length > 0 && (
                 <div className="border-t border-border px-4 py-3 text-sm text-muted-foreground">
@@ -377,6 +417,7 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
                 employee={selectedEmployee}
                 project={selectedProject}
                 isLoading={isLoading}
+                onEdit={(employee) => setEditingEmployee(employee)}
                 onClose={closeEmployeeProfile}
               />
             )}
@@ -477,11 +518,13 @@ function EmployeeDetailPanel({
   employee,
   project,
   isLoading,
+  onEdit,
   onClose,
 }: {
   employee?: Employee
   project?: Project
   isLoading: boolean
+  onEdit: (employee: Employee) => void
   onClose: () => void
 }) {
   return (
@@ -495,33 +538,41 @@ function EmployeeDetailPanel({
         width: "min(100vw, 32rem)",
       }}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-border p-4">
+      <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-5">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Employee detail
           </p>
           <h2 className="mt-1 font-semibold">Profile</h2>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={onClose}
-          aria-label="Close employee detail"
-        >
-          <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
-        </Button>
+        <div className="flex items-center gap-2">
+          {employee && (
+            <Button type="button" variant="outline" size="sm" onClick={() => onEdit(employee)}>
+              <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} className="size-4" />
+              Edit
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            aria-label="Close employee detail"
+          >
+            <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
-        <div className="flex flex-col gap-4 p-4">
+        <div className="flex flex-col gap-4 px-6 pt-5 pb-8">
           <Skeleton className="h-16" />
           <Skeleton className="h-32" />
           <Skeleton className="h-44" />
         </div>
       ) : employee ? (
         <ScrollArea className="min-h-0 flex-1">
-          <div className="flex flex-col gap-5 p-4">
+          <div className="flex flex-col gap-5 px-6 pt-5 pb-8">
             <div className="flex items-center gap-3">
               <Avatar size="lg">
                 <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
@@ -584,7 +635,10 @@ function EmployeeDetailPanel({
                       Required skills
                     </p>
                     <div className="mt-2">
-                      <SkillBadges skills={project.required_skills} compact />
+                      <ProjectRequirementBadges
+                        skills={project.required_skills}
+                        compact
+                      />
                     </div>
                   </div>
                   <div>
@@ -626,7 +680,7 @@ function EmployeeDetailPanel({
           </div>
         </ScrollArea>
       ) : (
-        <div className="p-4">
+        <div className="px-6 pt-5 pb-8">
           <Alert>
             <AlertTitle>Employee not found</AlertTitle>
             <AlertDescription>
@@ -708,6 +762,36 @@ function SkillBadges({ skills, compact }: { skills: Skills; compact?: boolean })
   )
 }
 
+function ProjectRequirementBadges({
+  skills,
+  compact,
+}: {
+  skills: ProjectSkillRequirements
+  compact?: boolean
+}) {
+  const entries = projectRequirementEntries(skills).filter(
+    ([, requirement]) => getRequirementTotal(requirement) > 0
+  )
+  const visibleEntries = compact ? entries.slice(0, 3) : entries
+
+  if (visibleEntries.length === 0) {
+    return <span className="text-muted-foreground">No skills</span>
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {visibleEntries.map(([skill, requirement]) => (
+        <Badge key={skill} variant="secondary">
+          {skillLabels[skill]} {formatRequirementParts(requirement).join(", ")}
+        </Badge>
+      ))}
+      {compact && entries.length > visibleEntries.length && (
+        <Badge variant="outline">+{entries.length - visibleEntries.length}</Badge>
+      )}
+    </div>
+  )
+}
+
 function SkillLevel({ skill, level }: { skill: SkillKey; level: number }) {
   return (
     <div className="grid grid-cols-[6rem_1fr_1.5rem] items-center gap-3">
@@ -754,6 +838,44 @@ function skillEntries(skills: Skills): Array<[SkillKey, number]> {
   return (Object.entries(skills) as Array<[SkillKey, number]>).sort(
     ([, leftLevel], [, rightLevel]) => rightLevel - leftLevel
   )
+}
+
+function projectRequirementEntries(
+  skills: ProjectSkillRequirements
+): Array<[SkillKey, ProjectSkillRequirements[SkillKey]]> {
+  return (
+    Object.entries(skills) as Array<[SkillKey, ProjectSkillRequirements[SkillKey]]>
+  ).sort(
+    ([, leftRequirement], [, rightRequirement]) =>
+      getRequirementTotal(rightRequirement) - getRequirementTotal(leftRequirement) ||
+      getHighestRequirementLevel(rightRequirement) -
+        getHighestRequirementLevel(leftRequirement)
+  )
+}
+
+function formatRequirementParts(
+  requirement: ProjectSkillRequirements[SkillKey]
+) {
+  return skillRequirementLevels
+    .map((level) => {
+      const count = requirement[getRequirementLevelField(level)]
+      return count > 0 ? `${count}x L${level}` : null
+    })
+    .filter((part): part is string => Boolean(part))
+}
+
+function getRequirementLevelField(level: SkillRequirementLevel) {
+  return `level_${level}` as const
+}
+
+function getRequirementTotal(requirement: ProjectSkillRequirements[SkillKey]) {
+  return requirement.level_1 + requirement.level_2 + requirement.level_3
+}
+
+function getHighestRequirementLevel(requirement: ProjectSkillRequirements[SkillKey]) {
+  return [...skillRequirementLevels]
+    .reverse()
+    .find((level) => requirement[getRequirementLevelField(level)] > 0) ?? 0
 }
 
 function getInitials(name: string) {

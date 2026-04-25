@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS projects (
     icon_url VARCHAR(2048) NOT NULL,
     poster_url VARCHAR(2048) NOT NULL,
     required_people_amount INT NOT NULL,
+    -- JSON object keyed by skill; each value is { "level_1": int, "level_2": int, "level_3": int }.
     required_skills JSON NOT NULL,
     github_repositories JSON NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

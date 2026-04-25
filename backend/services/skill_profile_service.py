@@ -1,8 +1,11 @@
 import json
+from collections.abc import Iterable
 
+import httpx
 from clients import GitHubClient, get_openai_client
 from schemas import (
     ProjectPhase,
+    ProjectSkillRequirements,
     RoleRequirement,
     Skills,
     SkillProfile,
@@ -18,9 +21,22 @@ async def suggest_skill_profile(
     project_id: int, payload: SkillProfileSuggestRequest
 ) -> StaffingSuggestion:
     github_client = GitHubClient()
-    owner, repo = github_client.parse_github_url(payload.github_repo_url)
+    repository_urls = normalize_repository_urls(
+        [*payload.github_repo_urls, payload.github_repo_url]
+    )
 
-    repo_info = await github_client.get_repository_info(owner, repo)
+    repo_infos = []
+    for repository_url in repository_urls:
+        owner, repo = github_client.parse_github_url(repository_url)
+        try:
+            repo_infos.append(await github_client.get_repository_info(owner, repo))
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                raise ValueError(
+                    f"GitHub repository was not found or is not accessible: {repository_url}"
+                ) from exc
+
+            raise
 
     system_prompt = f"""You are an expert CTO and staffing consultant.
 Your task is to recommend a minimal, high-performing team composition for a software project.
@@ -37,6 +53,8 @@ HEURISTICS:
    - 2: Strong working capability / can work independently
    - 3: Expert / can lead, review, and onboard others
 4. JUSTIFY: Provide a clear reasoning for each role based on the repository content and project phase.
+5. MULTI-REPO CONTEXT: When multiple repositories are provided, recommend one combined minimum team for the whole project. Avoid duplicate roles unless each role adds distinct coverage.
+6. PROJECT REQUIREMENT MATRIX: Also summarize, for EACH skill, how many engineers need minimum level 1, level 2, and level 3. Roles can overlap: one full-stack role can contribute to both web and backend counts while total_headcount remains distinct people.
 
 ALLOWED SKILL KEYS (use ALL six in every required_skills object, default unused ones to 0):
 - android
@@ -64,27 +82,32 @@ Return a JSON object with the following structure:
       "reasoning": "Reasoning must reference specific repo files or project phase."
     }}
   ],
+  "required_skills": {{
+    "android": {{ "level_1": 0, "level_2": 0, "level_3": 0 }},
+    "ios": {{ "level_1": 0, "level_2": 0, "level_3": 0 }},
+    "web": {{ "level_1": 0, "level_2": 1, "level_3": 0 }},
+    "backend": {{ "level_1": 0, "level_2": 0, "level_3": 1 }},
+    "infrastructure": {{ "level_1": 0, "level_2": 0, "level_3": 0 }},
+    "ai": {{ "level_1": 0, "level_2": 1, "level_3": 0 }}
+  }},
   "summary": "Overall staffing strategy summary.",
   "total_headcount": 1
 }}
 
 CRITICAL: In "required_skills", use ONLY the exact six keys listed above (lowercase). Do not invent keys like "security", "design", or "product".
+CRITICAL: In project-level "required_skills", each level bucket is a count of engineers whose minimum acceptable level for that skill is that bucket. Use zero for unused buckets.
 """
+
+    repository_context = "\n\n".join(
+        format_repository_context(repo_info, index + 1)
+        for index, repo_info in enumerate(repo_infos)
+    )
 
     user_content = f"""Project Phase: {payload.project_phase.value}
 Task Description: {payload.task_description or "Not provided"}
 
-Repository Metadata:
-Name: {repo_info['name']}
-Description: {repo_info['description']}
-Primary Language: {repo_info['language']}
-Topics: {', '.join(repo_info['topics'])}
-
-File Tree (partial):
-{chr(10).join(repo_info['file_tree'])}
-
-README Content (partial):
-{repo_info['readme'][:2000]}
+Repositories to analyze:
+{repository_context}
 """
 
     client = get_openai_client()
@@ -97,7 +120,11 @@ README Content (partial):
         response_format={"type": "json_object"},
     )
 
-    suggestion_data = json.loads(response.choices[0].message.content)
+    raw_content = response.choices[0].message.content
+    try:
+        suggestion_data = json.loads(raw_content)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ValueError(f"AI model returned an unparseable response: {exc}") from exc
 
     roles: list[RoleRequirement] = []
     for role_data in suggestion_data.get("roles", []):
@@ -109,13 +136,106 @@ README Content (partial):
         role_data["required_skills"] = Skills(**normalized_skills)
         roles.append(RoleRequirement(**role_data))
 
+    required_skills = normalize_project_requirements(
+        suggestion_data.get("required_skills"),
+        roles,
+    )
+
     return StaffingSuggestion(
         roles=roles,
+        required_skills=required_skills,
         summary=suggestion_data.get("summary", ""),
         total_headcount=suggestion_data.get(
             "total_headcount", sum(r.count for r in roles)
         ),
     )
+
+
+def normalize_project_requirements(
+    raw_requirements: object,
+    roles: list[RoleRequirement],
+) -> ProjectSkillRequirements:
+    if isinstance(raw_requirements, dict):
+        normalized_requirements = {}
+        for skill in ALLOWED_SKILL_KEYS:
+            requirement = raw_requirements.get(skill, {})
+            if not isinstance(requirement, dict):
+                requirement = {}
+            normalized_requirements[skill] = normalize_requirement_buckets(requirement)
+
+        return ProjectSkillRequirements(**normalized_requirements)
+
+    return derive_project_requirements_from_roles(roles)
+
+
+def derive_project_requirements_from_roles(
+    roles: list[RoleRequirement],
+) -> ProjectSkillRequirements:
+    requirements = {
+        skill: {"level_1": 0, "level_2": 0, "level_3": 0}
+        for skill in ALLOWED_SKILL_KEYS
+    }
+
+    for role in roles:
+        skills = role.required_skills.model_dump()
+        for skill, level in skills.items():
+            if level <= 0:
+                continue
+            requirements[skill][f"level_{level}"] += role.count
+
+    return ProjectSkillRequirements(**requirements)
+
+
+def normalize_requirement_buckets(requirement: dict[str, object]) -> dict[str, int]:
+    if {"level_1", "level_2", "level_3"} & set(requirement):
+        return {
+            "level_1": max(0, int(requirement.get("level_1") or 0)),
+            "level_2": max(0, int(requirement.get("level_2") or 0)),
+            "level_3": max(0, int(requirement.get("level_3") or 0)),
+        }
+
+    count = max(0, int(requirement.get("count") or 0))
+    minimum_level = min(3, max(0, int(requirement.get("minimum_level") or 0)))
+    return {
+        "level_1": count if minimum_level == 1 else 0,
+        "level_2": count if minimum_level == 2 else 0,
+        "level_3": count if minimum_level == 3 else 0,
+    }
+
+
+def normalize_repository_urls(values: Iterable[str | None]) -> list[str]:
+    repository_urls: list[str] = []
+    seen: set[str] = set()
+
+    for value in values:
+        if not value:
+            continue
+
+        trimmed_value = value.strip()
+        if not trimmed_value or trimmed_value in seen:
+            continue
+
+        repository_urls.append(trimmed_value)
+        seen.add(trimmed_value)
+
+    if not repository_urls:
+        raise ValueError("At least one GitHub repository URL is required")
+
+    return repository_urls
+
+
+def format_repository_context(repo_info: dict, index: int) -> str:
+    return f"""Repository {index}
+Name: {repo_info['name']}
+Description: {repo_info['description']}
+Primary Language: {repo_info['language']}
+Topics: {', '.join(repo_info['topics'])}
+
+File Tree (partial):
+{chr(10).join(repo_info['file_tree'])}
+
+README Content (partial):
+{repo_info['readme'][:2000]}"""
 
 
 def save_skill_profile(project_id: int, skill_profile: SkillProfile) -> SkillProfile:

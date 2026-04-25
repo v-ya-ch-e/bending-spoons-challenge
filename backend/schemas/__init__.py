@@ -3,6 +3,8 @@
 from schemas.common import (
     CurrentProjectImpact,
     MoveRequestStatus,
+    ProjectSkillRequirement,
+    ProjectSkillRequirements,
     ProjectPhase,
     SkillKey,
     SkillLevel,
@@ -38,6 +40,8 @@ __all__ = [
     "Project",
     "ProjectCreate",
     "ProjectPhase",
+    "ProjectSkillRequirement",
+    "ProjectSkillRequirements",
     "ProjectUpdate",
     "RoleRequirement",
     "SkillKey",

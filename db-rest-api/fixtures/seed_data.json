@@ -169,7 +169,7 @@
       "icon_url": "https://www.google.com/s2/favicons?domain=evernote.com&sz=128",
       "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://evernote.com",
       "required_people_amount": 5,
-      "required_skills": {"android": 2, "ios": 2, "web": 3, "backend": 3, "infrastructure": 2, "ai": 2},
+      "required_skills": {"android": {"level_1": 0, "level_2": 1, "level_3": 0}, "ios": {"level_1": 0, "level_2": 1, "level_3": 0}, "web": {"level_1": 0, "level_2": 0, "level_3": 1}, "backend": {"level_1": 0, "level_2": 0, "level_3": 1}, "infrastructure": {"level_1": 0, "level_2": 1, "level_3": 0}, "ai": {"level_1": 0, "level_2": 1, "level_3": 0}},
       "github_repositories": ["https://github.com/bendingspoons/evernote-core", "https://github.com/bendingspoons/evernote-sync"]
     },
     {
@@ -179,7 +179,7 @@
       "icon_url": "https://www.google.com/s2/favicons?domain=remini.ai&sz=128",
       "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://remini.ai",
       "required_people_amount": 6,
-      "required_skills": {"android": 2, "ios": 2, "web": 2, "backend": 3, "infrastructure": 3, "ai": 3},
+      "required_skills": {"android": {"level_1": 0, "level_2": 1, "level_3": 0}, "ios": {"level_1": 0, "level_2": 1, "level_3": 0}, "web": {"level_1": 0, "level_2": 1, "level_3": 0}, "backend": {"level_1": 0, "level_2": 0, "level_3": 1}, "infrastructure": {"level_1": 0, "level_2": 0, "level_3": 1}, "ai": {"level_1": 0, "level_2": 0, "level_3": 1}},
       "github_repositories": ["https://github.com/bendingspoons/remini-app", "https://github.com/bendingspoons/remini-ml"]
     },
     {
@@ -189,7 +189,7 @@
       "icon_url": "https://www.google.com/s2/favicons?domain=wetransfer.com&sz=128",
       "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://wetransfer.com",
       "required_people_amount": 5,
-      "required_skills": {"android": 1, "ios": 1, "web": 3, "backend": 3, "infrastructure": 3, "ai": 1},
+      "required_skills": {"android": {"level_1": 1, "level_2": 0, "level_3": 0}, "ios": {"level_1": 1, "level_2": 0, "level_3": 0}, "web": {"level_1": 0, "level_2": 0, "level_3": 1}, "backend": {"level_1": 0, "level_2": 0, "level_3": 1}, "infrastructure": {"level_1": 0, "level_2": 0, "level_3": 1}, "ai": {"level_1": 1, "level_2": 0, "level_3": 0}},
       "github_repositories": ["https://github.com/bendingspoons/wetransfer-web", "https://github.com/bendingspoons/wetransfer-storage"]
     },
     {
@@ -199,7 +199,7 @@
       "icon_url": "https://www.google.com/s2/favicons?domain=meetup.com&sz=128",
       "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://www.meetup.com",
       "required_people_amount": 3,
-      "required_skills": {"android": 2, "ios": 2, "web": 2, "backend": 2, "infrastructure": 1, "ai": 1},
+      "required_skills": {"android": {"level_1": 0, "level_2": 1, "level_3": 0}, "ios": {"level_1": 0, "level_2": 1, "level_3": 0}, "web": {"level_1": 0, "level_2": 1, "level_3": 0}, "backend": {"level_1": 0, "level_2": 1, "level_3": 0}, "infrastructure": {"level_1": 1, "level_2": 0, "level_3": 0}, "ai": {"level_1": 1, "level_2": 0, "level_3": 0}},
       "github_repositories": ["https://github.com/bendingspoons/meetup-app", "https://github.com/bendingspoons/meetup-events"]
     },
     {
@@ -209,7 +209,7 @@
       "icon_url": "https://www.google.com/s2/favicons?domain=komoot.com&sz=128",
       "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://www.komoot.com",
       "required_people_amount": 4,
-      "required_skills": {"android": 3, "ios": 3, "web": 2, "backend": 2, "infrastructure": 2, "ai": 1},
+      "required_skills": {"android": {"level_1": 0, "level_2": 0, "level_3": 1}, "ios": {"level_1": 0, "level_2": 0, "level_3": 1}, "web": {"level_1": 0, "level_2": 1, "level_3": 0}, "backend": {"level_1": 0, "level_2": 1, "level_3": 0}, "infrastructure": {"level_1": 0, "level_2": 1, "level_3": 0}, "ai": {"level_1": 1, "level_2": 0, "level_3": 0}},
       "github_repositories": ["https://github.com/bendingspoons/komoot-mobile", "https://github.com/bendingspoons/komoot-routing"]
     },
     {
@@ -219,7 +219,7 @@
       "icon_url": "https://www.google.com/s2/favicons?domain=streamyard.com&sz=128",
       "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://streamyard.com",
       "required_people_amount": 4,
-      "required_skills": {"android": 0, "ios": 1, "web": 3, "backend": 3, "infrastructure": 3, "ai": 2},
+      "required_skills": {"android": {"level_1": 0, "level_2": 0, "level_3": 0}, "ios": {"level_1": 1, "level_2": 0, "level_3": 0}, "web": {"level_1": 0, "level_2": 0, "level_3": 1}, "backend": {"level_1": 0, "level_2": 0, "level_3": 1}, "infrastructure": {"level_1": 0, "level_2": 0, "level_3": 1}, "ai": {"level_1": 0, "level_2": 1, "level_3": 0}},
       "github_repositories": ["https://github.com/bendingspoons/streamyard-studio", "https://github.com/bendingspoons/streamyard-recording"]
     },
     {
@@ -229,7 +229,7 @@
       "icon_url": "https://www.google.com/s2/favicons?domain=brightcove.com&sz=128",
       "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://www.brightcove.com",
       "required_people_amount": 5,
-      "required_skills": {"android": 1, "ios": 1, "web": 3, "backend": 3, "infrastructure": 3, "ai": 2},
+      "required_skills": {"android": {"level_1": 1, "level_2": 0, "level_3": 0}, "ios": {"level_1": 1, "level_2": 0, "level_3": 0}, "web": {"level_1": 0, "level_2": 0, "level_3": 1}, "backend": {"level_1": 0, "level_2": 0, "level_3": 1}, "infrastructure": {"level_1": 0, "level_2": 0, "level_3": 1}, "ai": {"level_1": 0, "level_2": 1, "level_3": 0}},
       "github_repositories": ["https://github.com/bendingspoons/brightcove-video", "https://github.com/bendingspoons/brightcove-ai"]
     },
     {
@@ -239,7 +239,7 @@
       "icon_url": "https://www.google.com/s2/favicons?domain=eventbrite.com&sz=128",
       "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://www.eventbrite.com",
       "required_people_amount": 6,
-      "required_skills": {"android": 2, "ios": 2, "web": 3, "backend": 3, "infrastructure": 2, "ai": 1},
+      "required_skills": {"android": {"level_1": 0, "level_2": 1, "level_3": 0}, "ios": {"level_1": 0, "level_2": 1, "level_3": 0}, "web": {"level_1": 0, "level_2": 0, "level_3": 1}, "backend": {"level_1": 0, "level_2": 0, "level_3": 1}, "infrastructure": {"level_1": 0, "level_2": 1, "level_3": 0}, "ai": {"level_1": 1, "level_2": 0, "level_3": 0}},
       "github_repositories": ["https://github.com/bendingspoons/eventbrite-marketplace", "https://github.com/bendingspoons/eventbrite-payments"]
     }
   ],

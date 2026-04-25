@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 
-from schemas.common import ProjectPhase, Skills
+from schemas.common import ProjectPhase, ProjectSkillRequirements
 
 
 class ProjectBase(BaseModel):
@@ -10,7 +10,7 @@ class ProjectBase(BaseModel):
     icon_url: str = Field(min_length=1, max_length=2048, pattern=r"^https://")
     poster_url: str = Field(min_length=1, max_length=2048, pattern=r"^https://")
     required_people_amount: int = Field(ge=0)
-    required_skills: Skills
+    required_skills: ProjectSkillRequirements
     github_repositories: list[str]
 
 
@@ -31,7 +31,7 @@ class ProjectUpdate(BaseModel):
         default=None, min_length=1, max_length=2048, pattern=r"^https://"
     )
     required_people_amount: int | None = Field(default=None, ge=0)
-    required_skills: Skills | None = None
+    required_skills: ProjectSkillRequirements | None = None
     github_repositories: list[str] | None = None
     current_team_member_ids: list[int] | None = None
     current_team_members: list[str] | None = None
