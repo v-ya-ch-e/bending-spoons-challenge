@@ -11,7 +11,8 @@ See `docs/bending_spoons_internal_platform_brief.md` for the product brief.
 - `frontend/`: Frontend application workspace.
 
 Environment variables live in the repository-level `.env` file. Start from
-`.env.example`.
+`.env.example`. For backend-specific variables (e.g. LLM and GitHub
+integration), see `backend/README.md`.
 
 ## Deployment
 

@@ -15,7 +15,10 @@ uv run uvicorn main:app --reload
 ```
 
 Environment variables are loaded from the repository-level `.env` file.
-Ensure `OPENAI_API_KEY` is set to enable LLM-powered features.
+Ensure `OPENAI_API_KEY` is set to enable LLM-powered features. `GITHUB_TOKEN` is
+optional: `clients/github_client.py` passes it to the GitHub REST API for better
+rate limits; private repositories require a token with repo access. Public repos
+work without a token, subject to unauthenticated rate limits.
 
 ## Testing
 
@@ -49,10 +52,13 @@ The backend implements a sophisticated staffing analysis engine in `services/ski
     - `3`: Expert / Lead
 
 ### GitHub Integration
-The `GitHubClient` performs a lightweight analysis of the target repository by:
-1. Fetching the **file tree** to identify languages, frameworks, and project structure.
-2. Extracting **README.md** content to understand the project's purpose and existing documentation.
-3. Retrieving **metadata** (topics, description, primary language) for high-level context.
+The `GitHubClient` (see `clients/github_client.py`) calls the GitHub REST API with
+`Accept: application/vnd.github.v3+json` and, when `GITHUB_TOKEN` is set, a
+`token` Authorization header. It parses a repo URL into `owner` and `name`,
+then fetches: repository metadata (`/repos/{owner}/{repo}`), the README
+(`/repos/.../readme`, base64-decoded), and a branch tree (tries `main`, then
+`master`, recursive listing capped to the first 100 paths). The result is fed
+into the skill-profile LLM prompt.
 
 ### Constraints & Validation
 - **Allowed Categories**: The engine strictly enforces six skill categories: `Android`, `iOS`, `Backend`, `Web`, `Infrastructure`, and `AI/ML`.
