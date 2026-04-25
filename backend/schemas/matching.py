@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from schemas.common import Skills
 
@@ -19,32 +19,10 @@ Urgency = Literal["low", "medium", "high"]
 
 # --- Matching run request/response schemas ---
 
-
-class MatchingRuleConfigRequest(BaseModel):
-    max_moves: int | None = Field(default=None, ge=1, le=3)
-    max_projects_in_scope: int | None = Field(default=None, ge=1)
-    max_employees_in_scope: int | None = Field(default=None, ge=1)
-    max_employee_project_count: int | None = Field(default=None, ge=1)
-    minimum_remaining_project_coverage: float | None = Field(
-        default=None, ge=0.0, le=1.0
-    )
-    minimum_target_coverage_improvement: float | None = Field(
-        default=None, ge=0.0, le=1.0
-    )
-    allow_unassigned_employees: bool | None = None
-    allow_multi_project_assignment: bool | None = None
-    allow_understaff_current_project: bool | None = None
-    exclude_pending_move_requests: bool | None = None
-    prefer_employee_preferences: bool | None = None
-    emit_hiring_gaps: bool | None = None
-
-
 class MatchingRunRequest(BaseModel):
-    max_recommendations: int = Field(default=5, ge=1, le=25)
-    max_candidate_plans: int = Field(default=25, ge=1, le=100)
-    dry_run: bool = True
+    model_config = ConfigDict(extra="forbid")
+
     requested_by: str | None = Field(default=None, max_length=255)
-    rule_config: MatchingRuleConfigRequest | None = None
 
 
 class MatchingMoveResponse(BaseModel):

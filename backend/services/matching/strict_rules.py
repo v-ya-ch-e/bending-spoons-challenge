@@ -624,13 +624,7 @@ def _blocked_ids(
         if request.status in OPEN_MOVE_REQUEST_STATUSES
     ]
     blocked_employee_ids = frozenset(request.employee_id for request in open_requests)
-    blocked_project_ids = frozenset(
-        project_id
-        for request in open_requests
-        for project_id in (request.from_project_id, request.to_project_id)
-        if project_id is not None
-    )
-    return blocked_employee_ids, blocked_project_ids
+    return blocked_employee_ids, frozenset()
 
 
 def _employee_target_fit(
@@ -953,7 +947,7 @@ def _role_title(required_skills: SkillMap) -> str:
 def _urgency(project: ProjectSnapshot, coverage: ProjectCoverage) -> str:
     phase = project.project_phase.lower()
     if coverage.headcount_gap >= 2 or coverage.skill_gap_total >= 3 or phase in {
-        "new",
+        "new acquisition",
         "growth",
     }:
         return "high"

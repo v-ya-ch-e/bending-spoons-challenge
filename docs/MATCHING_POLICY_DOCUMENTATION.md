@@ -8,8 +8,10 @@ Every matching run uses this order:
 
 1. Start from backend code defaults.
 2. Apply the active database policy.
-3. Apply any explicit request overrides.
-4. Save the final effective configuration on the matching run for auditability.
+3. Save the final effective configuration on the matching run for auditability.
+
+Run endpoints do not accept per-run tuning. To change matching behavior, update
+or activate a policy in the DB API before starting a new run.
 
 ## Current Default Policy
 
@@ -73,11 +75,12 @@ Aggressive:
 - Lower `minimum_remaining_project_coverage` toward `0.6`.
 - Consider `allow_understaff_current_project: true` only if leadership accepts the source-project risk.
 
-## Policy Changes vs Request Overrides
+## Policy Changes
 
-Changing the active policy affects future matching runs for everyone. Request
-overrides affect only one run and are saved in `matching_runs.rule_config` along
-with the active policy snapshot and final effective config.
+Changing the active policy affects future matching runs for everyone. Existing
+runs remain explainable because `matching_runs.rule_config` stores the active
+policy snapshot and final effective config used at run time.
 
-Use policy changes for durable organization-wide tuning. Use request overrides
-for experiments, debugging, and one-off leadership decisions.
+Use policy changes for durable organization-wide tuning. For experiments or
+debugging, create a temporary inactive policy, activate it for the test run, and
+then reactivate the previous policy.

@@ -409,8 +409,9 @@ Foreign-key behavior:
 Database table: `policies`
 
 Policies store reusable matching rule configuration. The backend matching service
-loads the active policy before every matching run, then may apply explicit
-request overrides. The final merged config is still stored on
+loads the active policy before every matching run. Run endpoints do not accept
+configuration overrides; the active policy is the source of matching
+configuration. The final effective config is still stored on
 `matching_runs.rule_config` for auditability.
 
 Stored fields:
@@ -653,6 +654,14 @@ Create candidate payload:
           "web": 0,
           "backend": 0,
           "infrastructure": 0,
+          "ai": 0
+        },
+        "available_skills": {
+          "android": 0,
+          "ios": 0,
+          "web": 2,
+          "backend": 3,
+          "infrastructure": 2,
           "ai": 0
         },
         "coverage_ratio": 1.0

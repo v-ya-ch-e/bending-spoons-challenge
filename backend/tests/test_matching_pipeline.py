@@ -125,8 +125,6 @@ class TestMatchingPipeline(unittest.TestCase):
             use_case="project_rebalance",
             target_project_id=1,
             request=MatchingRunRequest(
-                max_recommendations=1,
-                max_candidate_plans=5,
                 requested_by="test-suite",
             ),
             db_client=db_client,
@@ -141,8 +139,8 @@ class TestMatchingPipeline(unittest.TestCase):
         self.assertEqual(db_client.runs[0]["rule_config"]["policy_id"], 7)
         self.assertEqual(db_client.runs[0]["rule_config"]["policy_name"], "Default strict matching")
         self.assertEqual(db_client.runs[0]["rule_config"]["policy_config"], DEFAULT_POLICY_CONFIG)
-        self.assertEqual(db_client.runs[0]["rule_config"]["request_overrides"], {"max_candidate_plans": 5})
-        self.assertEqual(db_client.runs[0]["rule_config"]["effective_config"]["max_candidate_plans"], 5)
+        self.assertNotIn("request_overrides", db_client.runs[0]["rule_config"])
+        self.assertEqual(db_client.runs[0]["rule_config"]["effective_config"]["max_candidate_plans"], 9)
         self.assertEqual(db_client.runs[0]["rule_config"]["effective_config"]["max_moves"], 2)
         self.assertEqual(db_client.updated_runs[-1]["status"], "completed")
         self.assertIn(
@@ -150,27 +148,20 @@ class TestMatchingPipeline(unittest.TestCase):
             [event["event_type"] for event in db_client.events],
         )
 
-    def test_request_rule_config_overrides_active_policy(self):
+    def test_active_policy_is_the_only_rule_configuration_source(self):
         db_client = FakeDbApiClient()
 
         run_matching_pipeline(
             use_case="project_rebalance",
             target_project_id=1,
-            request=MatchingRunRequest(
-                max_recommendations=1,
-                rule_config={"max_moves": 1, "allow_understaff_current_project": True},
-            ),
+            request=MatchingRunRequest(),
             db_client=db_client,
         )
 
         rule_config = db_client.runs[0]["rule_config"]
-        self.assertEqual(
-            rule_config["request_overrides"],
-            {"max_moves": 1, "allow_understaff_current_project": True},
-        )
         self.assertEqual(rule_config["effective_config"]["max_candidate_plans"], 9)
-        self.assertEqual(rule_config["effective_config"]["max_moves"], 1)
-        self.assertTrue(rule_config["effective_config"]["allow_understaff_current_project"])
+        self.assertEqual(rule_config["effective_config"]["max_moves"], 2)
+        self.assertFalse(rule_config["effective_config"]["allow_understaff_current_project"])
 
     def test_project_matching_route_delegates_to_service(self):
         client = TestClient(app)
@@ -189,13 +180,23 @@ class TestMatchingPipeline(unittest.TestCase):
         )
 
         with patch("main.matching_service.run_matching", return_value=service_response) as run_matching:
-            response = client.post("/projects/1/matching:run", json={"max_candidate_plans": 3})
+            response = client.post("/projects/1/matching:run")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["run_id"], 99)
         run_matching.assert_called_once()
         self.assertEqual(run_matching.call_args.kwargs["use_case"], "project_rebalance")
         self.assertEqual(run_matching.call_args.kwargs["target_project_id"], 1)
+
+    def test_project_matching_route_rejects_inline_config(self):
+        client = TestClient(app)
+
+        response = client.post(
+            "/projects/1/matching:run",
+            json={"rule_config": {"max_moves": 1}},
+        )
+
+        self.assertEqual(response.status_code, 422)
 
 
 if __name__ == "__main__":

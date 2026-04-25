@@ -38,14 +38,14 @@ async def suggest_skill_profile(payload: SkillProfileRequest) -> SkillProfileRes
 @app.post("/projects/{project_id}/matching:run", response_model=MatchingRunResponse)
 async def run_project_matching(
     project_id: int,
-    payload: MatchingRunRequest,
+    payload: MatchingRunRequest | None = None,
 ) -> MatchingRunResponse:
     try:
         return await asyncio.to_thread(
             matching_service.run_matching,
             use_case="project_rebalance",
             target_project_id=project_id,
-            request=payload,
+            request=payload or MatchingRunRequest(),
         )
     except DbApiError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
@@ -55,14 +55,14 @@ async def run_project_matching(
 
 @app.post("/matching/portfolio:rebalance", response_model=MatchingRunResponse)
 async def run_portfolio_rebalance(
-    payload: MatchingRunRequest,
+    payload: MatchingRunRequest | None = None,
 ) -> MatchingRunResponse:
     try:
         return await asyncio.to_thread(
             matching_service.run_matching,
             use_case="portfolio_rebalance",
             target_project_id=None,
-            request=payload,
+            request=payload or MatchingRunRequest(),
         )
     except DbApiError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc

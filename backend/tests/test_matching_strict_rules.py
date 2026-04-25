@@ -314,7 +314,7 @@ class TestMatchingStrictRules(unittest.TestCase):
         self.assertEqual(top_move.employee_id, 20)
         self.assertEqual(top_move.current_project_impact, "low")
 
-    def test_project_scope_blocks_target_with_open_move_request(self):
+    def test_open_move_request_blocks_employee_not_entire_target_project(self):
         snapshot = normalize_snapshot(
             [
                 project(
@@ -346,7 +346,8 @@ class TestMatchingStrictRules(unittest.TestCase):
             config=StrictRuleConfig(),
         )
 
-        self.assertEqual(result.candidate_plans, ())
+        self.assertEqual(len(result.candidate_plans), 1)
+        self.assertEqual(result.candidate_plans[0].moves[0].employee_id, 10)
 
     def test_full_gap_closure_beats_preferred_partial_match(self):
         snapshot = normalize_snapshot(
@@ -434,6 +435,30 @@ class TestMatchingStrictRules(unittest.TestCase):
         self.assertEqual(result.candidate_plans, ())
         self.assertEqual(len(result.hiring_gaps), 1)
 
+    def test_new_acquisition_hiring_gap_is_high_urgency(self):
+        snapshot = normalize_snapshot(
+            [
+                project(
+                    1,
+                    name="Target",
+                    required_people_amount=1,
+                    required_skills={"backend": 3},
+                    phase="new acquisition",
+                ),
+            ],
+            [],
+        )
+
+        result = run_strict_rules(
+            use_case="project_rebalance",
+            target_project_id=1,
+            snapshot=snapshot,
+            config=StrictRuleConfig(),
+        )
+
+        self.assertEqual(result.candidate_plans, ())
+        self.assertEqual(result.hiring_gaps[0].urgency, "high")
+
     def test_coverage_calculation_uses_max_skill_coverage(self):
         snapshot = normalize_snapshot(
             [
@@ -451,29 +476,22 @@ class TestMatchingStrictRules(unittest.TestCase):
         self.assertEqual(coverage.available_skills["backend"], 3)
         self.assertEqual(coverage.skill_gap["web"], 1)
 
-    def test_config_overrides_request_candidate_limit(self):
-        config = build_rule_config(
-            max_candidate_plans=7,
-            overrides={"max_moves": 2, "allow_understaff_current_project": True},
-        )
-
-        self.assertEqual(config.max_candidate_plans, 7)
-        self.assertEqual(config.max_moves, 2)
-        self.assertTrue(config.allow_understaff_current_project)
-
-    def test_policy_config_merges_before_request_overrides(self):
+    def test_policy_config_builds_rule_config(self):
         config = build_rule_config(
             policy_config={
                 "max_candidate_plans": 9,
-                "max_moves": 3,
-                "allow_understaff_current_project": False,
+                "max_moves": 2,
+                "allow_understaff_current_project": True,
             },
-            overrides={"max_moves": 1, "allow_understaff_current_project": True},
         )
 
         self.assertEqual(config.max_candidate_plans, 9)
-        self.assertEqual(config.max_moves, 1)
+        self.assertEqual(config.max_moves, 2)
         self.assertTrue(config.allow_understaff_current_project)
+
+    def test_unknown_config_keys_are_rejected_with_value_error(self):
+        with self.assertRaisesRegex(ValueError, "Unknown matching rule config keys"):
+            build_rule_config(policy_config={"minimum_skill_level_gap": 1})
 
 
 if __name__ == "__main__":

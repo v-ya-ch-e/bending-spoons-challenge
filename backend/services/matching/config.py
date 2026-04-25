@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, fields, replace
 from typing import Any
 
 
@@ -26,15 +26,15 @@ class StrictRuleConfig:
 
 def build_rule_config(
     *,
-    max_candidate_plans: int | None = None,
     policy_config: Any = None,
-    overrides: Any = None,
 ) -> StrictRuleConfig:
     data = _config_data(policy_config)
-    data.update(_config_data(overrides))
 
-    if max_candidate_plans is not None:
-        data["max_candidate_plans"] = max_candidate_plans
+    known_fields = {field.name for field in fields(StrictRuleConfig)}
+    unknown_fields = set(data) - known_fields
+    if unknown_fields:
+        names = ", ".join(sorted(unknown_fields))
+        raise ValueError(f"Unknown matching rule config keys: {names}")
 
     config = replace(StrictRuleConfig(), **data)
     _validate_config(config)
