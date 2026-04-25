@@ -8,6 +8,15 @@ services:
       - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     restart: unless-stopped
 
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+    restart: unless-stopped
+
   db-rest-api:
     build:
       context: ./db-rest-api
