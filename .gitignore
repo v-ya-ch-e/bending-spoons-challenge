@@ -19,8 +19,9 @@ thumbs.db
 # Logs and temproraries
 *.log
 
-# Environment variables
+# Secrets
 .env
+.env.local
 
 # Certificates
 *.crt
