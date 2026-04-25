@@ -104,3 +104,7 @@ See [db/schema.sql](db/schema.sql) for the source of truth. Summary:
 `skills` and `required_skills` use the brief's six keys exactly: `android`, `ios`, `web`, `backend`, `infrastructure`, `ai`. Levels are integers 0-3.
 
 For agent-facing context (conventions, JSON column rules, when to add new tables), see [CLAUDE.md](CLAUDE.md).
+
+## Related API Deployment
+
+The database-facing HTTP API lives in [../db-rest-api](../db-rest-api) and deploys separately through the branch-based CI/CD workflow. See [../docs/deployment.md](../docs/deployment.md) for production and development URLs, EC2 paths, nginx routing, and verification commands.

@@ -97,4 +97,4 @@ The following appear in the brief but are deliberately not modeled in the databa
 - Generated documentation artifacts
 - Acquired-company registry, employee status lifecycle history
 
-The database-facing HTTP API lives in `../db-rest-api` and is exposed at `/db-api`. Do not duplicate DB connection setup here; add shared DB endpoints in `db-rest-api` using its connection helpers.
+The database-facing HTTP API lives in `../db-rest-api` and is exposed at `/db-api`. Production is `https://doubleu.team/db-api/...`; development is `https://dev.doubleu.team/db-api/...`. Do not duplicate DB connection setup here; add shared DB endpoints in `db-rest-api` using its connection helpers.
