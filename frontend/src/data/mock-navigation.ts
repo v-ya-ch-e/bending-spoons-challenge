@@ -13,9 +13,9 @@ export type RoleWorkspace = {
 }
 
 export const currentUser = {
-  name: "Maksim Sigov",
-  email: "maksim@bendingspoons.com",
-  initials: "MS",
+  name: "Demo User",
+  email: "demo@example.com",
+  initials: "DU",
   team: "Platform Operations",
 }
 
