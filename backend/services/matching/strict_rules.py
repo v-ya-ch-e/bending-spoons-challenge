@@ -366,6 +366,9 @@ def _candidate_moves_for_target(
     snapshot: MatchingSnapshot,
     config: StrictRuleConfig,
 ) -> tuple[CandidateMove, ...]:
+    if target_project_id in scoped.blocked_project_ids:
+        return ()
+
     target_project = scoped.projects[target_project_id]
     target_coverage = scoped.current_coverage[target_project_id]
     moves: list[CandidateMove] = []
@@ -779,11 +782,11 @@ def _score_candidate(
     preference_score = _candidate_preference_score(moves, snapshot, config)
 
     score = (
-        0.35 * max(skill_reduction, 0)
+        0.45 * max(skill_reduction, 0)
         + 0.25 * max(headcount_reduction, 0)
-        + 0.20 * source_preservation
+        + 0.15 * source_preservation
         + 0.10 * low_disruption
-        + 0.10 * preference_score
+        + 0.05 * preference_score
     )
     return round(min(score, 1.0), 4)
 
