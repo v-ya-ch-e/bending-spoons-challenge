@@ -1,9 +1,11 @@
+import json
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 import httpx
+import openai
 
 from schemas import (
     MatchingResult,
@@ -59,6 +61,11 @@ async def run_skill_profile_suggestion(
         raise HTTPException(
             status_code=exc.response.status_code,
             detail="GitHub repository lookup failed",
+        ) from exc
+    except openai.OpenAIError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"AI service error: {exc}",
         ) from exc
     except NotImplementedError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc

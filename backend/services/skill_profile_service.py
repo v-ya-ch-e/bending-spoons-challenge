@@ -120,7 +120,11 @@ Repositories to analyze:
         response_format={"type": "json_object"},
     )
 
-    suggestion_data = json.loads(response.choices[0].message.content)
+    raw_content = response.choices[0].message.content
+    try:
+        suggestion_data = json.loads(raw_content)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ValueError(f"AI model returned an unparseable response: {exc}") from exc
 
     roles: list[RoleRequirement] = []
     for role_data in suggestion_data.get("roles", []):
