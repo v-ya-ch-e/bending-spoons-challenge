@@ -13,6 +13,11 @@ See `docs/bending_spoons_internal_platform_brief.md` for the product brief.
 Environment variables live in the repository-level `.env` file. Start from
 `.env.example`.
 
+## Docs
+
+- [DB API documentation](docs/DB_API_DOCUMENTATION.md) for the `db-rest-api` schema, CRUD endpoints, payload contracts, and agent workflow.
+- [Deployment documentation](docs/deployment.md) for the CI/CD workflow, server layout, nginx routing, TLS setup, and verification commands.
+
 ## Deployment
 
 The DB REST API deploys to two environments on the same EC2 host:

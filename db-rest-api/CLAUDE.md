@@ -7,6 +7,7 @@ DB REST API notes:
 - Keep MySQL RDS credentials in the root `.env`; expected keys are `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`.
 - Reuse `get_db_connection` or `open_db_connection()` from `main.py` for DB-backed endpoints.
 - Do not log or return database credentials or raw connection errors from public endpoints.
+- `../docs/DB_API_DOCUMENTATION.md` is the canonical agent-facing API contract. Read it before changing schema, fixtures, API routes, request/response models, or frontend-facing behavior.
 
 ## Stack
 
@@ -30,8 +31,12 @@ db-rest-api/
     load_fixtures.py      # Insert seed_data.json into the database
   main.py                 # FastAPI application
   requirements.txt
+  requirements-dev.txt     # Test dependencies
+  tests/                   # Pytest suite for the FastAPI service
   README.md               # Setup + usage walkthrough
   CLAUDE.md               # This file
+docs/
+  DB_API_DOCUMENTATION.md # Canonical DB API contract for agents
 ```
 
 The `fixtures/` directory is created on first run by the generator.
@@ -92,6 +97,8 @@ Reads the fixture JSON and inserts in dependency order: `projects` -> `employees
 - Keep scripts as plain executable modules (`if __name__ == "__main__"`). Do not introduce a CLI framework or package layout unless asked.
 - Use `json.dumps(...)` when writing into a `JSON` column. `mysql-connector-python` does not auto-serialize dicts/lists.
 - Treat `seed_data.json` as the contract between generation and loading. Adding a column means: update SQL -> update Pydantic model -> update generator prompt -> update loader insert.
+- Keep `../docs/DB_API_DOCUMENTATION.md` up to date after every DB schema or public API change, including changes to fields, enums, payload shapes, endpoint behavior, error behavior, or foreign-key side effects.
+- Always run `python3 -m pytest db-rest-api/tests` at the end of changes that touch `db-rest-api`, and add or update tests when adding functionality or changing API/schema behavior.
 - Do not commit `.env`. The repo `.gitignore` already excludes it.
 
 ## What is NOT in scope here
