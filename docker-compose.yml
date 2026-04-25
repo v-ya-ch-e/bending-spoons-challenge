@@ -1,4 +1,16 @@
 services:
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - .env
+    environment:
+      ROOT_PATH: /api
+      APP_VERSION: "0.1.0"
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+
   db-rest-api:
     build:
       context: ./db-rest-api
