@@ -17,3 +17,7 @@ thumbs.db
 
 # Logs and temproraries
 *.log
+
+# Secrets
+.env
+.env.local
