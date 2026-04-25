@@ -1,19 +1,22 @@
 "use client"
 
 import { useEffect, useMemo, useState, type ReactNode } from "react"
-import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowRight01Icon,
   Cancel01Icon,
+  Edit02Icon,
   GridViewIcon,
   ListViewIcon,
 } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import {
+  getCachedEmployees,
   getCachedProjects,
+  listEmployees,
   listProjects,
+  type Employee,
   type Project,
   type ProjectSkillRequirement,
   type ProjectSkillRequirements,
@@ -58,6 +61,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -106,15 +110,20 @@ export function ProjectsScreen() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const cachedEmployees = getCachedEmployees()
   const cachedProjects = getCachedProjects()
+  const [employees, setEmployees] = useState<Employee[]>(() => cachedEmployees ?? [])
   const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
   const [searchQuery, setSearchQuery] = useState("")
   const [filter, setFilter] = useState<FilterKey>("all")
   const [sort, setSort] = useState<SortKey>("name")
   const [viewMode, setViewMode] = useState<ViewMode>("list")
   const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>()
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | undefined>()
   const [editingProject, setEditingProject] = useState<Project | null>(null)
+  const [isEmployeeLoading, setIsEmployeeLoading] = useState(false)
   const [isLoading, setIsLoading] = useState(() => !cachedProjects)
+  const [employeeError, setEmployeeError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const createDialogOpen = searchParams.get("create") === "1"
 
@@ -220,6 +229,14 @@ export function ProjectsScreen() {
     return projects.find((project) => project.id === selectedProjectId)
   }, [projects, selectedProjectId])
 
+  const selectedEmployee = useMemo(() => {
+    return employees.find((employee) => employee.id === selectedEmployeeId)
+  }, [employees, selectedEmployeeId])
+
+  const selectedEmployeeProject = selectedEmployee?.current_project
+    ? projects.find((project) => project.project_name === selectedEmployee.current_project)
+    : undefined
+
   const metrics = useMemo(() => {
     const projectsNeedingStaff = projects.filter(
       (project) => getStaffingGap(project) > 0
@@ -257,6 +274,35 @@ export function ProjectsScreen() {
 
   function closeProject() {
     setSelectedProjectId(undefined)
+    setSelectedEmployeeId(undefined)
+  }
+
+  async function openEmployeeDetail(employeeId: number) {
+    setSelectedEmployeeId(employeeId)
+    setEmployeeError(null)
+
+    if (employees.some((employee) => employee.id === employeeId)) {
+      return
+    }
+
+    try {
+      setIsEmployeeLoading(true)
+      const nextEmployees = await listEmployees()
+      setEmployees(nextEmployees)
+    } catch (loadError) {
+      setEmployeeError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Unable to load employee details."
+      )
+    } finally {
+      setIsEmployeeLoading(false)
+    }
+  }
+
+  function closeEmployeeDetail() {
+    setSelectedEmployeeId(undefined)
+    setEmployeeError(null)
   }
 
   function handleCreateDialogOpenChange(open: boolean) {
@@ -466,8 +512,18 @@ export function ProjectsScreen() {
               <ProjectDetailPanel
                 project={selectedProject}
                 isLoading={isLoading}
+                onEmployeeOpen={openEmployeeDetail}
                 onEdit={(project) => setEditingProject(project)}
                 onClose={closeProject}
+              />
+            )}
+            {selectedEmployeeId && (
+              <ProjectEmployeeDetailPanel
+                employee={selectedEmployee}
+                project={selectedEmployeeProject}
+                isLoading={isEmployeeLoading}
+                error={employeeError}
+                onClose={closeEmployeeDetail}
               />
             )}
           </div>
@@ -645,11 +701,13 @@ function ProjectsCardGrid({
 function ProjectDetailPanel({
   project,
   isLoading,
+  onEmployeeOpen,
   onEdit,
   onClose,
 }: {
   project?: Project
   isLoading: boolean
+  onEmployeeOpen: (employeeId: number) => void
   onEdit: (project: Project) => void
   onClose: () => void
 }) {
@@ -674,6 +732,7 @@ function ProjectDetailPanel({
         <div className="flex items-center gap-2">
           {project && (
             <Button type="button" variant="outline" size="sm" onClick={() => onEdit(project)}>
+              <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} className="size-4" />
               Edit
             </Button>
           )}
@@ -732,12 +791,16 @@ function ProjectDetailPanel({
                     const employeeId = project.current_team_member_ids[index]
 
                     return (
-                      <Link
+                      <button
+                        type="button"
                         key={`${member}-${employeeId ?? index}`}
-                        href={
-                          employeeId ? `/cto/employees/${employeeId}` : "/cto/employees"
-                        }
-                        className="group flex items-center gap-3 rounded-2xl bg-muted px-3 py-2 transition-colors hover:bg-accent hover:text-foreground"
+                        disabled={!employeeId}
+                        onClick={() => {
+                          if (employeeId) {
+                            onEmployeeOpen(employeeId)
+                          }
+                        }}
+                        className="group flex items-center gap-3 rounded-2xl bg-muted px-3 py-2 text-left transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Avatar size="sm">
                           <AvatarFallback>{getInitials(member)}</AvatarFallback>
@@ -755,7 +818,7 @@ function ProjectDetailPanel({
                             className="size-4"
                           />
                         </span>
-                      </Link>
+                      </button>
                     )
                   })}
                 </div>
@@ -831,6 +894,133 @@ function ProjectCover({ project }: { project: Project }) {
         </div>
       </div>
     </div>
+  )
+}
+
+function ProjectEmployeeDetailPanel({
+  employee,
+  project,
+  isLoading,
+  error,
+  onClose,
+}: {
+  employee?: Employee
+  project?: Project
+  isLoading: boolean
+  error: string | null
+  onClose: () => void
+}) {
+  return (
+    <aside
+      className="animate-in fade-in-0 slide-in-from-right-8 z-50 flex flex-col border-l border-border bg-background shadow-xl duration-200"
+      style={{
+        position: "fixed",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: "min(100vw, 32rem)",
+      }}
+    >
+      <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-5">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Employee detail
+          </p>
+          <h2 className="mt-1 font-semibold">Profile</h2>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={onClose}
+          aria-label="Close employee detail"
+        >
+          <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex flex-col gap-4 px-6 pt-5 pb-8">
+          <Skeleton className="h-16" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-44" />
+        </div>
+      ) : error ? (
+        <div className="px-6 pt-5 pb-8">
+          <Alert variant="destructive">
+            <AlertTitle>Could not load employee</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </div>
+      ) : employee ? (
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="flex flex-col gap-5 px-6 pt-5 pb-8">
+            <div className="flex items-center gap-3">
+              <Avatar size="lg">
+                <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <h3 className="truncate text-lg font-semibold">{employee.name}</h3>
+                <p className="truncate text-sm text-muted-foreground">
+                  {employee.role}
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+
+            <DetailSection title="Skill levels">
+              <div className="flex flex-col gap-3">
+                {employeeSkillEntries(employee.skills).map(([skill, level]) => (
+                  <EmployeeSkillLevel key={skill} skill={skill} level={level} />
+                ))}
+              </div>
+            </DetailSection>
+
+            <DetailSection title="Current allocation">
+              {employee.current_project ? (
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <p className="font-medium">{employee.current_project}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {project?.project_description ??
+                        "Project details are not available from the current API response."}
+                    </p>
+                  </div>
+                  {project && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <MiniStat label="Phase" value={formatPhase(project.project_phase)} />
+                      <MiniStat
+                        label="Team"
+                        value={`${project.current_team_members.length} people`}
+                      />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  This employee is not assigned to a current project.
+                </p>
+              )}
+            </DetailSection>
+
+            <DetailSection title="Preferences and interests">
+              <TokenList items={employee.preferences} emptyLabel="No preferences" />
+              <TokenList items={employee.interests} emptyLabel="No interests" />
+            </DetailSection>
+          </div>
+        </ScrollArea>
+      ) : (
+        <div className="px-6 pt-5 pb-8">
+          <Alert>
+            <AlertTitle>Employee not found</AlertTitle>
+            <AlertDescription>
+              The selected employee is not present in the current backend response.
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
+    </aside>
   )
 }
 
@@ -1043,6 +1233,32 @@ function SkillLevel({
   )
 }
 
+function EmployeeSkillLevel({
+  skill,
+  level,
+}: {
+  skill: SkillKey
+  level: number
+}) {
+  return (
+    <div className="grid grid-cols-[6rem_1fr_1.5rem] items-center gap-3">
+      <span className="text-sm text-muted-foreground">{skillLabels[skill]}</span>
+      <div className="grid grid-cols-3 gap-1.5">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <span
+            key={index}
+            className={cn(
+              "h-2 rounded-full",
+              index < level ? "bg-primary" : "bg-muted"
+            )}
+          />
+        ))}
+      </div>
+      <span className="text-right text-sm font-medium">{level}</span>
+    </div>
+  )
+}
+
 function skillEntries(
   skills: ProjectSkillRequirements
 ): Array<[SkillKey, ProjectSkillRequirement]> {
@@ -1053,6 +1269,36 @@ function skillEntries(
       getRequirementTotal(rightRequirement) - getRequirementTotal(leftRequirement) ||
       getHighestRequirementLevel(rightRequirement) -
         getHighestRequirementLevel(leftRequirement)
+  )
+}
+
+function employeeSkillEntries(
+  skills: Employee["skills"]
+): Array<[SkillKey, number]> {
+  return (Object.entries(skills) as Array<[SkillKey, number]>).sort(
+    ([, leftLevel], [, rightLevel]) => rightLevel - leftLevel
+  )
+}
+
+function TokenList({
+  items,
+  emptyLabel,
+}: {
+  items: string[]
+  emptyLabel: string
+}) {
+  if (items.length === 0) {
+    return <p className="text-sm text-muted-foreground">{emptyLabel}</p>
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((item) => (
+        <Badge key={item} variant="outline">
+          {item}
+        </Badge>
+      ))}
+    </div>
   )
 }
 

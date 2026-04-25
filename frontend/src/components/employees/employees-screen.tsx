@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Cancel01Icon } from "@hugeicons/core-free-icons"
+import { Cancel01Icon, Edit02Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import {
@@ -548,6 +548,7 @@ function EmployeeDetailPanel({
         <div className="flex items-center gap-2">
           {employee && (
             <Button type="button" variant="outline" size="sm" onClick={() => onEdit(employee)}>
+              <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} className="size-4" />
               Edit
             </Button>
           )}
