@@ -31,9 +31,9 @@ def run_matching_pipeline(
     logs: list[dict[str, Any]] = []
 
     try:
+        active_policy = client.get_active_policy()
         config = build_rule_config(
-            max_candidate_plans=request.max_candidate_plans,
-            overrides=request.rule_config,
+            policy_config=active_policy["config"],
         )
         raw_projects = _list_all(client.list_projects)
         raw_employees = _list_all(client.list_employees)
@@ -44,10 +44,13 @@ def run_matching_pipeline(
             raw_move_requests,
             target_project_id=target_project_id,
         )
+        final_config = config.to_dict()
         effective_rule_config = {
-            **config.to_dict(),
-            "max_recommendations": request.max_recommendations,
-            "dry_run": request.dry_run,
+            **final_config,
+            "policy_id": active_policy["id"],
+            "policy_name": active_policy["name"],
+            "policy_config": active_policy["config"],
+            "effective_config": final_config,
         }
 
         run = client.create_matching_run(
@@ -111,7 +114,7 @@ def run_matching_pipeline(
             target_project_id=target_project_id,
             result=result,
             logs=logs,
-            max_returned_candidates=request.max_recommendations,
+            max_returned_candidates=config.max_candidate_plans,
             summary=summary,
         )
     except Exception as exc:

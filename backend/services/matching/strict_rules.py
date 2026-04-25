@@ -366,6 +366,9 @@ def _candidate_moves_for_target(
     snapshot: MatchingSnapshot,
     config: StrictRuleConfig,
 ) -> tuple[CandidateMove, ...]:
+    if target_project_id in scoped.blocked_project_ids:
+        return ()
+
     target_project = scoped.projects[target_project_id]
     target_coverage = scoped.current_coverage[target_project_id]
     moves: list[CandidateMove] = []
@@ -621,13 +624,7 @@ def _blocked_ids(
         if request.status in OPEN_MOVE_REQUEST_STATUSES
     ]
     blocked_employee_ids = frozenset(request.employee_id for request in open_requests)
-    blocked_project_ids = frozenset(
-        project_id
-        for request in open_requests
-        for project_id in (request.from_project_id, request.to_project_id)
-        if project_id is not None
-    )
-    return blocked_employee_ids, blocked_project_ids
+    return blocked_employee_ids, frozenset()
 
 
 def _employee_target_fit(
@@ -779,11 +776,11 @@ def _score_candidate(
     preference_score = _candidate_preference_score(moves, snapshot, config)
 
     score = (
-        0.35 * max(skill_reduction, 0)
+        0.45 * max(skill_reduction, 0)
         + 0.25 * max(headcount_reduction, 0)
-        + 0.20 * source_preservation
+        + 0.15 * source_preservation
         + 0.10 * low_disruption
-        + 0.10 * preference_score
+        + 0.05 * preference_score
     )
     return round(min(score, 1.0), 4)
 
@@ -950,7 +947,7 @@ def _role_title(required_skills: SkillMap) -> str:
 def _urgency(project: ProjectSnapshot, coverage: ProjectCoverage) -> str:
     phase = project.project_phase.lower()
     if coverage.headcount_gap >= 2 or coverage.skill_gap_total >= 3 or phase in {
-        "new",
+        "new acquisition",
         "growth",
     }:
         return "high"

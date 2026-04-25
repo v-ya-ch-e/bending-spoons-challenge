@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from schemas.common import Skills
 
 
 MatchingUseCase = Literal[
@@ -11,32 +13,16 @@ MatchingUseCase = Literal[
     "project_staffing",
 ]
 
+Impact = Literal["low", "medium", "high"]
+Urgency = Literal["low", "medium", "high"]
 
-class MatchingRuleConfigRequest(BaseModel):
-    max_moves: int | None = Field(default=None, ge=1, le=3)
-    max_projects_in_scope: int | None = Field(default=None, ge=1)
-    max_employees_in_scope: int | None = Field(default=None, ge=1)
-    max_employee_project_count: int | None = Field(default=None, ge=1)
-    minimum_remaining_project_coverage: float | None = Field(
-        default=None, ge=0.0, le=1.0
-    )
-    minimum_target_coverage_improvement: float | None = Field(
-        default=None, ge=0.0, le=1.0
-    )
-    allow_unassigned_employees: bool | None = None
-    allow_multi_project_assignment: bool | None = None
-    allow_understaff_current_project: bool | None = None
-    exclude_pending_move_requests: bool | None = None
-    prefer_employee_preferences: bool | None = None
-    emit_hiring_gaps: bool | None = None
 
+# --- Matching run request/response schemas ---
 
 class MatchingRunRequest(BaseModel):
-    max_recommendations: int = Field(default=5, ge=1, le=25)
-    max_candidate_plans: int = Field(default=25, ge=1, le=100)
-    dry_run: bool = True
+    model_config = ConfigDict(extra="forbid")
+
     requested_by: str | None = Field(default=None, max_length=255)
-    rule_config: MatchingRuleConfigRequest | None = None
 
 
 class MatchingMoveResponse(BaseModel):
@@ -91,3 +77,122 @@ class MatchingRunResponse(BaseModel):
     candidates: list[MatchingCandidateResponse]
     hiring_recommendations: list[MatchingHiringRecommendationResponse]
     logs: list[MatchingRunEventResponse]
+
+
+# --- Input to the LLM evaluator ---
+
+
+class TargetProject(BaseModel):
+    id: int = Field(gt=0)
+    name: str
+    phase: str
+    required_people_amount: int = Field(ge=0)
+    required_skills: Skills
+
+
+class GapClosingMove(BaseModel):
+    employee_id: int = Field(gt=0)
+    name: str
+    role: str
+    from_project_id: int = Field(gt=0)
+    from_project_name: str
+    to_project_id: int = Field(gt=0)
+    to_project_name: str
+    skills: Skills
+    preferences: list[str]
+    interests: list[str]
+
+
+class BenchMove(BaseModel):
+    employee_id: int = Field(gt=0)
+    name: str
+    role: str
+    to_project_id: int = Field(gt=0)
+    to_project_name: str
+    skills: Skills
+    interests: list[str]
+
+
+class CoverageAfter(BaseModel):
+    headcount_gap: int = Field(ge=0)
+    skill_gap: Skills
+
+
+class SourceProjectImpact(BaseModel):
+    project_id: int = Field(gt=0)
+    project_name: str
+    impact: Impact
+
+
+class CandidatePlan(BaseModel):
+    candidate_plan_id: str = Field(min_length=1)
+    gap_closing_moves: list[GapClosingMove]
+    bench_moves: list[BenchMove]
+    coverage_after: CoverageAfter
+    source_project_impacts: list[SourceProjectImpact]
+
+
+class HiringGapHint(BaseModel):
+    project_id: int = Field(gt=0)
+    role_title: str
+    count: int = Field(gt=0)
+    required_skills: Skills
+
+
+class MatchingLlmRequest(BaseModel):
+    use_case: str
+    target_project: TargetProject
+    candidate_plans: list[CandidatePlan] = Field(min_length=1)
+    hiring_gap_hints: list[HiringGapHint]
+
+
+# --- Output from the LLM evaluator (Structured Outputs schema) ---
+
+
+class RecommendedMove(BaseModel):
+    employee_id: int = Field(gt=0)
+    from_project_id: int = Field(gt=0)
+    to_project_id: int = Field(gt=0)
+    suggested_role: str
+    current_project_impact: Impact
+
+
+class RecommendedBenchMove(BaseModel):
+    employee_id: int = Field(gt=0)
+    to_project_id: int = Field(gt=0)
+    suggested_role: str
+    reason: str
+
+
+class BestPlan(BaseModel):
+    candidate_plan_id: str = Field(min_length=1)
+    fit_score: float = Field(ge=0.0, le=1.0)
+    reason: str
+    moves: list[RecommendedMove]
+    bench_moves: list[RecommendedBenchMove]
+    risks: list[str]
+
+
+class AlternativePlan(BaseModel):
+    candidate_plan_id: str = Field(min_length=1)
+    fit_score: float = Field(ge=0.0, le=1.0)
+    reason: str
+    tradeoff: str = Field(min_length=1)
+    moves: list[RecommendedMove]
+    bench_moves: list[RecommendedBenchMove]
+    risks: list[str]
+
+
+class HiringRecommendation(BaseModel):
+    project_id: int = Field(gt=0)
+    role_title: str
+    count: int = Field(gt=0)
+    required_skills: Skills
+    urgency: Urgency
+    reason: str
+
+
+class MatchingLlmResponse(BaseModel):
+    best: BestPlan
+    alternatives: list[AlternativePlan] = Field(max_length=2)
+    hiring_recommendations: list[HiringRecommendation]

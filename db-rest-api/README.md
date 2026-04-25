@@ -98,6 +98,13 @@ Useful endpoints:
 - `GET /move-requests/{request_id}`
 - `PUT /move-requests/{request_id}`
 - `DELETE /move-requests/{request_id}`
+- `GET /policies`
+- `POST /policies`
+- `GET /policies/active`
+- `GET /policies/{policy_id}`
+- `PUT /policies/{policy_id}`
+- `POST /policies/{policy_id}:activate`
+- `DELETE /policies/{policy_id}`
 - `GET /matching-runs`
 - `POST /matching-runs`
 - `GET /matching-runs/latest`
@@ -239,6 +246,7 @@ See [db/schema.sql](db/schema.sql) for the source of truth. Summary:
 - `employees(id, name, role, skills, preferences, interests)`
 - `project_assignments(employee_id FK, project_id FK)`
 - `move_requests(id, employee_id FK, from_project_id FK nullable, to_project_id FK, reason, expected_role, current_project_impact, status, created_at, responded_at)`
+- `policies(id, name, description, config, is_active, created_at, updated_at, activated_at)`
 - `matching_runs(id, use_case, target_project_id FK nullable, status, requested_by, rule_config, input_snapshot, counts, selected_candidate_plan_id, summary, error_message, timestamps)`
 - `matching_candidates(id, run_id FK, candidate_plan_id, strict_score, hard_rule_summary, plan_payload, rejected_reason, created_at)`
 - `matching_recommendations(id, run_id FK, candidate_plan_id, recommendation_rank, fit_score, summary, explanation, risks, ramp_up_estimate, suggested_moves, model_metadata, created_at)`

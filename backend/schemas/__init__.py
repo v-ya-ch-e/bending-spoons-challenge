@@ -4,8 +4,9 @@ from schemas.common import Skills
 from schemas.matching import (
     MatchingCandidateResponse,
     MatchingHiringRecommendationResponse,
+    MatchingLlmRequest,
+    MatchingLlmResponse,
     MatchingMoveResponse,
-    MatchingRuleConfigRequest,
     MatchingRunEventResponse,
     MatchingRunRequest,
     MatchingRunResponse,
@@ -15,8 +16,9 @@ from schemas.skill_profiles import SkillProfileRequest, SkillProfileResponse
 __all__ = [
     "MatchingCandidateResponse",
     "MatchingHiringRecommendationResponse",
+    "MatchingLlmRequest",
+    "MatchingLlmResponse",
     "MatchingMoveResponse",
-    "MatchingRuleConfigRequest",
     "MatchingRunEventResponse",
     "MatchingRunRequest",
     "MatchingRunResponse",

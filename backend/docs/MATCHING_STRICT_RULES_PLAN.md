@@ -27,20 +27,12 @@ Step 1 receives a normalized pipeline request:
 {
   "use_case": "project_rebalance",
   "target_project_id": 7,
-  "max_candidate_plans": 25,
-  "rule_config": {
-    "max_moves": 3,
-    "max_projects_in_scope": 8,
-    "max_employees_in_scope": 60,
-    "minimum_remaining_project_coverage": 0.75,
-    "allow_unassigned_employees": true,
-    "allow_multi_project_assignment": true,
-    "allow_understaff_current_project": false
-  }
+  "policy_id": 1
 }
 ```
 
-It also receives a snapshot loaded through the DB API:
+Configuration is loaded from the active database policy, not from the run
+request. Step 1 also receives a snapshot loaded through the DB API:
 
 - Projects with `id`, `required_people_amount`, `required_skills`,
   `project_phase`, and `current_team_member_ids`.

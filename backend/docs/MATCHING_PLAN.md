@@ -135,17 +135,13 @@ Example request:
 
 ```json
 {
-  "max_recommendations": 5,
-  "max_candidate_plans": 25,
-  "dry_run": true,
-  "rule_config": {
-    "max_moves": 3,
-    "allow_understaff_current_project": false,
-    "minimum_skill_level_gap": 0,
-    "include_preferences": true
-  }
+  "requested_by": "cto@example.com"
 }
 ```
+
+The body is optional. Matching configuration is not accepted on run endpoints;
+the backend always loads the active policy from the DB API and saves that
+effective configuration on the run.
 
 Example response:
 
@@ -155,26 +151,83 @@ Example response:
   "use_case": "project_rebalance",
   "status": "completed",
   "target_project_id": 7,
-  "recommendations": [
+  "candidate_count": 1,
+  "recommendation_count": 0,
+  "hiring_recommendation_count": 1,
+  "summary": "Generated 1 deterministic strict-rule candidate plans and 1 hiring gaps.",
+  "candidates": [
     {
-      "rank": 1,
       "candidate_plan_id": "plan_01",
-      "fit_score": 0.91,
-      "summary": "Best balance of backend coverage and low current-project disruption.",
+      "strict_score": 0.82,
+      "summary": "Move 3 toward Project 7 to reduce headcount or skill gaps.",
       "moves": [
         {
           "employee_id": 3,
           "from_project_id": 2,
           "to_project_id": 7,
+          "action": "move",
           "suggested_role": "Backend/platform engineer",
           "current_project_impact": "low",
+          "hard_rule_reasons": [
+            "Employee and target project exist in the DB snapshot.",
+            "Move improves or preserves target coverage.",
+            "Source project remains above strict minimums."
+          ],
           "reason": "Backend 3 and infrastructure 2 match the target gap."
         }
       ],
       "risks": [
         "Project 2 loses one backend-capable engineer but remains above strict minimums."
       ],
-      "ramp_up_estimate": "3-5 days"
+      "hard_rule_summary": {
+        "valid": true,
+        "target_project_id": 7,
+        "move_count": 1
+      },
+      "plan_payload": {
+        "summary": "Move 3 toward Project 7 to reduce headcount or skill gaps.",
+        "moves": [
+          {
+            "employee_id": 3,
+            "from_project_id": 2,
+            "to_project_id": 7,
+            "action": "move",
+            "suggested_role": "Backend/platform engineer",
+            "current_project_impact": "low",
+            "hard_rule_reasons": [
+              "Employee and target project exist in the DB snapshot.",
+              "Move improves or preserves target coverage.",
+              "Source project remains above strict minimums."
+            ],
+            "reason": "Backend 3 and infrastructure 2 match the target gap."
+          }
+        ],
+        "risks": [
+          "Project 2 loses one backend-capable engineer but remains above strict minimums."
+        ],
+        "project_coverage_after": {
+          "7": {
+            "headcount_gap": 0,
+            "skill_gap": {
+              "android": 0,
+              "ios": 0,
+              "web": 0,
+              "backend": 0,
+              "infrastructure": 0,
+              "ai": 0
+            },
+            "available_skills": {
+              "android": 0,
+              "ios": 0,
+              "web": 2,
+              "backend": 3,
+              "infrastructure": 2,
+              "ai": 0
+            },
+            "coverage_ratio": 1.0
+          }
+        }
+      }
     }
   ],
   "hiring_recommendations": [
@@ -198,6 +251,7 @@ Example response:
     {
       "level": "info",
       "stage": "strict_rules",
+      "event_type": "strict_rules.completed",
       "message": "Generated 18 valid candidate plans."
     }
   ]
@@ -208,7 +262,7 @@ Read endpoints:
 
 ```http
 GET /matching-runs/{run_id}
-GET /matching-runs/latest?use_case=project_rebalance&project_id=7
+GET /matching-runs/latest?use_case=project_rebalance&target_project_id=7
 GET /projects/{project_id}/matching/latest
 ```
 
@@ -216,12 +270,14 @@ Action endpoints:
 
 ```http
 POST /matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests
-POST /matching-runs/{run_id}/recommendations/{candidate_plan_id}:apply
 ```
 
-The first action creates `move_requests` only. The second action should be kept
-admin-only or postponed until the product is ready for direct assignment
-mutation.
+The action creates `move_requests` only from persisted
+`matching_recommendations`. Current strict-rule-only runs write
+`matching_candidates`, so direct move-request creation from strict candidates is
+handled by the frontend calling `POST /move-requests` per selected move. Direct
+assignment mutation should be kept admin-only or postponed until the product is
+ready for it.
 
 ## Shared Pipeline Location
 
@@ -421,23 +477,24 @@ events stored in the database.
 
 Event examples:
 
-- `run.created`
-- `snapshot.loaded`
-- `scope.selected`
 - `strict_rules.started`
+- `strict_rules.scope_selected`
+- `strict_rules.coverage_computed`
+- `strict_rules.candidates_generated`
+- `strict_rules.candidates_pruned`
+- `strict_rules.hiring_gaps_detected`
 - `strict_rules.completed`
-- `hiring_gap.detected`
+- `strict_rules.no_candidates`
+- `strict_rules.failed`
 - `llm_evaluation.started`
 - `llm_evaluation.completed`
-- `result.persisted`
-- `run.failed`
 
 Each event should include:
 
 - `run_id`
 - `level`: `debug`, `info`, `warning`, or `error`
-- `stage`: `request`, `snapshot`, `strict_rules`, `llm_evaluation`,
-  `persistence`, or `action`
+- `stage`: `request`, `snapshot`, `strict_rules`, `hiring_gap`,
+  `llm_evaluation`, `persistence`, or `action`
 - `message`: short safe display text
 - `metadata`: compact JSON with counts and public IDs
 
@@ -446,8 +503,10 @@ in the run or recommendation record if needed for audit/debugging.
 
 ## Configuration
 
-Start with defaults in code, then allow request-level overrides for safe values.
-Later, move durable organization defaults into a database table.
+Start with defaults in code, then apply the active database policy. Run
+endpoints do not accept configuration overrides; durable organization defaults
+live in the `policies` table, and the active policy is the matching
+configuration source for every new run.
 
 Recommended config groups:
 
@@ -495,17 +554,17 @@ If step 1 produces candidates but all candidates leave unresolved gaps:
 - Return hiring recommendations for the remaining uncovered gaps.
 - Make clear that hiring is required to maintain all projects properly.
 
-If OpenAI fails:
+For the future OpenAI ranking step, if OpenAI fails:
 
-- Save a warning event.
-- Return deterministic candidates ordered by strict score when acceptable.
-- Mark the run with `llm_status: failed` or equivalent metadata.
+- Save an error event.
+- Mark the run as `failed` unless the product explicitly chooses to support a
+  deterministic fallback mode.
 
-If model output is invalid:
+For the future OpenAI ranking step, if model output is invalid:
 
 - Reject invalid rows.
 - Never use unknown employee or project IDs.
-- If no valid recommendation remains, fall back to deterministic ordering.
+- Mark the run as `failed` if the best recommendation is missing or invalid.
 
 If persistence fails:
 

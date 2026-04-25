@@ -204,6 +204,31 @@ class MoveRequest(ApiModel):
     responded_at: datetime | None
 
 
+class PolicyCreate(ApiModel):
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    config: dict[str, Any]
+    is_active: bool = False
+
+
+class PolicyUpdate(UpdateModel):
+    name: str = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    config: dict[str, Any] = None
+    is_active: bool = None
+
+
+class Policy(ApiModel):
+    id: int
+    name: str
+    description: str | None
+    config: dict[str, Any]
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    activated_at: datetime | None
+
+
 class MatchingRunBase(ApiModel):
     use_case: MatchingUseCase
     target_project_id: int | None = Field(default=None, gt=0)
@@ -454,6 +479,13 @@ def serialize_move_request(row: dict[str, Any]) -> dict[str, Any]:
     return dict(row)
 
 
+def serialize_policy(row: dict[str, Any]) -> dict[str, Any]:
+    policy = dict(row)
+    policy["config"] = parse_json_column(policy["config"])
+    policy["is_active"] = bool(policy["is_active"])
+    return policy
+
+
 def numeric_value(value: Any) -> Any:
     if isinstance(value, Decimal):
         return float(value)
@@ -606,6 +638,25 @@ def fetch_move_request(cursor: DictCursor, request_id: int) -> dict[str, Any]:
     return serialize_move_request(row)
 
 
+def fetch_policy(cursor: DictCursor, policy_id: int) -> dict[str, Any]:
+    execute_or_raise(cursor, "SELECT * FROM policies WHERE id = %s", (policy_id,))
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Policy not found.")
+    return serialize_policy(row)
+
+
+def fetch_active_policy(cursor: DictCursor) -> dict[str, Any]:
+    execute_or_raise(
+        cursor,
+        "SELECT * FROM policies WHERE is_active = TRUE ORDER BY activated_at DESC, id DESC LIMIT 1",
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Active policy not found.")
+    return serialize_policy(row)
+
+
 def fetch_matching_run(cursor: DictCursor, run_id: int) -> dict[str, Any]:
     execute_or_raise(cursor, "SELECT * FROM matching_runs WHERE id = %s", (run_id,))
     row = cursor.fetchone()
@@ -721,6 +772,10 @@ def move_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return prepared
 
 
+def policy_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return serialize_json_fields(payload, ("config",))
+
+
 def serialize_json_fields(payload: dict[str, Any], columns: Sequence[str]) -> dict[str, Any]:
     prepared = dict(payload)
     for column in columns:
@@ -798,6 +853,7 @@ def read_root() -> dict[str, Any]:
             "/projects",
             "/employees",
             "/move-requests",
+            "/policies",
             "/matching-runs",
             "/docs",
         ],
@@ -1068,6 +1124,128 @@ def delete_move_request(request_id: int) -> Response:
             )
             if cursor.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Move request not found.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/policies", response_model=list[Policy])
+def list_policies(
+    limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> list[dict[str, Any]]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                "SELECT * FROM policies ORDER BY id LIMIT %s OFFSET %s",
+                (limit, offset),
+            )
+            return [serialize_policy(row) for row in cursor.fetchall()]
+
+
+@app.post("/policies", response_model=Policy, status_code=status.HTTP_201_CREATED)
+def create_policy(policy: PolicyCreate) -> dict[str, Any]:
+    payload = policy_payload(model_payload(policy))
+    is_active = bool(payload.get("is_active"))
+    if is_active:
+        payload["activated_at"] = datetime.now(UTC).replace(tzinfo=None)
+    columns = ", ".join(payload)
+    placeholders = ", ".join(["%s"] * len(payload))
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            try:
+                connection.begin()
+                if is_active:
+                    execute_or_raise(cursor, "UPDATE policies SET is_active = FALSE", ())
+                execute_or_raise(
+                    cursor,
+                    f"INSERT INTO policies ({columns}) VALUES ({placeholders})",
+                    list(payload.values()),
+                )
+                created = fetch_policy(cursor, cursor.lastrowid)
+                connection.commit()
+                return created
+            except Exception:
+                connection.rollback()
+                raise
+
+
+@app.get("/policies/active", response_model=Policy)
+def get_active_policy() -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            return fetch_active_policy(cursor)
+
+
+@app.get("/policies/{policy_id}", response_model=Policy)
+def get_policy(policy_id: int) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            return fetch_policy(cursor, policy_id)
+
+
+@app.put("/policies/{policy_id}", response_model=Policy)
+def update_policy(policy_id: int, policy: PolicyUpdate) -> dict[str, Any]:
+    payload = policy_payload(model_payload(policy, exclude_unset=True))
+    wants_activation = payload.get("is_active") is True
+    wants_deactivation = payload.get("is_active") is False
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            try:
+                connection.begin()
+                existing = fetch_policy(cursor, policy_id)
+                if wants_deactivation and existing["is_active"]:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Cannot deactivate the active policy without activating another policy.",
+                    )
+                if wants_activation:
+                    execute_or_raise(cursor, "UPDATE policies SET is_active = FALSE", ())
+                    payload["activated_at"] = datetime.now(UTC).replace(tzinfo=None)
+                assignments, values = update_fields_sql(payload)
+                execute_or_raise(
+                    cursor,
+                    f"UPDATE policies SET {assignments} WHERE id = %s",
+                    [*values, policy_id],
+                )
+                updated = fetch_policy(cursor, policy_id)
+                connection.commit()
+                return updated
+            except Exception:
+                connection.rollback()
+                raise
+
+
+@app.post("/policies/{policy_id}:activate", response_model=Policy)
+def activate_policy(policy_id: int) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            try:
+                connection.begin()
+                fetch_policy(cursor, policy_id)
+                execute_or_raise(cursor, "UPDATE policies SET is_active = FALSE", ())
+                execute_or_raise(
+                    cursor,
+                    "UPDATE policies SET is_active = %s, activated_at = %s WHERE id = %s",
+                    [True, datetime.now(UTC).replace(tzinfo=None), policy_id],
+                )
+                activated = fetch_policy(cursor, policy_id)
+                connection.commit()
+                return activated
+            except Exception:
+                connection.rollback()
+                raise
+
+
+@app.delete("/policies/{policy_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_policy(policy_id: int) -> Response:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            policy = fetch_policy(cursor, policy_id)
+            if policy["is_active"]:
+                raise HTTPException(status_code=409, detail="Active policy cannot be deleted.")
+            execute_or_raise(cursor, "DELETE FROM policies WHERE id = %s", (policy_id,))
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Policy not found.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

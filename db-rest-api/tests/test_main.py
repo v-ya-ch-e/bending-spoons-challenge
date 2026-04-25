@@ -24,6 +24,22 @@ SKILLS = {
     "ai": 1,
 }
 
+DEFAULT_POLICY_CONFIG = {
+    "max_candidate_plans": 25,
+    "max_moves": 3,
+    "max_projects_in_scope": 8,
+    "max_employees_in_scope": 60,
+    "max_employee_project_count": 2,
+    "minimum_remaining_project_coverage": 0.75,
+    "minimum_target_coverage_improvement": 0.1,
+    "allow_unassigned_employees": True,
+    "allow_multi_project_assignment": True,
+    "allow_understaff_current_project": False,
+    "exclude_pending_move_requests": True,
+    "prefer_employee_preferences": True,
+    "emit_hiring_gaps": True,
+}
+
 
 def project_payload(name: str = "Atlas Staffing") -> dict[str, Any]:
     return {
@@ -67,6 +83,15 @@ def matching_run_payload(target_project_id: int | None = None) -> dict[str, Any]
         "requested_by": "cto@example.com",
         "rule_config": {"max_moves": 2},
         "input_snapshot": {"projects": [target_project_id] if target_project_id else []},
+    }
+
+
+def policy_payload(name: str = "Balanced strict matching") -> dict[str, Any]:
+    return {
+        "name": name,
+        "description": "Balanced matching defaults for staffing recommendations.",
+        "config": {**DEFAULT_POLICY_CONFIG, "max_moves": 2},
+        "is_active": False,
     }
 
 
@@ -162,10 +187,23 @@ class InMemoryDatabase:
         self.matching_recommendations: list[dict[str, Any]] = []
         self.matching_hiring_recommendations: list[dict[str, Any]] = []
         self.matching_run_events: list[dict[str, Any]] = []
+        self.policies: list[dict[str, Any]] = [
+            {
+                "id": 1,
+                "name": "Default strict matching",
+                "description": "Baseline policy matching the original strict-rule defaults.",
+                "config": deepcopy(DEFAULT_POLICY_CONFIG),
+                "is_active": True,
+                "created_at": datetime(2026, 4, 25, 12, 0, 0),
+                "updated_at": datetime(2026, 4, 25, 12, 0, 0),
+                "activated_at": datetime(2026, 4, 25, 12, 0, 0),
+            }
+        ]
         self.next_ids = {
             "projects": 1,
             "employees": 1,
             "move_requests": 1,
+            "policies": 2,
             "matching_runs": 1,
             "matching_candidates": 1,
             "matching_recommendations": 1,
@@ -269,6 +307,33 @@ class InMemoryDatabase:
             return
         if normalized.startswith("delete from move_requests where id"):
             self._delete(cursor, params[0], self.move_requests)
+            return
+
+        if normalized.startswith("select * from policies where is_active"):
+            active_policies = [row for row in self.policies if row["is_active"]]
+            cursor._one = deepcopy(
+                sorted(active_policies, key=lambda row: row["id"])[-1]
+            ) if active_policies else None
+            return
+        if normalized.startswith("select * from policies order by id"):
+            cursor._many = self._limited(self.policies, params)
+            return
+        if normalized.startswith("select * from policies where id"):
+            cursor._one = self._find(self.policies, params[0])
+            return
+        if normalized.startswith("insert into policies"):
+            self._insert_policy(cursor, sql, params)
+            return
+        if normalized.startswith("update policies set is_active = false") and "where" not in normalized:
+            for policy in self.policies:
+                policy["is_active"] = False
+            cursor.rowcount = len(self.policies)
+            return
+        if normalized.startswith("update policies set"):
+            self._update(cursor, sql, params, self.policies)
+            return
+        if normalized.startswith("delete from policies where id"):
+            self._delete(cursor, params[0], self.policies)
             return
 
         if normalized.startswith("select * from matching_runs where id"):
@@ -412,6 +477,22 @@ class InMemoryDatabase:
         row["id"] = self.next_ids["move_requests"]
         self.next_ids["move_requests"] += 1
         self.move_requests.append(row)
+        cursor.lastrowid = row["id"]
+        cursor.rowcount = 1
+
+    def _insert_policy(self, cursor: FakeCursor, sql: str, params: list[Any]) -> None:
+        columns = self._insert_columns(sql)
+        row = dict(zip(columns, params, strict=True))
+        if any(existing["name"] == row["name"] for existing in self.policies):
+            raise pymysql.err.IntegrityError(1062, "Duplicate entry")
+        row.setdefault("description", None)
+        row.setdefault("is_active", False)
+        row.setdefault("created_at", datetime(2026, 4, 25, 12, 0, 0))
+        row.setdefault("updated_at", datetime(2026, 4, 25, 12, 0, 0))
+        row.setdefault("activated_at", None)
+        row["id"] = self.next_ids["policies"]
+        self.next_ids["policies"] += 1
+        self.policies.append(row)
         cursor.lastrowid = row["id"]
         cursor.rowcount = 1
 
@@ -612,10 +693,54 @@ def test_metadata_and_openapi_endpoints(client: TestClient) -> None:
         "/projects",
         "/employees",
         "/move-requests",
+        "/policies",
+        "/policies/active",
         "/matching-runs",
         "/matching-runs/{run_id}/recommendations",
     ):
         assert path in openapi.json()["paths"]
+
+
+def test_policy_crud_activation_and_active_delete_rejection(client: TestClient) -> None:
+    active_policy = client.get("/policies/active")
+    assert active_policy.status_code == 200
+    assert active_policy.json()["name"] == "Default strict matching"
+    assert active_policy.json()["config"] == DEFAULT_POLICY_CONFIG
+
+    create_response = client.post("/policies", json=policy_payload())
+    assert create_response.status_code == 201
+    policy = create_response.json()
+    assert policy["id"] == 2
+    assert policy["config"]["max_moves"] == 2
+    assert policy["is_active"] is False
+
+    assert client.get("/policies").json() == [active_policy.json(), policy]
+    assert client.get("/policies/2").json() == policy
+
+    update_response = client.put(
+        "/policies/2",
+        json={
+            "description": "More conservative moves.",
+            "config": {**DEFAULT_POLICY_CONFIG, "max_moves": 1},
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["description"] == "More conservative moves."
+    assert update_response.json()["config"]["max_moves"] == 1
+
+    activate_response = client.post("/policies/2:activate")
+    assert activate_response.status_code == 200
+    assert activate_response.json()["is_active"] is True
+    assert client.get("/policies/active").json()["id"] == 2
+    assert client.get("/policies/1").json()["is_active"] is False
+
+    active_delete = client.delete("/policies/2")
+    assert active_delete.status_code == 409
+    assert active_delete.json() == {"detail": "Active policy cannot be deleted."}
+
+    inactive_delete = client.delete("/policies/1")
+    assert inactive_delete.status_code == 204
+    assert client.get("/policies/1").status_code == 404
 
 
 def test_database_health_success_and_failure(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
