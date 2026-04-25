@@ -64,6 +64,36 @@ export type ProjectCreateInput = Omit<
 
 export type ProjectUpdateInput = Partial<ProjectCreateInput>
 
+export type ProjectDocumentationStatus = "pending" | "running" | "ready" | "failed"
+
+export type ProjectDocumentation = {
+  id: number
+  project_id: number
+  project_name: string
+  status: ProjectDocumentationStatus
+  content_markdown: string
+  source_repositories: string[]
+  source_snapshot: Record<string, unknown> | null
+  model_metadata: Record<string, unknown> | null
+  last_error: string | null
+  last_generated_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type ProjectDocumentationUpdateInput = Partial<
+  Pick<
+    ProjectDocumentation,
+    | "status"
+    | "content_markdown"
+    | "source_repositories"
+    | "source_snapshot"
+    | "model_metadata"
+    | "last_error"
+    | "last_generated_at"
+  >
+>
+
 export type MatchingRunStatus =
   | "pending"
   | "running"
@@ -403,6 +433,27 @@ export async function updateProject(projectId: number, project: ProjectUpdateInp
     fetchedAt: Date.now(),
   }
   return normalizedProject
+}
+
+export function listProjectDocumentation() {
+  return fetchDbApi<ProjectDocumentation[]>("/project-documentation?limit=500")
+}
+
+export function getProjectDocumentationByProject(projectId: number) {
+  return fetchDbApi<ProjectDocumentation>(`/projects/${projectId}/documentation`)
+}
+
+export function updateProjectDocumentationByProject(
+  projectId: number,
+  documentation: ProjectDocumentationUpdateInput
+) {
+  return fetchDbApi<ProjectDocumentation>(`/projects/${projectId}/documentation`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(documentation),
+  })
 }
 
 export function createEmployee(employee: EmployeeCreateInput) {

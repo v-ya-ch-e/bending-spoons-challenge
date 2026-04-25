@@ -29,6 +29,24 @@ CREATE TABLE IF NOT EXISTS project_assignments (
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS project_documentation (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    project_id INT NOT NULL,
+    status ENUM('pending', 'running', 'ready', 'failed') NOT NULL DEFAULT 'pending',
+    content_markdown MEDIUMTEXT NOT NULL,
+    source_repositories JSON NOT NULL,
+    source_snapshot JSON,
+    model_metadata JSON,
+    last_error TEXT,
+    last_generated_at DATETIME,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_project_documentation_project (project_id),
+    INDEX idx_project_documentation_status (status),
+    INDEX idx_project_documentation_updated (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS move_requests (
     id INT AUTO_INCREMENT PRIMARY KEY,
     employee_id INT NOT NULL,

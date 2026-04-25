@@ -87,6 +87,31 @@ class DbApiClient:
     def delete_project(self, project_id: int) -> None:
         self._request("DELETE", f"/projects/{project_id}")
 
+    # ---- project documentation -------------------------------------------
+
+    def list_project_documentation(self, limit: int = 100, offset: int = 0) -> list[dict]:
+        return self._request(
+            "GET", "/project-documentation", params={"limit": limit, "offset": offset}
+        )
+
+    def create_project_documentation(self, payload: dict) -> dict:
+        return self._request("POST", "/project-documentation", json=payload)
+
+    def get_project_documentation(self, documentation_id: int) -> dict:
+        return self._request("GET", f"/project-documentation/{documentation_id}")
+
+    def update_project_documentation(self, documentation_id: int, payload: dict) -> dict:
+        return self._request("PUT", f"/project-documentation/{documentation_id}", json=payload)
+
+    def delete_project_documentation(self, documentation_id: int) -> None:
+        self._request("DELETE", f"/project-documentation/{documentation_id}")
+
+    def get_project_documentation_by_project(self, project_id: int) -> dict:
+        return self._request("GET", f"/projects/{project_id}/documentation")
+
+    def upsert_project_documentation_by_project(self, project_id: int, payload: dict) -> dict:
+        return self._request("PUT", f"/projects/{project_id}/documentation", json=payload)
+
     # ---- employees -------------------------------------------------------
 
     def list_employees(self, limit: int = 100, offset: int = 0) -> list[dict]:

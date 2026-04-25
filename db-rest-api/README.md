@@ -9,7 +9,7 @@ For the canonical agent-facing API contract, payload shapes, schema notes, and s
 ## What this provides
 
 - A FastAPI service with health, version, database connectivity, and CRUD endpoints.
-- A MySQL schema for staffing data plus matching pipeline persistence, defined in plain SQL.
+- A MySQL schema for staffing data, project documentation, and matching pipeline persistence, defined in plain SQL.
 - A script to apply the schema to AWS RDS.
 - A script that uses the OpenAI API to generate realistic seed data as JSON.
 - A script that loads that JSON into the database.
@@ -88,6 +88,13 @@ Useful endpoints:
 - `GET /projects/{project_id}`
 - `PUT /projects/{project_id}`
 - `DELETE /projects/{project_id}`
+- `GET /project-documentation`
+- `POST /project-documentation`
+- `GET /project-documentation/{documentation_id}`
+- `PUT /project-documentation/{documentation_id}`
+- `DELETE /project-documentation/{documentation_id}`
+- `GET /projects/{project_id}/documentation`
+- `PUT /projects/{project_id}/documentation`
 - `GET /employees`
 - `POST /employees`
 - `GET /employees/{employee_id}`

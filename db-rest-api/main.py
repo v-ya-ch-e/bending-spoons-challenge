@@ -59,6 +59,13 @@ class MatchingRunStatus(str, Enum):
     failed = "failed"
 
 
+class ProjectDocumentationStatus(str, Enum):
+    pending = "pending"
+    running = "running"
+    ready = "ready"
+    failed = "failed"
+
+
 class MatchingEventLevel(str, Enum):
     debug = "debug"
     info = "info"
@@ -192,6 +199,34 @@ class Project(ProjectBase):
     id: int
     current_team_member_ids: list[int]
     current_team_members: list[str]
+
+
+class ProjectDocumentationCreate(ApiModel):
+    project_id: int = Field(gt=0)
+    status: ProjectDocumentationStatus = ProjectDocumentationStatus.pending
+    content_markdown: str = ""
+    source_repositories: list[str] = Field(default_factory=list)
+    source_snapshot: dict[str, Any] | None = None
+    model_metadata: dict[str, Any] | None = None
+    last_error: str | None = None
+    last_generated_at: datetime | None = None
+
+
+class ProjectDocumentationUpdate(UpdateModel):
+    status: ProjectDocumentationStatus = None
+    content_markdown: str = None
+    source_repositories: list[str] = None
+    source_snapshot: dict[str, Any] | None = None
+    model_metadata: dict[str, Any] | None = None
+    last_error: str | None = None
+    last_generated_at: datetime | None = None
+
+
+class ProjectDocumentation(ProjectDocumentationCreate):
+    id: int
+    project_name: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class EmployeeBase(ApiModel):
@@ -518,6 +553,32 @@ def serialize_project(
     return project
 
 
+PROJECT_DOCUMENTATION_SELECT = """
+    SELECT
+        doc.id,
+        doc.project_id,
+        project.project_name,
+        doc.status,
+        doc.content_markdown,
+        doc.source_repositories,
+        doc.source_snapshot,
+        doc.model_metadata,
+        doc.last_error,
+        doc.last_generated_at,
+        doc.created_at,
+        doc.updated_at
+    FROM project_documentation AS doc
+    INNER JOIN projects AS project ON project.id = doc.project_id
+"""
+
+
+def serialize_project_documentation(row: dict[str, Any]) -> dict[str, Any]:
+    documentation = dict(row)
+    for column in ("source_repositories", "source_snapshot", "model_metadata"):
+        documentation[column] = parse_json_column(documentation[column])
+    return documentation
+
+
 def serialize_employee(
     row: dict[str, Any],
     current_project_ids: list[int] | None = None,
@@ -626,6 +687,33 @@ def fetch_project(cursor: DictCursor, project_id: int) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Project not found.")
     member_ids, member_names = fetch_project_assignments(cursor, project_id)
     return serialize_project(row, member_ids, member_names)
+
+
+def fetch_project_documentation(cursor: DictCursor, documentation_id: int) -> dict[str, Any]:
+    execute_or_raise(
+        cursor,
+        f"{PROJECT_DOCUMENTATION_SELECT} WHERE doc.id = %s",
+        (documentation_id,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Project documentation not found.")
+    return serialize_project_documentation(row)
+
+
+def fetch_project_documentation_by_project(
+    cursor: DictCursor,
+    project_id: int,
+) -> dict[str, Any]:
+    execute_or_raise(
+        cursor,
+        f"{PROJECT_DOCUMENTATION_SELECT} WHERE doc.project_id = %s",
+        (project_id,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Project documentation not found.")
+    return serialize_project_documentation(row)
 
 
 def fetch_employee(cursor: DictCursor, employee_id: int) -> dict[str, Any]:
@@ -812,6 +900,13 @@ def project_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return prepared
 
 
+def project_documentation_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return serialize_json_fields(
+        payload,
+        ("source_repositories", "source_snapshot", "model_metadata"),
+    )
+
+
 def employee_payload(payload: dict[str, Any]) -> dict[str, Any]:
     prepared = dict(payload)
     for column in ("skills", "preferences", "interests"):
@@ -910,6 +1005,7 @@ def read_root() -> dict[str, Any]:
             "/health/db",
             "/version",
             "/projects",
+            "/project-documentation",
             "/employees",
             "/move-requests",
             "/policies",
@@ -1031,6 +1127,130 @@ def delete_project(project_id: int) -> Response:
             if cursor.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Project not found.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/project-documentation", response_model=list[ProjectDocumentation])
+def list_project_documentation(
+    limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> list[dict[str, Any]]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                f"{PROJECT_DOCUMENTATION_SELECT} ORDER BY doc.id LIMIT %s OFFSET %s",
+                (limit, offset),
+            )
+            return [serialize_project_documentation(row) for row in cursor.fetchall()]
+
+
+@app.post(
+    "/project-documentation",
+    response_model=ProjectDocumentation,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_project_documentation(
+    documentation: ProjectDocumentationCreate,
+) -> dict[str, Any]:
+    payload = project_documentation_payload(model_payload(documentation))
+    columns = ", ".join(payload)
+    placeholders = ", ".join(["%s"] * len(payload))
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                f"INSERT INTO project_documentation ({columns}) VALUES ({placeholders})",
+                list(payload.values()),
+            )
+            return fetch_project_documentation(cursor, cursor.lastrowid)
+
+
+@app.get("/project-documentation/{documentation_id}", response_model=ProjectDocumentation)
+def get_project_documentation(documentation_id: int) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            return fetch_project_documentation(cursor, documentation_id)
+
+
+@app.put("/project-documentation/{documentation_id}", response_model=ProjectDocumentation)
+def update_project_documentation(
+    documentation_id: int,
+    documentation: ProjectDocumentationUpdate,
+) -> dict[str, Any]:
+    payload = project_documentation_payload(model_payload(documentation, exclude_unset=True))
+    assignments, values = update_fields_sql(payload)
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                f"UPDATE project_documentation SET {assignments} WHERE id = %s",
+                [*values, documentation_id],
+            )
+            return fetch_project_documentation(cursor, documentation_id)
+
+
+@app.delete("/project-documentation/{documentation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project_documentation(documentation_id: int) -> Response:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                "DELETE FROM project_documentation WHERE id = %s",
+                (documentation_id,),
+            )
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Project documentation not found.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/projects/{project_id}/documentation", response_model=ProjectDocumentation)
+def get_project_documentation_for_project(project_id: int) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            return fetch_project_documentation_by_project(cursor, project_id)
+
+
+@app.put("/projects/{project_id}/documentation", response_model=ProjectDocumentation)
+def upsert_project_documentation_for_project(
+    project_id: int,
+    documentation: ProjectDocumentationUpdate,
+    response: Response,
+) -> dict[str, Any]:
+    raw_payload = model_payload(documentation, exclude_unset=True)
+    payload = project_documentation_payload(raw_payload)
+    assignments, values = update_fields_sql(payload)
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            try:
+                fetch_project_documentation_by_project(cursor, project_id)
+            except HTTPException as exc:
+                if exc.status_code != 404:
+                    raise
+                fetch_project(cursor, project_id)
+                create_payload = {
+                    "project_id": project_id,
+                    "status": ProjectDocumentationStatus.pending.value,
+                    "content_markdown": "",
+                    "source_repositories": [],
+                    **raw_payload,
+                }
+                storage_payload = project_documentation_payload(create_payload)
+                columns = ", ".join(storage_payload)
+                placeholders = ", ".join(["%s"] * len(storage_payload))
+                execute_or_raise(
+                    cursor,
+                    f"INSERT INTO project_documentation ({columns}) VALUES ({placeholders})",
+                    list(storage_payload.values()),
+                )
+                response.status_code = status.HTTP_201_CREATED
+                return fetch_project_documentation(cursor, cursor.lastrowid)
+
+            execute_or_raise(
+                cursor,
+                f"UPDATE project_documentation SET {assignments} WHERE project_id = %s",
+                [*values, project_id],
+            )
+            return fetch_project_documentation_by_project(cursor, project_id)
 
 
 @app.get("/employees", response_model=list[Employee])

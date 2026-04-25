@@ -3,16 +3,19 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 
 from clients import DbApiError
 from schemas import (
     MatchingRunRequest,
     MatchingRunResponse,
+    ProjectDocumentationChatRequest,
+    ProjectDocumentationChatResponse,
+    ProjectDocumentationResponse,
     SkillProfileRequest,
     SkillProfileResponse,
 )
-from services import matching_service, skill_profile_service
+from services import matching_service, project_documentation_service, skill_profile_service
 from services.matching_llm_service import MatchingLlmError
 
 
@@ -34,6 +37,48 @@ def health_check() -> dict[str, str]:
 @app.post("/skill-profile", response_model=SkillProfileResponse)
 async def suggest_skill_profile(payload: SkillProfileRequest) -> SkillProfileResponse:
     return await skill_profile_service.suggest_skill_profile(payload)
+
+
+@app.post("/projects/{project_id}/documentation:refresh", response_model=ProjectDocumentationResponse)
+async def refresh_project_documentation(
+    project_id: int,
+    background_tasks: BackgroundTasks,
+) -> dict:
+    try:
+        documentation = await asyncio.to_thread(
+            project_documentation_service.start_documentation_refresh,
+            project_id,
+        )
+        if documentation["status"] == "running":
+            background_tasks.add_task(
+                project_documentation_service.generate_project_documentation,
+                project_id,
+            )
+        return documentation
+    except DbApiError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post(
+    "/projects/{project_id}/documentation:chat",
+    response_model=ProjectDocumentationChatResponse,
+)
+async def chat_with_project_documentation(
+    project_id: int,
+    payload: ProjectDocumentationChatRequest,
+) -> ProjectDocumentationChatResponse:
+    try:
+        return await asyncio.to_thread(
+            project_documentation_service.chat_with_documentation,
+            project_id,
+            payload,
+        )
+    except DbApiError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/projects/{project_id}/matching:run", response_model=MatchingRunResponse)

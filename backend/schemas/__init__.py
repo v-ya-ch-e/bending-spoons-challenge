@@ -18,9 +18,16 @@ from schemas.matching import (
     MatchingSuggestionMoveResponse,
     MatchingSuggestionResponse,
 )
+from schemas.project_documentation import (
+    DocumentationChatMessage,
+    ProjectDocumentationChatRequest,
+    ProjectDocumentationChatResponse,
+    ProjectDocumentationResponse,
+)
 from schemas.skill_profiles import SkillProfileRequest, SkillProfileResponse
 
 __all__ = [
+    "DocumentationChatMessage",
     "MatchingCandidateResponse",
     "MatchingHiringRecommendationResponse",
     "MatchingHiringSuggestionResponse",
@@ -36,6 +43,9 @@ __all__ = [
     "MatchingSuggestionImpactResponse",
     "MatchingSuggestionMoveResponse",
     "MatchingSuggestionResponse",
+    "ProjectDocumentationChatRequest",
+    "ProjectDocumentationChatResponse",
+    "ProjectDocumentationResponse",
     "SkillProfileRequest",
     "SkillProfileResponse",
     "Skills",

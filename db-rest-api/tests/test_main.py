@@ -76,6 +76,17 @@ def project_payload(name: str = "Atlas Staffing") -> dict[str, Any]:
     }
 
 
+def documentation_payload(project_id: int) -> dict[str, Any]:
+    return {
+        "project_id": project_id,
+        "status": "running",
+        "content_markdown": "",
+        "source_repositories": ["https://github.com/bendingspoons/atlas-staffing"],
+        "source_snapshot": {"repositories": []},
+        "model_metadata": {"model": "gpt-4o"},
+    }
+
+
 def employee_payload(name: str = "Marco Bianchi") -> dict[str, Any]:
     return {
         "name": name,
@@ -201,6 +212,7 @@ class FakeConnection:
 class InMemoryDatabase:
     def __init__(self) -> None:
         self.projects: list[dict[str, Any]] = []
+        self.project_documentation: list[dict[str, Any]] = []
         self.employees: list[dict[str, Any]] = []
         self.project_assignments: list[dict[str, int]] = []
         self.move_requests: list[dict[str, Any]] = []
@@ -243,6 +255,7 @@ class InMemoryDatabase:
         ]
         self.next_ids = {
             "projects": 1,
+            "project_documentation": 1,
             "employees": 1,
             "move_requests": 1,
             "policies": 4,
@@ -288,6 +301,51 @@ class InMemoryDatabase:
             return
         if normalized.startswith("delete from projects where id"):
             self._delete(cursor, params[0], self.projects)
+            return
+
+        if "from project_documentation as doc" in normalized:
+            if "where doc.id" in normalized:
+                cursor._one = self._project_documentation_row(
+                    next(
+                        (row for row in self.project_documentation if row["id"] == params[0]),
+                        None,
+                    )
+                )
+            elif "where doc.project_id" in normalized:
+                cursor._one = self._project_documentation_row(
+                    next(
+                        (
+                            row
+                            for row in self.project_documentation
+                            if row["project_id"] == params[0]
+                        ),
+                        None,
+                    )
+                )
+            else:
+                cursor._many = self._limited(
+                    [
+                        row
+                        for row in (
+                            self._project_documentation_row(doc)
+                            for doc in self.project_documentation
+                        )
+                        if row is not None
+                    ],
+                    params,
+                )
+            return
+        if normalized.startswith("insert into project_documentation"):
+            self._insert_project_documentation(cursor, sql, params)
+            return
+        if normalized.startswith("update project_documentation set") and "where project_id" in normalized:
+            self._update_project_documentation_by_project(cursor, sql, params)
+            return
+        if normalized.startswith("update project_documentation set"):
+            self._update(cursor, sql, params, self.project_documentation)
+            return
+        if normalized.startswith("delete from project_documentation where id"):
+            self._delete(cursor, params[0], self.project_documentation)
             return
 
         if normalized.startswith("select * from employees order by id"):
@@ -509,6 +567,33 @@ class InMemoryDatabase:
         cursor.lastrowid = row["id"]
         cursor.rowcount = 1
 
+    def _insert_project_documentation(
+        self,
+        cursor: FakeCursor,
+        sql: str,
+        params: list[Any],
+    ) -> None:
+        columns = self._insert_columns(sql)
+        row = dict(zip(columns, params, strict=True))
+        if self._find(self.projects, row["project_id"]) is None:
+            raise pymysql.err.IntegrityError(1452, "Missing project")
+        if any(existing["project_id"] == row["project_id"] for existing in self.project_documentation):
+            raise pymysql.err.IntegrityError(1062, "Duplicate entry")
+        row.setdefault("status", "pending")
+        row.setdefault("content_markdown", "")
+        row.setdefault("source_repositories", json.dumps([]))
+        row.setdefault("source_snapshot", None)
+        row.setdefault("model_metadata", None)
+        row.setdefault("last_error", None)
+        row.setdefault("last_generated_at", None)
+        row.setdefault("created_at", datetime(2026, 4, 25, 12, 0, 0))
+        row.setdefault("updated_at", datetime(2026, 4, 25, 12, 0, 0))
+        row["id"] = self.next_ids["project_documentation"]
+        self.next_ids["project_documentation"] += 1
+        self.project_documentation.append(row)
+        cursor.lastrowid = row["id"]
+        cursor.rowcount = 1
+
     def _insert_move_request(self, cursor: FakeCursor, sql: str, params: list[Any]) -> None:
         columns = self._insert_columns(sql)
         row = dict(zip(columns, params, strict=True))
@@ -607,6 +692,25 @@ class InMemoryDatabase:
             row[column] = value
         cursor.rowcount = 1
 
+    def _update_project_documentation_by_project(
+        self,
+        cursor: FakeCursor,
+        sql: str,
+        params: list[Any],
+    ) -> None:
+        project_id = params[-1]
+        row = next(
+            (item for item in self.project_documentation if item["project_id"] == project_id),
+            None,
+        )
+        if row is None:
+            cursor.rowcount = 0
+            return
+        columns = self._update_columns(sql)
+        for column, value in zip(columns, params[:-1], strict=True):
+            row[column] = value
+        cursor.rowcount = 1
+
     def _delete(self, cursor: FakeCursor, row_id: int, rows: list[dict[str, Any]]) -> None:
         original_count = len(rows)
         rows[:] = [row for row in rows if row["id"] != row_id]
@@ -690,6 +794,20 @@ class InMemoryDatabase:
             "to_project_name": to_project["project_name"],
         }
 
+    def _project_documentation_row(
+        self,
+        documentation: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        if documentation is None:
+            return None
+        project = self._find(self.projects, documentation["project_id"])
+        if project is None:
+            return None
+        return {
+            **deepcopy(documentation),
+            "project_name": project["project_name"],
+        }
+
     def _insert_columns(self, sql: str) -> list[str]:
         start = sql.index("(") + 1
         end = sql.index(")", start)
@@ -737,6 +855,8 @@ def test_metadata_and_openapi_endpoints(client: TestClient) -> None:
     assert openapi.status_code == 200
     for path in (
         "/projects",
+        "/project-documentation",
+        "/projects/{project_id}/documentation",
         "/employees",
         "/move-requests",
         "/policies",
@@ -835,6 +955,65 @@ def test_project_crud_and_validation(client: TestClient) -> None:
     delete_response = client.delete("/projects/1")
     assert delete_response.status_code == 204
     assert client.get("/projects/1").status_code == 404
+
+
+def test_project_documentation_crud_and_project_upsert(client: TestClient) -> None:
+    project_id = client.post("/projects", json=project_payload()).json()["id"]
+
+    create_response = client.post(
+        "/project-documentation",
+        json=documentation_payload(project_id),
+    )
+    assert create_response.status_code == 201
+    documentation = create_response.json()
+    assert documentation["id"] == 1
+    assert documentation["project_id"] == project_id
+    assert documentation["project_name"] == "Atlas Staffing"
+    assert documentation["status"] == "running"
+    assert documentation["source_repositories"] == [
+        "https://github.com/bendingspoons/atlas-staffing"
+    ]
+    assert documentation["source_snapshot"] == {"repositories": []}
+
+    assert client.get("/project-documentation").json() == [documentation]
+    assert client.get("/project-documentation/1").json() == documentation
+    assert client.get(f"/projects/{project_id}/documentation").json() == documentation
+
+    ready_response = client.put(
+        f"/projects/{project_id}/documentation",
+        json={
+            "status": "ready",
+            "content_markdown": "# Atlas Staffing\n\nGenerated docs.",
+            "source_snapshot": {"repositories": [{"name": "atlas-staffing"}]},
+            "last_error": None,
+        },
+    )
+    assert ready_response.status_code == 200
+    ready = ready_response.json()
+    assert ready["status"] == "ready"
+    assert ready["content_markdown"].startswith("# Atlas Staffing")
+    assert ready["source_snapshot"] == {"repositories": [{"name": "atlas-staffing"}]}
+
+    duplicate = client.post("/project-documentation", json=documentation_payload(project_id))
+    assert duplicate.status_code == 409
+
+    second_project_id = client.post("/projects", json=project_payload("Second")).json()["id"]
+    upsert_create = client.put(
+        f"/projects/{second_project_id}/documentation",
+        json={"status": "pending", "content_markdown": "Queued."},
+    )
+    assert upsert_create.status_code == 201
+    assert upsert_create.json()["project_id"] == second_project_id
+
+    missing_project = client.put(
+        "/projects/999/documentation",
+        json={"status": "pending"},
+    )
+    assert missing_project.status_code == 404
+
+    delete_response = client.delete("/project-documentation/1")
+    assert delete_response.status_code == 204
+    assert client.get("/project-documentation/1").status_code == 404
 
 
 def test_employee_crud_and_validation(client: TestClient) -> None:
