@@ -461,6 +461,20 @@ class TestMatchingStrictRules(unittest.TestCase):
         self.assertEqual(config.max_moves, 2)
         self.assertTrue(config.allow_understaff_current_project)
 
+    def test_policy_config_merges_before_request_overrides(self):
+        config = build_rule_config(
+            policy_config={
+                "max_candidate_plans": 9,
+                "max_moves": 3,
+                "allow_understaff_current_project": False,
+            },
+            overrides={"max_moves": 1, "allow_understaff_current_project": True},
+        )
+
+        self.assertEqual(config.max_candidate_plans, 9)
+        self.assertEqual(config.max_moves, 1)
+        self.assertTrue(config.allow_understaff_current_project)
+
 
 if __name__ == "__main__":
     unittest.main()

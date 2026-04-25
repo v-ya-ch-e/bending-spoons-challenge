@@ -62,6 +62,18 @@ def _matching_api_reachable() -> bool:
         return False
 
 
+def _policies_api_reachable() -> bool:
+    try:
+        base = get_db_api_base_url()
+    except KeyError:
+        return False
+    try:
+        r = httpx.get(f"{base}/openapi.json", timeout=5.0)
+        return r.status_code == 200 and "/policies/active" in r.json().get("paths", {})
+    except (httpx.HTTPError, ValueError):
+        return False
+
+
 @unittest.skipUnless(_api_reachable(), "DB API not reachable at DB_API_BASE_URL")
 class TestDbApiClientMetadata(unittest.TestCase):
     @classmethod
@@ -359,6 +371,73 @@ class TestDbApiClientMoveRequests(unittest.TestCase):
         with self.assertRaises(DbApiError) as ctx:
             self.client.get_move_request(created["id"])
         self.assertEqual(ctx.exception.status_code, 404)
+
+
+@unittest.skipUnless(
+    _policies_api_reachable(),
+    "policy DB API endpoints not reachable at DB_API_BASE_URL",
+)
+class TestDbApiClientPolicies(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.client = DbApiClient()
+        cls.created_policy_ids: list[int] = []
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        for policy_id in cls.created_policy_ids:
+            try:
+                cls.client.delete_policy(policy_id)
+            except DbApiError:
+                pass
+        cls.client.close()
+
+    def _make_payload(self) -> dict:
+        return {
+            "name": _unique("policy"),
+            "description": "Created by db_client integration tests.",
+            "config": {
+                "max_candidate_plans": 10,
+                "max_moves": 2,
+                "max_projects_in_scope": 8,
+                "max_employees_in_scope": 60,
+                "max_employee_project_count": 2,
+                "minimum_remaining_project_coverage": 0.75,
+                "minimum_target_coverage_improvement": 0.1,
+                "allow_unassigned_employees": True,
+                "allow_multi_project_assignment": True,
+                "allow_understaff_current_project": False,
+                "exclude_pending_move_requests": True,
+                "prefer_employee_preferences": True,
+                "emit_hiring_gaps": True,
+            },
+            "is_active": False,
+        }
+
+    def test_policy_crud_and_activation(self):
+        original_active = self.client.get_active_policy()
+        created = self.client.create_policy(self._make_payload())
+        self.created_policy_ids.append(created["id"])
+        try:
+            self.assertFalse(created["is_active"])
+            self.assertEqual(created["config"]["max_moves"], 2)
+            self.assertIn(created["id"], [policy["id"] for policy in self.client.list_policies()])
+
+            updated = self.client.update_policy(
+                created["id"],
+                {"description": "Updated test policy.", "config": {**created["config"], "max_moves": 1}},
+            )
+            self.assertEqual(updated["description"], "Updated test policy.")
+            self.assertEqual(updated["config"]["max_moves"], 1)
+
+            activated = self.client.activate_policy(created["id"])
+            self.assertTrue(activated["is_active"])
+            self.assertEqual(self.client.get_active_policy()["id"], created["id"])
+        finally:
+            self.client.activate_policy(original_active["id"])
+
+        self.client.delete_policy(created["id"])
+        self.created_policy_ids.remove(created["id"])
 
 
 @unittest.skipUnless(

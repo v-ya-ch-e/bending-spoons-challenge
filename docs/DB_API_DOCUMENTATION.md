@@ -23,6 +23,7 @@ Public environments:
 - JSON columns must be serialized before writes and deserialized before API responses.
 - Project assignments are stored by ID in `project_assignments`; name-based assignment fields are response aliases only.
 - Updating a move request only updates the `move_requests` row. It does not automatically move employees between projects.
+- Matching policies are versioned rows in `policies`; exactly one policy should be active and backend matching runs use the active policy as their default rule configuration.
 - If the DB schema or public API changes, update this document in the same change.
 
 ## Service Metadata Endpoints
@@ -402,6 +403,103 @@ Foreign-key behavior:
 - `employee_id` must reference an existing employee.
 - `to_project_id` must reference an existing project.
 - `from_project_id` may be `null`, but a non-null value must reference an existing project.
+
+## Policies
+
+Database table: `policies`
+
+Policies store reusable matching rule configuration. The backend matching service
+loads the active policy before every matching run, then may apply explicit
+request overrides. The final merged config is still stored on
+`matching_runs.rule_config` for auditability.
+
+Stored fields:
+
+- `id`: integer primary key, auto-incremented.
+- `name`: required string, unique, maximum 255 characters.
+- `description`: optional text.
+- `config`: required JSON object containing matching rule values.
+- `is_active`: required boolean. API activation flows keep one active policy.
+- `created_at`: datetime set by MySQL.
+- `updated_at`: datetime set by MySQL and updated on row changes.
+- `activated_at`: datetime set when a policy is activated, otherwise nullable.
+
+Default seed:
+
+- `schema.sql` inserts `Default strict matching` when the `policies` table is empty. Its config matches the original strict-rule defaults from backend code.
+
+Endpoints:
+
+- `GET /policies`
+- `POST /policies`
+- `GET /policies/active`
+- `GET /policies/{policy_id}`
+- `PUT /policies/{policy_id}`
+- `POST /policies/{policy_id}:activate`
+- `DELETE /policies/{policy_id}`
+
+`GET /policies` accepts `limit` and `offset`. `GET /policies/active` returns
+HTTP `404` when no active policy exists.
+
+Create payload:
+
+```json
+{
+  "name": "Balanced strict matching",
+  "description": "Balanced matching defaults for staffing recommendations.",
+  "config": {
+    "max_candidate_plans": 25,
+    "max_moves": 2,
+    "max_projects_in_scope": 8,
+    "max_employees_in_scope": 60,
+    "max_employee_project_count": 2,
+    "minimum_remaining_project_coverage": 0.75,
+    "minimum_target_coverage_improvement": 0.1,
+    "allow_unassigned_employees": true,
+    "allow_multi_project_assignment": true,
+    "allow_understaff_current_project": false,
+    "exclude_pending_move_requests": true,
+    "prefer_employee_preferences": true,
+    "emit_hiring_gaps": true
+  },
+  "is_active": false
+}
+```
+
+Response shape:
+
+```json
+{
+  "id": 2,
+  "name": "Balanced strict matching",
+  "description": "Balanced matching defaults for staffing recommendations.",
+  "config": {
+    "max_candidate_plans": 25,
+    "max_moves": 2,
+    "max_projects_in_scope": 8,
+    "max_employees_in_scope": 60,
+    "max_employee_project_count": 2,
+    "minimum_remaining_project_coverage": 0.75,
+    "minimum_target_coverage_improvement": 0.1,
+    "allow_unassigned_employees": true,
+    "allow_multi_project_assignment": true,
+    "allow_understaff_current_project": false,
+    "exclude_pending_move_requests": true,
+    "prefer_employee_preferences": true,
+    "emit_hiring_gaps": true
+  },
+  "is_active": false,
+  "created_at": "2026-04-25T12:00:00",
+  "updated_at": "2026-04-25T12:00:00",
+  "activated_at": null
+}
+```
+
+Activation behavior:
+
+- Creating a policy with `is_active: true`, updating a policy with `is_active: true`, or calling `POST /policies/{policy_id}:activate` deactivates all other policies in the same transaction.
+- Updating the active policy to `is_active: false` is rejected with HTTP `409`; activate another policy instead.
+- Deleting the active policy is rejected with HTTP `409`.
 
 ## Matching Persistence
 

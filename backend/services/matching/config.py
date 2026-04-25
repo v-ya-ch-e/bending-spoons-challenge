@@ -27,16 +27,11 @@ class StrictRuleConfig:
 def build_rule_config(
     *,
     max_candidate_plans: int | None = None,
+    policy_config: Any = None,
     overrides: Any = None,
 ) -> StrictRuleConfig:
-    data: dict[str, Any] = {}
-    if overrides is not None:
-        if hasattr(overrides, "model_dump"):
-            data = overrides.model_dump(exclude_none=True)
-        elif hasattr(overrides, "dict"):
-            data = overrides.dict(exclude_none=True)
-        else:
-            data = {key: value for key, value in dict(overrides).items() if value is not None}
+    data = _config_data(policy_config)
+    data.update(_config_data(overrides))
 
     if max_candidate_plans is not None:
         data["max_candidate_plans"] = max_candidate_plans
@@ -44,6 +39,16 @@ def build_rule_config(
     config = replace(StrictRuleConfig(), **data)
     _validate_config(config)
     return config
+
+
+def _config_data(value: Any) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if hasattr(value, "model_dump"):
+        return value.model_dump(exclude_none=True)
+    if hasattr(value, "dict"):
+        return value.dict(exclude_none=True)
+    return {key: item for key, item in dict(value).items() if item is not None}
 
 
 def _validate_config(config: StrictRuleConfig) -> None:

@@ -31,9 +31,19 @@ def run_matching_pipeline(
     logs: list[dict[str, Any]] = []
 
     try:
+        active_policy = client.get_active_policy()
+        request_max_candidate_plans = _explicit_request_value(
+            request,
+            "max_candidate_plans",
+        )
         config = build_rule_config(
-            max_candidate_plans=request.max_candidate_plans,
+            policy_config=active_policy["config"],
+            max_candidate_plans=request_max_candidate_plans,
             overrides=request.rule_config,
+        )
+        request_overrides = _request_overrides_payload(
+            request.rule_config,
+            max_candidate_plans=request_max_candidate_plans,
         )
         raw_projects = _list_all(client.list_projects)
         raw_employees = _list_all(client.list_employees)
@@ -44,8 +54,14 @@ def run_matching_pipeline(
             raw_move_requests,
             target_project_id=target_project_id,
         )
+        final_config = config.to_dict()
         effective_rule_config = {
-            **config.to_dict(),
+            **final_config,
+            "policy_id": active_policy["id"],
+            "policy_name": active_policy["name"],
+            "policy_config": active_policy["config"],
+            "request_overrides": request_overrides,
+            "effective_config": final_config,
             "max_recommendations": request.max_recommendations,
             "dry_run": request.dry_run,
         }
@@ -278,6 +294,36 @@ def _list_all(method: Any, *, page_size: int = 100) -> list[dict]:
         if len(page) < page_size:
             return items
         offset += page_size
+
+
+def _explicit_request_value(request: MatchingRunRequest, field_name: str) -> Any:
+    if hasattr(request, "model_fields_set"):
+        fields_set = request.model_fields_set
+    else:
+        fields_set = getattr(request, "__fields_set__", set())
+    if field_name in fields_set:
+        return getattr(request, field_name)
+    return None
+
+
+def _request_overrides_payload(
+    rule_config: Any,
+    *,
+    max_candidate_plans: int | None,
+) -> dict[str, Any]:
+    overrides: dict[str, Any] = {}
+    if rule_config is not None:
+        if hasattr(rule_config, "model_dump"):
+            overrides.update(rule_config.model_dump(exclude_none=True))
+        elif hasattr(rule_config, "dict"):
+            overrides.update(rule_config.dict(exclude_none=True))
+        else:
+            overrides.update(
+                {key: value for key, value in dict(rule_config).items() if value is not None}
+            )
+    if max_candidate_plans is not None:
+        overrides["max_candidate_plans"] = max_candidate_plans
+    return overrides
 
 
 def _input_snapshot_payload(

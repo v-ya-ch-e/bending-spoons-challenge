@@ -125,6 +125,31 @@ class DbApiClient:
     def delete_move_request(self, request_id: int) -> None:
         self._request("DELETE", f"/move-requests/{request_id}")
 
+    # ---- policies --------------------------------------------------------
+
+    def list_policies(self, limit: int = 100, offset: int = 0) -> list[dict]:
+        return self._request(
+            "GET", "/policies", params={"limit": limit, "offset": offset}
+        )
+
+    def get_active_policy(self) -> dict:
+        return self._request("GET", "/policies/active")
+
+    def get_policy(self, policy_id: int) -> dict:
+        return self._request("GET", f"/policies/{policy_id}")
+
+    def create_policy(self, payload: dict) -> dict:
+        return self._request("POST", "/policies", json=payload)
+
+    def update_policy(self, policy_id: int, payload: dict) -> dict:
+        return self._request("PUT", f"/policies/{policy_id}", json=payload)
+
+    def activate_policy(self, policy_id: int) -> dict:
+        return self._request("POST", f"/policies/{policy_id}:activate")
+
+    def delete_policy(self, policy_id: int) -> None:
+        self._request("DELETE", f"/policies/{policy_id}")
+
     # ---- matching persistence --------------------------------------------
 
     def list_matching_runs(
