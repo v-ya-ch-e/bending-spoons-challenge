@@ -1,204 +1,188 @@
-# Matching Pipeline Step 2: OpenAI Evaluation
+# Matching Pipeline Step 2: LLM Evaluation
 
 ## Purpose
 
-Step 2 evaluates the deterministic candidate plans from step 1 and chooses the
-best soft configuration for the current use case.
+Step 2 always runs after step 1. It refines the algorithm-produced candidate
+plans from a staffing product manager perspective, choosing the best plan and
+optionally up to two alternatives when they represent a meaningfully different
+tradeoff.
 
-The model should help with:
+The LLM is responsible for soft assessment that the deterministic step cannot
+make well: preference fit, learning value of bench placements, source-project
+disruption, ramp-up effort, and PM-style framing of hiring needs.
 
-- Ranking valid candidate plans.
-- Producing CTO-friendly explanations.
-- Describing project risk and ramp-up effort.
-- Choosing suggested roles for move requests.
-- Summarizing why a recommendation is better than alternatives.
-- Turning deterministic hiring gaps into clear hiring recommendations when safe
-  reassignment is not enough.
+The LLM may:
 
-The model must not:
+- Rank the candidate plans produced by step 1.
+- Pick the best plan and optionally 0–2 alternatives.
+- Write short reasons, risks, and suggested role labels.
+- Produce hiring needs framed in PM language. Step 1 hiring gaps are passed in
+  as hints, not as a closed set.
 
-- Invent employees, projects, skills, assignments, or IDs.
-- Override hard-rule validation.
-- Return candidates that were not produced by step 1.
-- Invent hiring needs that are not grounded in step 1 hiring gaps.
-- Make final assignment changes.
+The LLM must not:
 
-## Inputs
+- Invent employees, projects, skills, or assignments.
+- Return a plan ID that step 1 did not produce.
+- Add a move that is not in the chosen candidate plan.
+- Reference an unknown project ID or non-canonical skill key in a hiring need.
 
-The evaluator receives:
+## Always-On Two-Step
 
-- Matching use case.
-- Target project, when the run is project-scoped.
-- A compact data snapshot.
-- Candidate plans from step 1.
-- Hiring gaps from step 1, if safe reassignment cannot cover all needs.
-- Rule configuration and strict scores.
-- Open move request context.
+Step 2 is not optional and there is no deterministic fallback path. If the
+OpenAI call fails or returns invalid JSON, the matching run fails and the API
+returns an error. Keeping a single code path avoids duplicating ranking logic.
 
-Only send candidate plans that passed step 1 validation. Cap the number of
-plans sent to the model with config, for example `max_llm_candidate_plans: 10`.
+## Inputs From Step 1
 
-## Prompt Strategy
-
-Use a strict system prompt with a JSON-only response contract, similar to the
-existing skill-profile service pattern.
-
-System prompt responsibilities:
-
-- Define the CTO staffing assistant role.
-- Explain that all candidate plans are already hard-rule valid.
-- Instruct the model to rank only provided candidate IDs.
-- Forbid unknown employee IDs, project IDs, and skill keys.
-- Require concise explanations grounded in the provided candidate data.
-- Require JSON output with no markdown.
-
-User message content:
-
-- Use case and objective.
-- Target project summary, if project-scoped.
-- Relevant project coverage gaps.
-- Candidate plans and strict scores.
-- Step 1 hiring gaps and unresolved coverage summaries.
-- Employee preference/interests summary.
-- Source project impact summaries.
-
-Do not include secrets, raw credentials, hidden environment values, or unrelated
-employee data.
-
-## Prompt Versioning
-
-Every production prompt should have a version string:
-
-```text
-matching_llm_evaluator_v1
-```
-
-Persist the prompt version with the matching run or recommendation metadata.
-This makes old recommendations debuggable after prompt changes.
-
-## Model Configuration
-
-Recommended defaults:
-
-```json
-{
-  "model": "gpt-4o",
-  "temperature": 0.2,
-  "response_format": "json_object",
-  "max_llm_candidate_plans": 10,
-  "prompt_version": "matching_llm_evaluator_v1"
-}
-```
-
-The low temperature keeps rankings stable while allowing better natural-language
-explanations than a purely deterministic prompt.
-
-## Request Shape Sent To The Model
-
-Keep input compact and explicit.
+Step 2 receives a compact, snapshot-derived payload. Step 1 owns the data; this
+section describes only what gets forwarded to the LLM.
 
 ```json
 {
   "use_case": "project_rebalance",
-  "target": {
-    "project_id": 7,
-    "project_name": "Eventbrite",
-    "project_phase": "growth",
+  "target_project": {
+    "id": 7,
+    "name": "Eventbrite",
+    "phase": "growth",
     "required_people_amount": 3,
     "required_skills": {
-      "android": 0,
-      "ios": 0,
-      "web": 2,
-      "backend": 3,
-      "infrastructure": 2,
-      "ai": 1
+      "android": 0, "ios": 0, "web": 2,
+      "backend": 3, "infrastructure": 2, "ai": 1
     }
   },
-  "evaluation_policy": {
-    "prioritize": [
-      "target skill coverage",
-      "low disruption to source projects",
-      "employee preferences",
-      "short ramp-up"
-    ],
-    "forbidden": [
-      "unknown candidate_plan_id",
-      "unknown employee_id",
-      "unknown project_id",
-      "new move not present in candidate plan"
-    ]
-  },
-  "hiring_gaps": [
-    {
-      "project_id": 7,
-      "project_name": "Eventbrite",
-      "role_title": "Senior backend/platform engineer",
-      "count": 1,
-      "required_skills": {
-        "android": 0,
-        "ios": 0,
-        "web": 1,
-        "backend": 3,
-        "infrastructure": 2,
-        "ai": 0
-      },
-      "reason": "No safe reassignment can close the backend and infrastructure gap.",
-      "urgency": "high"
-    }
-  ],
   "candidate_plans": [
     {
       "candidate_plan_id": "plan_01",
-      "strict_score": 0.82,
-      "moves": [
+      "gap_closing_moves": [
         {
           "employee_id": 3,
-          "employee_name": "Sofia Romano",
-          "employee_role": "Backend Engineer",
+          "name": "Sofia Romano",
+          "role": "Backend Engineer",
           "from_project_id": 2,
           "from_project_name": "WeTransfer",
           "to_project_id": 7,
           "to_project_name": "Eventbrite",
-          "current_project_impact": "low",
-          "skill_match_summary": "backend 3, infrastructure 2, web 1"
+          "skills": { "backend": 3, "infrastructure": 2, "web": 1 },
+          "preferences": ["Eventbrite"],
+          "interests": ["platform"]
         }
       ],
-      "coverage_summary": "Target backend and infrastructure gaps close.",
-      "strict_risks": [
-        "Source project loses one infrastructure-capable engineer."
+      "bench_moves": [
+        {
+          "employee_id": 9,
+          "name": "Marco Bianchi",
+          "role": "iOS Engineer",
+          "to_project_id": 4,
+          "to_project_name": "WeTransfer",
+          "skills": { "ios": 3, "backend": 1 },
+          "interests": ["mobile platforms"]
+        }
+      ],
+      "coverage_after": {
+        "headcount_gap": 0,
+        "skill_gap": { "backend": 0, "infrastructure": 0, "ai": 0 }
+      },
+      "source_project_impacts": [
+        { "project_id": 2, "project_name": "WeTransfer", "impact": "low" }
       ]
+    }
+  ],
+  "hiring_gap_hints": [
+    {
+      "project_id": 7,
+      "role_title": "Senior backend/platform engineer",
+      "count": 1,
+      "required_skills": {
+        "android": 0, "ios": 0, "web": 1,
+        "backend": 3, "infrastructure": 2, "ai": 0
+      }
     }
   ]
 }
 ```
 
-## Required Model Output
+Notes on input shape:
 
-The model must return strict JSON.
+- `gap_closing_moves` are step 1's required-coverage moves.
+- `bench_moves` are deterministic placements for otherwise-unassigned employees,
+  picked by step 1 for support/learning. The LLM does not relocate them; it
+  only writes reasons.
+- `hiring_gap_hints` come from step 1 coverage analysis. The LLM may use,
+  expand, or ignore them.
+- Step 1 internal scores are intentionally not forwarded so the LLM ranks on
+  the soft signals alone.
+- Free-text employee or project context (profile summary, repo summary) is not
+  included in v1. The schema can accept extra string fields per employee or
+  project later without changing the response contract.
+
+## Prompt Strategy
+
+Use the same JSON-only pattern as `services/skill_profile_service.py`.
+
+System prompt responsibilities:
+
+- Define the staffing product manager role.
+- State that all candidate plans are already algorithmically valid.
+- Forbid unknown employee IDs, project IDs, plan IDs, and skill keys.
+- Forbid adding moves that are not in the chosen candidate plan.
+- Encode evaluation priorities: target coverage, low source-project disruption,
+  preference and interest alignment, short ramp-up, learning value of bench
+  placements.
+- Encode tone: explain project tradeoffs, do not judge people.
+- Require strict JSON.
+- Define when alternatives are appropriate: include up to two only when they
+  represent a meaningfully different tradeoff, otherwise return `best` only.
+
+User message: the JSON payload above.
+
+## Model Configuration
 
 ```json
 {
-  "ranked_recommendations": [
+  "model": "gpt-4o",
+  "temperature": 0.2,
+  "response_format": "json_object"
+}
+```
+
+## Required Model Output
+
+```json
+{
+  "best": {
+    "candidate_plan_id": "plan_01",
+    "fit_score": 0.91,
+    "reason": "Closes the backend and infrastructure gaps with low impact on WeTransfer.",
+    "moves": [
+      {
+        "employee_id": 3,
+        "from_project_id": 2,
+        "to_project_id": 7,
+        "suggested_role": "Backend/platform engineer",
+        "current_project_impact": "low"
+      }
+    ],
+    "bench_moves": [
+      {
+        "employee_id": 9,
+        "to_project_id": 4,
+        "suggested_role": "iOS support / backend ramp-up",
+        "reason": "Mobile background plus interest in platforms; useful contributor on WeTransfer."
+      }
+    ],
+    "risks": [
+      "WeTransfer loses one infrastructure-capable engineer."
+    ]
+  },
+  "alternatives": [
     {
-      "candidate_plan_id": "plan_01",
-      "rank": 1,
-      "fit_score": 0.91,
-      "summary": "Best balance of target coverage and low source disruption.",
-      "explanation": "Sofia covers the backend and infrastructure gaps with low impact on WeTransfer.",
-      "risks": [
-        "WeTransfer loses one infrastructure-capable engineer."
-      ],
-      "ramp_up_estimate": "3-5 days",
-      "suggested_moves": [
-        {
-          "employee_id": 3,
-          "from_project_id": 2,
-          "to_project_id": 7,
-          "suggested_role": "Backend/platform engineer",
-          "current_project_impact": "low",
-          "move_request_reason": "Backend 3 and infrastructure 2 match Eventbrite's target gaps."
-        }
-      ]
+      "candidate_plan_id": "plan_03",
+      "fit_score": 0.78,
+      "reason": "Lower disruption to WeTransfer at the cost of slower ramp-up.",
+      "tradeoff": "Better source-project preservation, weaker target skill match.",
+      "moves": [ /* same shape as best.moves */ ],
+      "bench_moves": [ /* same shape as best.bench_moves */ ],
+      "risks": [ "Eventbrite reaches infrastructure 2 only after onboarding." ]
     }
   ],
   "hiring_recommendations": [
@@ -207,240 +191,108 @@ The model must return strict JSON.
       "role_title": "Senior backend/platform engineer",
       "count": 1,
       "required_skills": {
-        "android": 0,
-        "ios": 0,
-        "web": 1,
-        "backend": 3,
-        "infrastructure": 2,
-        "ai": 0
+        "android": 0, "ios": 0, "web": 1,
+        "backend": 3, "infrastructure": 2, "ai": 0
       },
       "urgency": "high",
-      "reason": "The current employee pool cannot cover Eventbrite's backend and infrastructure needs without creating unacceptable gaps in source projects.",
-      "suggested_assignment": "Hire directly into Eventbrite's backend/platform role."
+      "reason": "No safe internal reassignment fully closes Eventbrite's backend and infrastructure needs."
     }
-  ],
-  "overall_summary": "Plan 01 is the best low-disruption staffing option for Eventbrite, but one senior backend/platform hire is still needed."
+  ]
 }
 ```
 
-`fit_score` should be a normalized score from 0 to 1. It is model-assisted, not
-a mathematical guarantee.
+Field rules:
+
+- `fit_score` is a float in `[0.0, 1.0]`.
+- `alternatives` may be an empty list. Maximum two entries.
+- `tradeoff` is required on alternatives, forcing justification.
+- `current_project_impact` is one of `low`, `medium`, `high`.
+- `suggested_role` is a short title.
+- `risks` is a list of short strings.
+- `hiring_recommendations` may be empty.
 
 ## Backend Validation
 
-The backend must validate model output before persisting or returning it.
+Validation is structural and ID-based only.
 
-Validation rules:
+- Response must parse as JSON and match the schema above.
+- `best.candidate_plan_id` and every `alternatives[].candidate_plan_id` must
+  exist in step 1 output.
+- Every move under `best` and `alternatives` must already be present in that
+  candidate plan (employee_id, from_project_id, to_project_id all match).
+- Every `bench_moves` entry must already be present in that candidate plan.
+- `fit_score` must be in `[0.0, 1.0]`.
+- `current_project_impact` must be `low`, `medium`, or `high`.
+- For `hiring_recommendations`: `project_id` must exist in the snapshot,
+  `required_skills` keys must be the canonical six, and `count` must be a
+  positive integer.
+- Drop a single malformed entry; do not attempt partial-merge logic.
+- If `best` is missing or invalid, the run fails.
 
-- Response must parse as JSON.
-- `ranked_recommendations` must be a list.
-- Every `candidate_plan_id` must exist in step 1 output.
-- Every suggested move must match a move already present in that candidate.
-- Employee IDs and project IDs must match the candidate plan.
-- Every hiring recommendation must match a hiring gap from step 1.
-- Hiring recommendation skill keys must use only the canonical six-key skill
-  object.
-- Hiring recommendation counts must be positive integers.
-- `fit_score` must be between 0 and 1.
-- `current_project_impact` must be one of `low`, `medium`, or `high`.
-- Risks must be short strings.
-- Unknown fields can be ignored, but unknown IDs must reject that
-  recommendation.
+## Endpoints
 
-If a recommendation references unknown or mismatched data, drop that
-recommendation and store a warning event. If no model recommendation survives,
-fall back to deterministic strict-score ordering.
+The matching surface stays flat and consistent with the rest of the backend
+(`backend/main.py`):
 
-If a hiring recommendation references an unknown project or required skill not
-present in the deterministic hiring gaps, drop it and keep the step 1 hiring gap
-instead.
-
-## Fallback Behavior
-
-OpenAI should improve the recommendation, not become a hard dependency for every
-run.
-
-Use deterministic fallback when:
-
-- OpenAI API call fails.
-- OpenAI returns invalid JSON.
-- The response is valid JSON but all recommendations fail validation.
-- The request exceeds configured token or candidate limits.
-
-Fallback response:
-
-- Rank candidates by strict score.
-- Use step 1 summaries and risks.
-- Use step 1 hiring gaps directly as hiring recommendations.
-- Set `model_metadata.status` to `failed` or `skipped`.
-- Add a frontend-visible warning event.
-
-Example event:
-
-```json
-{
-  "level": "warning",
-  "stage": "llm_evaluation",
-  "event_type": "llm_evaluation.fallback_used",
-  "message": "OpenAI evaluation failed; returned deterministic ranking.",
-  "metadata": {
-    "fallback_reason": "invalid_json",
-    "candidate_count": 10
-  }
-}
+```http
+POST /projects/{project_id}/matching:run
+GET  /projects/{project_id}/matching/latest
 ```
+
+`POST` runs the full pipeline (step 1 + step 2) and returns the validated
+result. `GET` returns the most recent stored run for the project. There are no
+per-recommendation action routes; move requests are created through the
+existing DB API `POST /move-requests` endpoint when the user accepts a plan.
 
 ## Persistence
 
-Persist the final validated recommendations in `matching_recommendations`.
+Persist the validated result via the DB API. For v1, store:
 
-Suggested metadata:
+- The matching run (target project, status, created_at).
+- The final response JSON (`best`, `alternatives`, `hiring_recommendations`).
 
-```json
-{
-  "model": "gpt-4o",
-  "prompt_version": "matching_llm_evaluator_v1",
-  "temperature": 0.2,
-  "status": "completed",
-  "input_candidate_count": 10,
-  "validated_recommendation_count": 5,
-  "validated_hiring_recommendation_count": 1
-}
-```
-
-If token usage is available from the API response, store aggregate counts in
-metadata. Do not store API keys or raw authorization data.
-
-Prompt and response storage should be decided deliberately:
-
-- For MVP, store only model metadata, final validated recommendation JSON, and
-  safe run events.
-- For debugging, optionally store redacted prompt/response payloads in a
-  restricted column or separate internal-only table.
-- Do not display raw prompts on the frontend by default.
-
-## Logs Emitted By Step 2
-
-Frontend-visible events:
-
-- `llm_evaluation.started`
-- `llm_evaluation.prompt_prepared`
-- `llm_evaluation.completed`
-- `llm_evaluation.validation_failed`
-- `llm_evaluation.fallback_used`
-- `llm_evaluation.skipped`
-- `llm_evaluation.hiring_recommendations_validated`
-
-Example success event:
-
-```json
-{
-  "level": "info",
-  "stage": "llm_evaluation",
-  "event_type": "llm_evaluation.completed",
-  "message": "Evaluated 10 candidate plans and validated 5 recommendations.",
-  "metadata": {
-    "model": "gpt-4o",
-    "prompt_version": "matching_llm_evaluator_v1",
-    "input_candidate_count": 10,
-    "validated_recommendation_count": 5,
-    "validated_hiring_recommendation_count": 1
-  }
-}
-```
+No per-candidate table, no event timeline, no model metadata, no prompt
+storage.
 
 ## Module Responsibilities
 
-`backend/services/matching/llm_evaluator.py`:
+`backend/services/matching_service.py`:
 
-- Select top candidates to send to OpenAI.
-- Build prompt messages.
-- Call `get_openai_client()`.
-- Parse JSON response.
-- Validate response against candidate plans.
-- Produce deterministic fallback recommendations.
+- Orchestrates step 1 (algorithm) and step 2 (LLM).
+- Calls `clients/llm_client.py` for the OpenAI call.
+- Validates the response and persists the run via `clients/db_client.py`.
+- Mirrors the structure of `services/skill_profile_service.py`.
 
-`backend/services/matching/models.py`:
+If the file grows large enough to hurt readability, split step 1 and step 2
+into a `services/matching/` package later. Do not pre-split.
 
-- Internal DTOs for LLM input, raw model output, validated recommendations, and
-  model metadata.
+## Tone
 
-`backend/services/matching/logging.py`:
-
-- Persist step 2 run events through the DB API.
-
-## Frontend Display Contract
-
-The frontend should display validated recommendations only. It should not need
-to know whether a recommendation came from OpenAI or fallback ranking, except
-for an optional status badge or run event timeline.
-
-Recommended fields for the UI:
-
-- Rank.
-- Fit score.
-- Recommended squad or moves.
-- Hiring recommendations when internal reassignment is insufficient.
-- Explanation.
-- Risks and tradeoffs.
-- Ramp-up estimate.
-- Suggested role.
-- Source project impact.
-- Event timeline.
-
-The UI should show 3 to 5 strong recommendations and optionally a small
-alternatives section.
-
-When hiring recommendations are present, the UI should show them as a separate
-"Hiring needed" outcome. This should make clear that the company should hire for
-an existing role in an existing project, not assign a hypothetical person.
-
-## Security And Tone
-
-The model should avoid employee performance judgments. Use language like:
-
-- "strong skill fit"
-- "low source-project disruption"
-- "short ramp-up estimate"
-- "preference alignment"
-- "coverage risk"
-- "hiring needed to maintain coverage"
-
-Avoid language like:
-
-- "weak employee"
-- "poor performer"
-- "replaceable"
-- "low value"
-
-The recommendation should explain project tradeoffs, not judge people.
+Use staffing PM language: "strong skill fit", "low source-project disruption",
+"short ramp-up", "preference alignment", "coverage risk", "hiring needed to
+maintain coverage". Avoid performance language ("weak", "poor performer",
+"replaceable").
 
 ## Tests
 
-Unit tests should cover:
+- Prompt builder includes only candidate plans from step 1.
+- Response with unknown `candidate_plan_id` is rejected.
+- Response with a move not in the chosen plan is rejected.
+- Response with unknown project ID in a hiring recommendation is rejected.
+- `fit_score` outside `[0, 1]` is rejected.
+- More than two alternatives is rejected.
+- Alternative without `tradeoff` is rejected.
+- Empty `alternatives` and empty `hiring_recommendations` are accepted.
+- Invalid JSON from the model surfaces a run failure.
 
-- Prompt builder includes only allowed candidate IDs.
-- Model response with unknown candidate ID is rejected.
-- Model response with unknown employee ID is rejected.
-- Model response with new invented move is rejected.
-- Model response with invented hiring need is rejected.
-- Valid hiring recommendations are preserved and linked to step 1 gaps.
-- Invalid JSON falls back to deterministic ranking.
-- Partial valid response keeps valid recommendations and logs warnings.
-- `fit_score` is clamped or rejected according to schema rules.
-- Fallback output is stable for a fixed strict-score input.
+## Future Extensions (Deliberately Deferred)
 
-Service tests should cover:
+When richer inputs become available, slot them into the existing payload
+without breaking the response contract:
 
-- A full run persists LLM metadata.
-- A failed LLM call still completes the matching run with fallback output.
-- Warning events are visible in run events.
+- Free-text `profile_summary` per employee.
+- Free-text `repo_summary` or `domain_notes` per project.
+- Free-text `recent_activity` or `team_dynamics` notes.
 
-## Future Extensions
-
-- Use OpenAI structured outputs with a JSON schema when the installed SDK and
-  model support it.
-- Add a second lightweight critique pass for high-impact recommendations.
-- Add localized explanations for employee-facing move requests.
-- Add offline evaluation datasets to compare prompt versions.
-- Add model-cost budget controls per run.
+The LLM is the only step that can use these meaningfully, which is why the
+two-step shape is set up to absorb them later.
