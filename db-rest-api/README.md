@@ -9,7 +9,7 @@ For the canonical agent-facing API contract, payload shapes, schema notes, and s
 ## What this provides
 
 - A FastAPI service with health, version, database connectivity, and CRUD endpoints.
-- A four-table MySQL schema (`projects`, `employees`, `project_assignments`, `move_requests`) defined in plain SQL.
+- A MySQL schema for staffing data plus matching pipeline persistence, defined in plain SQL.
 - A script to apply the schema to AWS RDS.
 - A script that uses the OpenAI API to generate realistic seed data as JSON.
 - A script that loads that JSON into the database.
@@ -98,6 +98,24 @@ Useful endpoints:
 - `GET /move-requests/{request_id}`
 - `PUT /move-requests/{request_id}`
 - `DELETE /move-requests/{request_id}`
+- `GET /matching-runs`
+- `POST /matching-runs`
+- `GET /matching-runs/latest`
+- `GET /matching-runs/{run_id}`
+- `PUT /matching-runs/{run_id}`
+- `DELETE /matching-runs/{run_id}`
+- `GET /projects/{project_id}/matching/latest`
+- `GET /matching-runs/{run_id}/candidates`
+- `POST /matching-runs/{run_id}/candidates`
+- `GET /matching-candidates/{candidate_id}`
+- `GET /matching-runs/{run_id}/recommendations`
+- `POST /matching-runs/{run_id}/recommendations`
+- `GET /matching-recommendations/{recommendation_id}`
+- `GET /matching-runs/{run_id}/hiring-recommendations`
+- `POST /matching-runs/{run_id}/hiring-recommendations`
+- `GET /matching-runs/{run_id}/events`
+- `POST /matching-runs/{run_id}/events`
+- `POST /matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests`
 - `GET /docs`
 
 List endpoints accept `limit` (default `100`, max `500`) and `offset` query parameters.
@@ -172,9 +190,9 @@ Move-request responses include joined names (`employee_name`, `from_project_name
 python scripts/init_db.py
 ```
 
-This applies [db/schema.sql](db/schema.sql). Statements are idempotent (`CREATE TABLE IF NOT EXISTS`), so running it on an already-initialized database is a no-op.
+This applies [db/schema.sql](db/schema.sql). Statements are idempotent (`CREATE TABLE IF NOT EXISTS`), so running it on an already-initialized database adds missing tables without resetting existing data.
 
-To wipe and recreate the demo tables (drops `move_requests`, `project_assignments`, `employees`, `projects` in FK-safe order):
+To wipe and recreate the demo tables (drops matching persistence tables, `move_requests`, `project_assignments`, `employees`, and `projects` in FK-safe order):
 
 ```bash
 python scripts/init_db.py --reset
@@ -221,8 +239,18 @@ See [db/schema.sql](db/schema.sql) for the source of truth. Summary:
 - `employees(id, name, role, skills, preferences, interests)`
 - `project_assignments(employee_id FK, project_id FK)`
 - `move_requests(id, employee_id FK, from_project_id FK nullable, to_project_id FK, reason, expected_role, current_project_impact, status, created_at, responded_at)`
+- `matching_runs(id, use_case, target_project_id FK nullable, status, requested_by, rule_config, input_snapshot, counts, selected_candidate_plan_id, summary, error_message, timestamps)`
+- `matching_candidates(id, run_id FK, candidate_plan_id, strict_score, hard_rule_summary, plan_payload, rejected_reason, created_at)`
+- `matching_recommendations(id, run_id FK, candidate_plan_id, recommendation_rank, fit_score, summary, explanation, risks, ramp_up_estimate, suggested_moves, model_metadata, created_at)`
+- `matching_hiring_recommendations(id, run_id FK, candidate_plan_id, project_id FK nullable, role_title, count, required_skills, reason, urgency, suggested_assignment, created_at)`
+- `matching_run_events(id, run_id FK, level, stage, event_type, message, metadata, created_at)`
 
 `skills` and `required_skills` use the brief's six keys exactly: `android`, `ios`, `web`, `backend`, `infrastructure`, `ai`. Levels are integers 0-3.
+
+Matching persistence is storage-only. The backend matching pipeline creates runs,
+candidates, recommendations, hiring recommendations, and events through this
+API. The action endpoint can turn a selected recommendation's `suggested_moves`
+into `move_requests`, but it does not update `project_assignments`.
 
 For agent-facing context (conventions, JSON column rules, when to add new tables), see [CLAUDE.md](CLAUDE.md).
 

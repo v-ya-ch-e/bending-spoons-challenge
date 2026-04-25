@@ -34,9 +34,9 @@ The repository already has the right high-level boundaries:
 - `db-rest-api/` owns shared database persistence.
 - `docs/DB_API_DOCUMENTATION.md` is the canonical database API contract.
 
-The database now stores projects, employees, assignments, move requests, and
-matching persistence records in `db-rest-api`: runs, strict-rule candidates,
-ranked recommendations, hiring recommendations, and frontend-visible run events.
+The database currently stores projects, employees, assignments, and move
+requests. It does not yet store matching runs, generated plans, or frontend
+visible matching logs.
 
 ## Design Principles
 
@@ -287,10 +287,10 @@ values in snapshots or logs.
 ## Persistence Plan
 
 Persistence belongs in `db-rest-api`, with documentation in
-`docs/DB_API_DOCUMENTATION.md`. The backend should access these records through
-`DbApiClient`.
+`docs/DB_API_DOCUMENTATION.md` when implemented. The backend should access these
+records through `DbApiClient`.
 
-Implemented tables:
+Proposed tables:
 
 ```sql
 matching_runs(
@@ -331,30 +331,15 @@ matching_recommendations(
   id,
   run_id,
   candidate_plan_id,
-  recommendation_rank,
+  rank,
   fit_score,
   summary,
   explanation,
   risks,
   ramp_up_estimate,
   suggested_moves,
+  hiring_recommendations,
   model_metadata,
-  created_at
-)
-```
-
-```sql
-matching_hiring_recommendations(
-  id,
-  run_id,
-  candidate_plan_id,
-  project_id,
-  role_title,
-  count,
-  required_skills,
-  reason,
-  urgency,
-  suggested_assignment,
   created_at
 )
 ```
@@ -373,33 +358,7 @@ matching_run_events(
 ```
 
 Keep event rows append-only. If a run is deleted, cascade its candidates,
-recommendations, hiring recommendations, and events.
-
-Implemented DB API endpoints:
-
-```http
-GET /matching-runs
-POST /matching-runs
-GET /matching-runs/latest?use_case=project_rebalance&target_project_id=7
-GET /matching-runs/{run_id}
-PUT /matching-runs/{run_id}
-DELETE /matching-runs/{run_id}
-GET /projects/{project_id}/matching/latest
-GET /matching-runs/{run_id}/candidates
-POST /matching-runs/{run_id}/candidates
-GET /matching-candidates/{candidate_id}
-GET /matching-runs/{run_id}/recommendations
-POST /matching-runs/{run_id}/recommendations
-GET /matching-recommendations/{recommendation_id}
-GET /matching-runs/{run_id}/hiring-recommendations
-POST /matching-runs/{run_id}/hiring-recommendations
-GET /matching-runs/{run_id}/events
-POST /matching-runs/{run_id}/events
-POST /matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests
-```
-
-The move-request action creates `move_requests` from a selected
-recommendation's `suggested_moves`. It does not mutate `project_assignments`.
+recommendations, and events.
 
 ## Frontend-Visible Logging
 
@@ -535,9 +494,8 @@ DB API tests:
 
 ## Rollout
 
-1. Add persistence tables and DB API endpoints. Done in `db-rest-api`.
-2. Extend backend schemas and `DbApiClient`. `DbApiClient` now has matching
-   persistence helpers; backend orchestration schemas/routes remain next.
+1. Add persistence tables and DB API endpoints.
+2. Extend backend schemas and `DbApiClient`.
 3. Implement strict-rule generation with deterministic recommendations only.
 4. Add frontend display for run result and run events.
 5. Add hiring-gap recommendations for uncovered capacity.
@@ -551,8 +509,7 @@ DB API tests:
   longer searches.
 - Whether accepted move requests should trigger automatic assignment mutation in
   a future workflow.
-- Hiring recommendations are persisted in the separate
-  `matching_hiring_recommendations` table so hiring-only results remain
-  first-class and queryable.
+- Whether hiring recommendations should be persisted in the same table as
+  matching recommendations or split into a separate table later.
 - Whether organization-level rule defaults should live in code, a config file,
   or a DB table.
