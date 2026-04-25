@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
-  Add01Icon,
   ArrowRight01Icon,
   Edit02Icon,
   InformationCircleIcon,
@@ -42,23 +41,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import {
   Sheet,
   SheetContent,
@@ -77,13 +60,13 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { CreateMatchingDialog } from "@/components/matching/create-matching-dialog"
 import {
   buildMovePlans,
   formatImpact,
   formatLifecycle,
   formatRequestStatus,
   formatRequirement,
-  getRequirementTotal,
   skillLabels,
   type AffectedCompanyImpact,
   type EmployeeTransitionImpact,
@@ -124,11 +107,9 @@ export function MatchingScreen() {
   const [runBundles, setRunBundles] = useState<MatchingRunBundle[]>([])
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<MatchingLifecycleState>("draft")
-  const [targetProjectId, setTargetProjectId] = useState("")
-  const [policyId, setPolicyId] = useState("")
+  const [createTargetProjectId, setCreateTargetProjectId] = useState("")
   const [detail, setDetail] = useState<DetailSelection>(null)
   const [isLoading, setIsLoading] = useState(() => !cachedEmployees || !cachedProjects)
-  const [isGenerating, setIsGenerating] = useState(false)
   const [actionPlanId, setActionPlanId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const createDialogOpen = searchParams.get("create") === "1"
@@ -216,9 +197,10 @@ export function MatchingScreen() {
   const visiblePlans = plans.filter((plan) => plan.lifecycle === activeTab)
   const selectedPlan =
     plans.find((plan) => plan.id === selectedPlanId) ?? visiblePlans[0] ?? null
-  const effectiveTargetProjectId = targetProjectId || String(projects[0]?.id ?? "")
   const effectivePolicyId =
-    policyId || String(policies.find((policy) => policy.is_active)?.id ?? "")
+    String(policies.find((policy) => policy.is_active)?.id ?? "")
+  const effectiveCreateTargetProjectId =
+    createTargetProjectId || String(projects[0]?.id ?? "")
 
   const metrics = useMemo(() => {
     return {
@@ -234,40 +216,6 @@ export function MatchingScreen() {
 
   function closeCreateDialog() {
     router.replace(pathname)
-  }
-
-  async function handleGeneratePlan() {
-    if (!effectiveTargetProjectId) {
-      return
-    }
-
-    setIsGenerating(true)
-    setError(null)
-    try {
-      const response = await runProjectMatching(Number(effectiveTargetProjectId), {
-        policy_id: effectivePolicyId ? Number(effectivePolicyId) : undefined,
-        requested_by: currentUser.email,
-      })
-      await loadWorkspace()
-      const candidatePlanId =
-        response.summary.selected_candidate_plan_id ??
-        response.suggestions[0]?.candidate_plan_id
-
-      if (candidatePlanId) {
-        setSelectedPlanId(`run-${response.run_id}-${candidatePlanId}`)
-      }
-
-      setActiveTab("draft")
-      closeCreateDialog()
-    } catch (generateError) {
-      setError(
-        generateError instanceof Error
-          ? generateError.message
-          : "Unable to generate a matching plan."
-      )
-    } finally {
-      setIsGenerating(false)
-    }
   }
 
   async function handleRegenerate(plan: MovePlan) {
@@ -424,7 +372,17 @@ export function MatchingScreen() {
   }
 
   return (
-    <div className="flex min-h-full flex-col gap-4 p-3 sm:p-4 lg:p-4">
+    <div className="flex h-full min-h-0 flex-col gap-5 bg-background p-4 sm:p-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-2xl">
+          <h1 className="text-2xl font-semibold tracking-tight">Matching</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Create move plans, review staffing coverage, and execute accepted
+            employee transitions.
+          </p>
+        </div>
+      </div>
+
       <MetricsStrip metrics={metrics} />
 
       {error && (
@@ -451,7 +409,7 @@ export function MatchingScreen() {
         </TabsList>
       </Tabs>
 
-      <div className="grid min-h-[calc(100svh-13rem)] grid-cols-1 gap-4 xl:grid-cols-[21rem_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-[21rem_minmax(0,1fr)]">
         <MovePlanList
           plans={visiblePlans}
           selectedPlanId={selectedPlan?.id ?? null}
@@ -468,7 +426,7 @@ export function MatchingScreen() {
             onOpenDetail={setDetail}
             onRegenerate={handleRegenerate}
             onEditConstraints={(plan) => {
-              setTargetProjectId(String(plan.targetProject.id))
+              setCreateTargetProjectId(String(plan.targetProject.id))
               router.push(`${pathname}?create=1`)
             }}
             onStartRequest={handleStartRequest}
@@ -482,20 +440,27 @@ export function MatchingScreen() {
         )}
       </div>
 
-      <CreatePlanDialog
-        open={createDialogOpen}
-        projects={projects}
-        policies={policies}
-        targetProjectId={effectiveTargetProjectId}
-        policyId={effectivePolicyId}
-        isGenerating={isGenerating}
-        onOpenChange={(open) => {
-          if (!open) closeCreateDialog()
-        }}
-        onTargetProjectChange={setTargetProjectId}
-        onPolicyChange={setPolicyId}
-        onGenerate={handleGeneratePlan}
-      />
+      {createDialogOpen && (
+        <CreateMatchingDialog
+          open={createDialogOpen}
+          projects={projects}
+          policies={policies}
+          initialTargetProjectId={effectiveCreateTargetProjectId}
+          initialPolicyId={effectivePolicyId}
+          requestedBy={currentUser.email}
+          onOpenChange={(open) => {
+            if (!open) closeCreateDialog()
+          }}
+          onCreated={async ({ runId, candidatePlanId }) => {
+            await loadWorkspace()
+            if (candidatePlanId) {
+              setSelectedPlanId(`run-${runId}-${candidatePlanId}`)
+            }
+            setActiveTab("draft")
+            closeCreateDialog()
+          }}
+        />
+      )}
 
       <DetailSheet detail={detail} onOpenChange={(open) => !open && setDetail(null)} />
     </div>
@@ -520,7 +485,7 @@ function MetricsStrip({
   ]
 
   return (
-    <div className="grid gap-2 rounded-3xl border bg-card p-2 text-sm shadow-sm sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-2 rounded-3xl border bg-card p-2 text-sm sm:grid-cols-2 xl:grid-cols-4">
       {items.map((item) => (
         <div key={item.label} className="flex items-center gap-2 rounded-2xl px-3 py-2">
           <span className="font-semibold">{item.value}</span>
@@ -543,47 +508,46 @@ function MovePlanList({
   onSelectPlan: (planId: string) => void
 }) {
   return (
-    <Card className="min-h-0" size="sm">
+    <Card className="min-h-0 shadow-none" size="sm">
       <CardHeader>
         <CardTitle>Move plans</CardTitle>
         <CardDescription>Select a plan to review coverage and impact.</CardDescription>
       </CardHeader>
-      <CardContent className="min-h-0 px-2">
+      <CardContent className="min-h-0 px-4">
         <ScrollArea className="h-[34rem]">
           {isLoading ? (
-            <div className="flex flex-col gap-2 p-2">
+            <div className="flex w-full flex-col gap-2">
               {Array.from({ length: 5 }).map((_, index) => (
                 <Skeleton key={index} className="h-20 rounded-3xl" />
               ))}
             </div>
           ) : plans.length > 0 ? (
-            <div className="flex flex-col gap-2 p-2">
+            <div className="flex w-full flex-col gap-2">
               {plans.map((plan) => (
                 <button
                   key={plan.id}
                   type="button"
                   className={cn(
-                    "rounded-3xl border p-3 text-left transition hover:bg-muted/60",
-                    selectedPlanId === plan.id && "border-foreground bg-muted"
+                    "w-full rounded-3xl border p-3 text-left transition hover:bg-muted/60",
+                    getPlanSurfaceClass(plan.lifecycle),
+                    selectedPlanId === plan.id && "border-foreground"
                   )}
                   onClick={() => onSelectPlan(plan.id)}
                 >
-                  <div className="flex items-start gap-3">
+                  <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3">
                     <ProjectLogo project={plan.targetProject} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate font-medium">{plan.title}</p>
-                        <Badge variant="outline">{formatLifecycle(plan.lifecycle)}</Badge>
-                      </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{plan.title}</p>
                       <p className="truncate text-xs text-muted-foreground">
                         {plan.targetProject.project_name}
                       </p>
-                      <div className="mt-2 flex items-center justify-between gap-2 text-xs">
-                        <span className="text-muted-foreground">
-                          {plan.movements.length} moves
-                        </span>
-                        <ImpactBadge impact={plan.highestImpact} />
-                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {plan.movements.length} moves
+                      </p>
+                    </div>
+                    <div className="flex min-h-16 shrink-0 flex-col items-end justify-between gap-2">
+                      <LifecycleBadge state={plan.lifecycle} />
+                      <ImpactBadge impact={plan.highestImpact} />
                     </div>
                   </div>
                 </button>
@@ -628,14 +592,14 @@ function SelectedPlanWorkspace({
   onOpenProject: () => void
 }) {
   return (
-    <div className="min-w-0 rounded-4xl border bg-card shadow-sm">
+    <div className="min-w-0 rounded-4xl border bg-card">
       <div className="flex flex-col gap-4 border-b p-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <ProjectLogo project={plan.targetProject} size="lg" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="truncate text-xl font-semibold">{plan.title}</h1>
-              <Badge variant="secondary">{formatLifecycle(plan.lifecycle)}</Badge>
+              <LifecycleBadge state={plan.lifecycle} />
             </div>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
               {plan.summary}
@@ -1104,137 +1068,6 @@ function WorkspaceSection({
   )
 }
 
-function CreatePlanDialog({
-  open,
-  projects,
-  policies,
-  targetProjectId,
-  policyId,
-  isGenerating,
-  onOpenChange,
-  onTargetProjectChange,
-  onPolicyChange,
-  onGenerate,
-}: {
-  open: boolean
-  projects: Project[]
-  policies: MatchingPolicy[]
-  targetProjectId: string
-  policyId: string
-  isGenerating: boolean
-  onOpenChange: (open: boolean) => void
-  onTargetProjectChange: (projectId: string) => void
-  onPolicyChange: (policyId: string) => void
-  onGenerate: () => void
-}) {
-  const targetProject = projects.find((project) => String(project.id) === targetProjectId)
-  const policy = policies.find((item) => String(item.id) === policyId)
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Create move plan</DialogTitle>
-          <DialogDescription>
-            Generate a draft from API-backed project requirements and matching policy.
-            Nothing is sent to employees until the draft request is started.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium" htmlFor="target-project">
-              Target company
-            </label>
-            <Select value={targetProjectId} onValueChange={onTargetProjectChange}>
-              <SelectTrigger id="target-project">
-                <SelectValue placeholder="Select company" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={String(project.id)}>
-                      {project.project_name}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium" htmlFor="matching-policy">
-              Constraints policy
-            </label>
-            <Select value={policyId} onValueChange={onPolicyChange}>
-              <SelectTrigger id="matching-policy">
-                <SelectValue placeholder="Select policy" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {policies.map((item) => (
-                    <SelectItem key={item.id} value={String(item.id)}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {targetProject && (
-          <div className="rounded-3xl border bg-background p-4">
-            <div className="flex items-center gap-3">
-              <ProjectLogo project={targetProject} />
-              <div>
-                <p className="font-medium">{targetProject.project_name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {targetProject.required_people_amount} people required
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-1.5">
-              {Object.entries(targetProject.required_skills)
-                .filter(([, requirement]) => getRequirementTotal(requirement) > 0)
-                .map(([skill, requirement]) => (
-                  <Badge key={skill} variant="secondary">
-                    {skillLabels[skill as keyof typeof skillLabels]}{" "}
-                    {formatRequirement(requirement)}
-                  </Badge>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {policy && (
-          <Alert>
-            <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
-            <AlertTitle>{policy.name}</AlertTitle>
-            <AlertDescription>
-              {policy.description ?? "This active API policy controls matching constraints."}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={!targetProjectId || isGenerating}
-            onClick={onGenerate}
-          >
-            <HugeiconsIcon icon={Add01Icon} strokeWidth={2} data-icon="inline-start" />
-            {isGenerating ? "Generating..." : "Generate draft"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 function DetailSheet({
   detail,
   onOpenChange,
@@ -1388,7 +1221,7 @@ function TokenList({ label, items }: { label: string; items: string[] }) {
 
 function EmptyWorkspace({ onCreate }: { onCreate: () => void }) {
   return (
-    <Card>
+    <Card className="shadow-none">
       <CardHeader>
         <CardTitle>No move plan selected</CardTitle>
         <CardDescription>
@@ -1431,15 +1264,7 @@ function CoverageBadge({
   }
 
   return (
-    <Badge
-      variant={
-        status === "missing"
-          ? "destructive"
-          : status === "covered"
-            ? "secondary"
-            : "outline"
-      }
-    >
+    <Badge variant="outline" className={getCoverageAccentClass(status)}>
       {labels[status]}
     </Badge>
   )
@@ -1447,7 +1272,7 @@ function CoverageBadge({
 
 function ImpactBadge({ impact }: { impact: "low" | "medium" | "high" }) {
   return (
-    <Badge variant={impact === "high" ? "destructive" : "outline"}>
+    <Badge variant="outline" className={getImpactAccentClass(impact)}>
       {formatImpact(impact)} risk
     </Badge>
   )
@@ -1459,16 +1284,16 @@ function RequestStatusBadge({
   status: MoveRequestStatus | "not_sent"
 }) {
   return (
-    <Badge
-      variant={
-        status === "rejected"
-          ? "destructive"
-          : status === "accepted"
-            ? "secondary"
-            : "outline"
-      }
-    >
+    <Badge variant="outline" className={getRequestStatusAccentClass(status)}>
       {formatRequestStatus(status)}
+    </Badge>
+  )
+}
+
+function LifecycleBadge({ state }: { state: MatchingLifecycleState }) {
+  return (
+    <Badge variant="outline" className={getLifecycleAccentClass(state)}>
+      {formatLifecycle(state)}
     </Badge>
   )
 }
@@ -1507,4 +1332,76 @@ function getDetailTitle(detail: DetailSelection) {
     return detail.company.project?.project_name ?? "Affected company"
   }
   return detail.impact.employee?.name ?? "Employee impact"
+}
+
+function getPlanSurfaceClass(state: MatchingLifecycleState) {
+  if (state === "draft") {
+    return "bg-muted/45"
+  }
+
+  return "bg-card"
+}
+
+function getLifecycleAccentClass(state: MatchingLifecycleState) {
+  if (state === "draft") {
+    return "border-border bg-muted text-foreground"
+  }
+
+  if (state === "active") {
+    return "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+  }
+
+  if (state === "ready") {
+    return "border-green-500/25 bg-green-500/10 text-green-700 dark:text-green-300"
+  }
+
+  return "border-green-600/30 bg-green-600/10 text-green-700 dark:text-green-300"
+}
+
+function getCoverageAccentClass(status: RequirementCoverageRow["status"]) {
+  if (status === "covered") {
+    return "border-green-500/25 bg-green-500/10 text-green-700 dark:text-green-300"
+  }
+
+  if (status === "partially_covered") {
+    return "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+  }
+
+  if (status === "missing") {
+    return "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300"
+  }
+
+  return "border-border bg-muted/60 text-muted-foreground"
+}
+
+function getImpactAccentClass(impact: "low" | "medium" | "high") {
+  if (impact === "low") {
+    return "border-green-500/25 bg-green-500/10 text-green-700 dark:text-green-300"
+  }
+
+  if (impact === "medium") {
+    return "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+  }
+
+  return "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300"
+}
+
+function getRequestStatusAccentClass(status: MoveRequestStatus | "not_sent") {
+  if (status === "accepted") {
+    return "border-green-500/25 bg-green-500/10 text-green-700 dark:text-green-300"
+  }
+
+  if (status === "rejected") {
+    return "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300"
+  }
+
+  if (status === "clarification_requested") {
+    return "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+  }
+
+  if (status === "pending") {
+    return "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-300"
+  }
+
+  return "border-border bg-muted/60 text-muted-foreground"
 }

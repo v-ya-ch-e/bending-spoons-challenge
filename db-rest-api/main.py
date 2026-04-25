@@ -441,7 +441,10 @@ def get_database_settings() -> DatabaseSettings:
 @contextmanager
 def open_db_connection() -> Iterator[Connection]:
     settings = get_database_settings()
-    connection = pymysql.connect(**settings.connect_kwargs())
+    try:
+        connection = pymysql.connect(**settings.connect_kwargs())
+    except pymysql.MySQLError as exc:
+        raise HTTPException(status_code=503, detail="Database connection failed.") from exc
     try:
         yield connection
     finally:

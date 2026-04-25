@@ -1,0 +1,944 @@
+"use client"
+
+import { useMemo, useState, type ReactNode } from "react"
+import {
+  ArrowRight01Icon,
+  InformationCircleIcon,
+  Tick02Icon,
+} from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
+
+import { runProjectMatching, type MatchingRunResponse } from "@/lib/backend-api"
+import {
+  getMatchingRun,
+  updateMatchingRun,
+  type ImpactLevel,
+  type MatchingPolicy,
+  type Project,
+  type ProjectSkillRequirement,
+} from "@/lib/db-api"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Progress } from "@/components/ui/progress"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Textarea } from "@/components/ui/textarea"
+import { cn } from "@/lib/utils"
+import {
+  formatImpact,
+  getRequirementTotal,
+  skillKeys,
+  skillLabels,
+  type MatchingCreateFlowMetadata,
+} from "@/components/matching/matching-model"
+
+type CreateMatchingDialogProps = {
+  open: boolean
+  projects: Project[]
+  policies: MatchingPolicy[]
+  initialTargetProjectId: string
+  initialPolicyId: string
+  requestedBy: string
+  onOpenChange: (open: boolean) => void
+  onCreated: (createdPlan: {
+    runId: number
+    candidatePlanId: string | null
+  }) => void | Promise<void>
+}
+
+type StepId = "target" | "constraints" | "generate" | "final"
+
+type FormState = {
+  targetProjectId: string
+  planName: string
+  goal: string
+  policyId: string
+}
+
+type GeneratedPlan = {
+  response: MatchingRunResponse
+  candidatePlanId: string | null
+}
+
+const steps: Array<{
+  id: StepId
+  label: string
+  description: string
+}> = [
+  { id: "target", label: "Target", description: "Company and goal." },
+  { id: "constraints", label: "Constraints", description: "API-backed policy." },
+  { id: "generate", label: "Generate", description: "Run matching." },
+  { id: "final", label: "Final", description: "Review and confirm." },
+]
+
+const generationStepLabels = [
+  "Reading minimum requirements",
+  "Finding matching employees",
+  "Checking source company capacity",
+  "Estimating employee transition impact",
+  "Building proposed move plan",
+]
+
+export function CreateMatchingDialog({
+  open,
+  projects,
+  policies,
+  initialTargetProjectId,
+  initialPolicyId,
+  requestedBy,
+  onOpenChange,
+  onCreated,
+}: CreateMatchingDialogProps) {
+  const initialProject = projects.find(
+    (project) => String(project.id) === initialTargetProjectId
+  )
+  const [stepIndex, setStepIndex] = useState(0)
+  const [formState, setFormState] = useState<FormState>(() => ({
+    targetProjectId: initialTargetProjectId,
+    planName: initialProject ? `Staff ${initialProject.project_name}` : "",
+    goal: initialProject
+      ? `Reach minimum staffing requirements for ${initialProject.project_name}.`
+      : "",
+    policyId: initialPolicyId,
+  }))
+  const [validationError, setValidationError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generatedPlan, setGeneratedPlan] = useState<GeneratedPlan | null>(null)
+
+  const currentStep = steps[stepIndex]
+  const isFirstStep = stepIndex === 0
+  const isFinalStep = currentStep.id === "final"
+  const targetProject = projects.find(
+    (project) => String(project.id) === formState.targetProjectId
+  )
+  const selectedPolicy = policies.find(
+    (policy) => String(policy.id) === formState.policyId
+  )
+  const generatedSuggestion = generatedPlan?.response.suggestions[0]
+
+  const summary = useMemo(() => {
+    const proposedMoves = generatedSuggestion?.moves.length ?? 0
+    const highestImpact = generatedSuggestion
+      ? generatedSuggestion.moves.reduce<ImpactLevel>(
+          (highest, move) =>
+            impactRank(move.current_project_impact) > impactRank(highest)
+              ? move.current_project_impact
+              : highest,
+          "low"
+        )
+      : "low"
+    const coveragePercent = generatedSuggestion
+      ? getSuggestionCoveragePercent(generatedSuggestion)
+      : 0
+
+    return { proposedMoves, highestImpact, coveragePercent }
+  }, [generatedSuggestion])
+
+  function updateFormState(nextState: Partial<FormState>) {
+    setFormState((current) => ({ ...current, ...nextState }))
+    setValidationError(null)
+    setSubmitError(null)
+  }
+
+  function handleTargetProjectChange(projectId: string) {
+    const nextProject = projects.find((project) => String(project.id) === projectId)
+    updateFormState({
+      targetProjectId: projectId,
+      planName:
+        !formState.planName.trim() || targetProject
+          ? `Staff ${nextProject?.project_name ?? "target company"}`
+          : formState.planName,
+      goal:
+        !formState.goal.trim() || targetProject
+          ? `Reach minimum staffing requirements for ${
+              nextProject?.project_name ?? "the target company"
+            }.`
+          : formState.goal,
+    })
+  }
+
+  function validateStep(step: StepId) {
+    if (step === "target") {
+      if (!formState.targetProjectId) return "Select the target company."
+      if (!formState.planName.trim()) return "Enter a move plan name."
+      if (!formState.goal.trim()) return "Enter the plan goal."
+    }
+
+    if (step === "constraints" && !formState.policyId) {
+      return "Select a matching policy."
+    }
+
+    return null
+  }
+
+  function canNavigateToStep(targetStepIndex: number) {
+    if (targetStepIndex <= stepIndex) return true
+    if (targetStepIndex === 3) return Boolean(generatedPlan)
+
+    return steps
+      .slice(0, targetStepIndex)
+      .every((step) => validateStep(step.id) === null)
+  }
+
+  function handleStepChange(targetStepIndex: number) {
+    if (targetStepIndex === stepIndex || isGenerating) return
+
+    if (!canNavigateToStep(targetStepIndex)) {
+      setValidationError(validateStep(currentStep.id))
+      return
+    }
+
+    setValidationError(null)
+    setSubmitError(null)
+    setStepIndex(targetStepIndex)
+  }
+
+  function handleNext() {
+    const nextValidationError = validateStep(currentStep.id)
+    if (nextValidationError) {
+      setValidationError(nextValidationError)
+      return
+    }
+
+    setValidationError(null)
+    setSubmitError(null)
+    setStepIndex((current) => Math.min(current + 1, steps.length - 1))
+  }
+
+  function handleBack() {
+    setValidationError(null)
+    setSubmitError(null)
+    setStepIndex((current) => Math.max(current - 1, 0))
+  }
+
+  async function handleGenerate() {
+    const targetValidationError = validateStep("target")
+    const constraintsValidationError = validateStep("constraints")
+
+    if (targetValidationError || constraintsValidationError || !targetProject) {
+      setValidationError(targetValidationError ?? constraintsValidationError)
+      setStepIndex(targetValidationError ? 0 : 1)
+      return
+    }
+
+    setIsGenerating(true)
+    setValidationError(null)
+    setSubmitError(null)
+
+    try {
+      const response = await runProjectMatching(targetProject.id, {
+        policy_id: formState.policyId ? Number(formState.policyId) : undefined,
+        requested_by: requestedBy,
+      })
+      const candidatePlanId =
+        response.summary.selected_candidate_plan_id ??
+        response.suggestions[0]?.candidate_plan_id ??
+        null
+      const persistedRun = await getMatchingRun(response.run_id)
+      const metadata: MatchingCreateFlowMetadata = {
+        planName: formState.planName.trim(),
+        goal: formState.goal.trim(),
+        targetProjectId: targetProject.id,
+        targetProjectName: targetProject.project_name,
+        policyId: selectedPolicy?.id,
+        policyName: selectedPolicy?.name,
+        candidatePool: "All employees in API matching scope",
+        moveTiming: "Requests sent after CTO starts the draft request",
+        impactTolerance: selectedPolicy?.name ?? "Active matching policy",
+        avoidBreakingMinimums: Boolean(
+          selectedPolicy?.config.allow_understaff_current_project === false
+        ),
+        preferLowerTransitionEffort: true,
+        preferFewerMoves: Boolean(selectedPolicy?.config.max_moves),
+        createdAt: new Date().toISOString(),
+      }
+
+      await updateMatchingRun(response.run_id, {
+        input_snapshot: {
+          ...(persistedRun.input_snapshot ?? {}),
+          matching_create_flow: metadata,
+        },
+      })
+
+      setGeneratedPlan({ response, candidatePlanId })
+      setStepIndex(3)
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : "Unable to generate move plan."
+      )
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  async function handleOpenDraftPlan() {
+    if (!generatedPlan) return
+    await onCreated({
+      runId: generatedPlan.response.run_id,
+      candidatePlanId: generatedPlan.candidatePlanId,
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex h-[min(47rem,calc(100svh-2rem))] flex-col gap-0 overflow-hidden p-0 shadow-none sm:max-w-6xl">
+        <DialogHeader className="border-b border-border px-6 py-5">
+          <DialogTitle className="text-lg">Create move plan</DialogTitle>
+          <DialogDescription>
+            Plan employee movements before sending requests.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid min-h-0 flex-1 md:grid-cols-[17rem_1fr]">
+          <StepNavigation
+            currentStepIndex={stepIndex}
+            canNavigateToStep={canNavigateToStep}
+            onStepChange={handleStepChange}
+          />
+
+          <div className="min-h-0 border-t border-border md:border-t-0 md:border-l">
+            <div className="h-full overflow-y-auto px-6 py-6">
+              <div className="mx-auto flex max-w-3xl flex-col gap-5">
+                {validationError && (
+                  <Alert variant="destructive">
+                    <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
+                    <AlertTitle>Check this step</AlertTitle>
+                    <AlertDescription>{validationError}</AlertDescription>
+                  </Alert>
+                )}
+                {submitError && (
+                  <Alert variant="destructive">
+                    <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
+                    <AlertTitle>Generation failed</AlertTitle>
+                    <AlertDescription>{submitError}</AlertDescription>
+                  </Alert>
+                )}
+
+                {currentStep.id === "target" && (
+                  <TargetStep
+                    formState={formState}
+                    projects={projects}
+                    targetProject={targetProject}
+                    onChange={updateFormState}
+                    onTargetProjectChange={handleTargetProjectChange}
+                  />
+                )}
+                {currentStep.id === "constraints" && (
+                  <ConstraintsStep
+                    policyId={formState.policyId}
+                    policies={policies}
+                    selectedPolicy={selectedPolicy}
+                    onPolicyChange={(nextPolicyId) =>
+                      updateFormState({ policyId: nextPolicyId })
+                    }
+                  />
+                )}
+                {currentStep.id === "generate" && (
+                  <GenerateStep
+                    targetProject={targetProject}
+                    selectedPolicy={selectedPolicy}
+                    isGenerating={isGenerating}
+                  />
+                )}
+                {currentStep.id === "final" && generatedPlan && targetProject && (
+                  <FinalStep
+                    targetProject={targetProject}
+                    formState={formState}
+                    summary={summary}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="flex-row items-center justify-between border-t border-border px-6 py-4">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isGenerating}
+            onClick={() => onOpenChange(false)}
+          >
+            {isFinalStep ? "Close" : "Cancel"}
+          </Button>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleBack}
+              disabled={isFirstStep || isGenerating}
+            >
+              Back
+            </Button>
+            {currentStep.id === "generate" ? (
+              <Button type="button" onClick={handleGenerate} disabled={isGenerating}>
+                {isGenerating ? "Generating..." : "Generate draft plan"}
+              </Button>
+            ) : isFinalStep ? (
+              <Button type="button" onClick={handleOpenDraftPlan}>
+                Open draft plan
+              </Button>
+            ) : (
+              <Button type="button" onClick={handleNext}>
+                Continue
+              </Button>
+            )}
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function StepNavigation({
+  currentStepIndex,
+  canNavigateToStep,
+  onStepChange,
+}: {
+  currentStepIndex: number
+  canNavigateToStep: (stepIndex: number) => boolean
+  onStepChange: (stepIndex: number) => void
+}) {
+  return (
+    <nav className="flex gap-2 overflow-x-auto bg-muted/20 p-4 md:flex-col md:p-5">
+      {steps.map((step, index) => {
+        const isActive = index === currentStepIndex
+        const isLocked = !canNavigateToStep(index)
+        const isCompleted = index < currentStepIndex && !isLocked
+
+        return (
+          <button
+            key={step.id}
+            type="button"
+            disabled={isLocked}
+            onClick={() => onStepChange(index)}
+            className={cn(
+              "flex min-w-52 items-center gap-3 rounded-3xl bg-muted/50 px-3 py-3 text-left transition-colors md:min-w-0",
+              isActive && "bg-green-50 ring-1 ring-green-600/20 dark:bg-green-950/20",
+              isCompleted && !isActive && "bg-green-50/60 dark:bg-green-950/15",
+              isLocked && "cursor-not-allowed opacity-55"
+            )}
+          >
+            <span
+              className={cn(
+                "flex size-7 shrink-0 items-center justify-center rounded-full border bg-background text-xs font-medium",
+                isActive && "border-green-600 bg-green-600 text-white",
+                isCompleted &&
+                  !isActive &&
+                  "border-green-600/40 bg-green-600/10 text-green-700 dark:text-green-300"
+              )}
+            >
+              {isCompleted ? (
+                <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />
+              ) : (
+                index + 1
+              )}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate font-medium">{step.label}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {isCompleted ? "Complete" : step.description}
+              </span>
+            </span>
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
+function TargetStep({
+  formState,
+  projects,
+  targetProject,
+  onChange,
+  onTargetProjectChange,
+}: {
+  formState: FormState
+  projects: Project[]
+  targetProject?: Project
+  onChange: (nextState: Partial<FormState>) => void
+  onTargetProjectChange: (projectId: string) => void
+}) {
+  return (
+    <section className="animate-in fade-in-0 slide-in-from-right-2 flex flex-col gap-6 duration-200">
+      <StepHeading
+        title="1. Target company"
+        description="Select the company that needs additional capacity."
+      />
+
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium" htmlFor="matching-target">
+          Target company
+        </label>
+        <Select value={formState.targetProjectId} onValueChange={onTargetProjectChange}>
+          <SelectTrigger id="matching-target">
+            <SelectValue placeholder="Select company" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {projects.map((project) => (
+                <SelectItem
+                  key={project.id}
+                  value={String(project.id)}
+                  textValue={project.project_name}
+                >
+                  <ProjectSelectOption project={project} />
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium" htmlFor="move-plan-name">
+          Move plan name
+        </label>
+        <Input
+          id="move-plan-name"
+          value={formState.planName}
+          onChange={(event) => onChange({ planName: event.target.value })}
+          placeholder="Staff Eventbrite Integration"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <label className="text-sm font-medium" htmlFor="move-plan-goal">
+          Goal
+        </label>
+        <Textarea
+          id="move-plan-goal"
+          value={formState.goal}
+          onChange={(event) => onChange({ goal: event.target.value })}
+          placeholder="Reach minimum staffing requirements for the new acquisition integration."
+        />
+      </div>
+
+      {targetProject && <MinimumRequirementsTable project={targetProject} />}
+    </section>
+  )
+}
+
+function ConstraintsStep({
+  policyId,
+  policies,
+  selectedPolicy,
+  onPolicyChange,
+}: {
+  policyId: string
+  policies: MatchingPolicy[]
+  selectedPolicy?: MatchingPolicy
+  onPolicyChange: (policyId: string) => void
+}) {
+  const maxMoves = selectedPolicy?.config.max_moves
+  const avoidUnderstaff = selectedPolicy?.config.allow_understaff_current_project === false
+  const pendingExcluded = selectedPolicy?.config.exclude_pending_move_requests !== false
+
+  return (
+    <section className="animate-in fade-in-0 slide-in-from-right-2 flex flex-col gap-6 duration-200">
+      <StepHeading
+        title="2. Constraints"
+        description="Choose how the API matching policy should search for possible moves."
+      />
+
+      <div className="grid gap-4 md:grid-cols-[14rem_1fr] md:items-center">
+        <FieldLabel>Candidate pool</FieldLabel>
+        <ReadOnlyField>All employees in API matching scope</ReadOnlyField>
+        <FieldLabel>Move timing</FieldLabel>
+        <ReadOnlyField>Requests sent only after CTO starts the draft request</ReadOnlyField>
+        <FieldLabel>Impact tolerance</FieldLabel>
+        <Select value={policyId} onValueChange={onPolicyChange}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select policy" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {policies.map((policy) => (
+                <SelectItem key={policy.id} value={String(policy.id)}>
+                  {policy.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="overflow-hidden rounded-3xl border bg-muted/40">
+        <ConstraintRow
+          label="Avoid breaking source company minimum requirements"
+          enabled={avoidUnderstaff}
+        />
+        <ConstraintRow label="Exclude employees with open move requests" enabled={pendingExcluded} />
+        <ConstraintRow
+          label="Prefer fewer company-to-company moves"
+          enabled={typeof maxMoves === "number"}
+          value={typeof maxMoves === "number" ? `Max ${maxMoves} moves` : undefined}
+        />
+      </div>
+
+      <Alert>
+        <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
+        <AlertTitle>API-backed constraints</AlertTitle>
+        <AlertDescription>
+          Candidate exclusions and timing are controlled by the selected matching policy.
+          The flow stores your plan metadata, then calls the existing matching runner.
+        </AlertDescription>
+      </Alert>
+    </section>
+  )
+}
+
+function GenerateStep({
+  targetProject,
+  selectedPolicy,
+  isGenerating,
+}: {
+  targetProject?: Project
+  selectedPolicy?: MatchingPolicy
+  isGenerating: boolean
+}) {
+  return (
+    <section className="animate-in fade-in-0 slide-in-from-right-2 flex flex-col gap-6 duration-200">
+      <StepHeading
+        title="3. Generate"
+        description={`Finding employees who can cover ${
+          targetProject?.project_name ?? "the target company"
+        } minimum requirements.`}
+      />
+
+      <div className="flex items-center gap-4">
+        <Progress
+          value={isGenerating ? 65 : 0}
+          className="max-w-md [&_[data-slot=progress-indicator]]:bg-green-600"
+        />
+        <span className="text-sm text-muted-foreground">
+          {isGenerating ? "65%" : "Ready"}
+        </span>
+      </div>
+
+      <ol className="flex flex-col divide-y rounded-3xl border bg-muted/35">
+        {generationStepLabels.map((label, index) => (
+          <li key={label} className="flex items-start gap-3 px-4 py-3">
+            <span
+              className={cn(
+                "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-xs",
+                (isGenerating || index === 0) &&
+                  "border-green-600 bg-green-600 text-white"
+              )}
+            >
+              {index < 3 && isGenerating ? (
+                <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />
+              ) : (
+                index + 1
+              )}
+            </span>
+            <div>
+              <p className="font-medium">{label}</p>
+              {index >= 3 && (
+                <p className="text-sm text-muted-foreground">
+                  Uses current project assignments, employee skills, and selected policy.
+                </p>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      <div className="rounded-3xl border bg-muted/35 p-4">
+        <SummaryRow label="Target company" value={targetProject?.project_name ?? "Not set"} />
+        <SummaryRow
+          label="Required coverage"
+          value={
+            targetProject
+              ? `${targetProject.required_people_amount} people, ${getRequiredSkillCount(
+                  targetProject
+                )} skill dimensions`
+              : "Not set"
+          }
+        />
+        <SummaryRow
+          label="Matching policy"
+          value={selectedPolicy?.name ?? "Active API policy"}
+        />
+      </div>
+    </section>
+  )
+}
+
+function FinalStep({
+  targetProject,
+  formState,
+  summary,
+}: {
+  targetProject: Project
+  formState: FormState
+  summary: {
+    proposedMoves: number
+    highestImpact: "low" | "medium" | "high"
+    coveragePercent: number
+  }
+}) {
+  return (
+    <section className="animate-in fade-in-0 slide-in-from-right-2 flex flex-col gap-6 duration-200">
+      <Badge
+        variant="outline"
+        className="w-fit border-green-500/25 bg-green-500/10 text-green-700 dark:text-green-300"
+      >
+        Plan created successfully
+      </Badge>
+      <StepHeading
+        title="Draft move plan ready"
+        description="Review the plan before sending requests to employees."
+      />
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <StatCard label="Target company">
+          <div className="flex items-center gap-3">
+            <Avatar>
+              <AvatarImage src={targetProject.icon_url} alt="" />
+              <AvatarFallback>{getInitials(targetProject.project_name)}</AvatarFallback>
+            </Avatar>
+            <span className="font-medium">{targetProject.project_name}</span>
+          </div>
+        </StatCard>
+        <StatCard label="Plan name">
+          <p className="font-medium">{formState.planName}</p>
+        </StatCard>
+        <StatCard label="Proposed moves">
+          <p className="text-2xl font-semibold">{summary.proposedMoves}</p>
+        </StatCard>
+        <StatCard label="Requirement coverage">
+          <p className="text-2xl font-semibold">{summary.coveragePercent}%</p>
+        </StatCard>
+        <StatCard label="Highest source impact">
+          <p className="text-2xl font-semibold">{formatImpact(summary.highestImpact)}</p>
+        </StatCard>
+      </div>
+
+      <div>
+        <h3 className="mb-3 font-medium">What&apos;s inside</h3>
+        <div className="overflow-hidden rounded-3xl border bg-muted/35">
+          {[
+            "Requirement coverage",
+            "Proposed movements",
+            "Affected companies",
+            "Employee impact",
+          ].map((item) => (
+            <div
+              key={item}
+              className="flex items-center justify-between border-b px-4 py-3 last:border-b-0"
+            >
+              <span>{item}</span>
+              <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <Alert>
+        <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
+        <AlertTitle>Nothing has been sent yet</AlertTitle>
+        <AlertDescription>
+          Requests will only be sent after you start the move request from the draft
+          plan page.
+        </AlertDescription>
+      </Alert>
+    </section>
+  )
+}
+
+function MinimumRequirementsTable({ project }: { project: Project }) {
+  return (
+    <div className="overflow-hidden rounded-3xl border bg-muted/35">
+      <div className="border-b px-4 py-3 font-medium">Minimum requirements</div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Skill</TableHead>
+            <TableHead>Requirement</TableHead>
+            <TableHead className="text-right">People</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {skillKeys.map((skill) => {
+            const requirement = project.required_skills[skill]
+            const total = getRequirementTotal(requirement)
+
+            return (
+              <TableRow key={skill}>
+                <TableCell>{skillLabels[skill]}</TableCell>
+                <TableCell>
+                  {total > 0 ? (
+                    <RequirementBadges requirement={requirement} />
+                  ) : (
+                    <span className="text-muted-foreground">Not required</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  {total > 0 ? `${total} ${total === 1 ? "person" : "people"}` : "—"}
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  )
+}
+
+function RequirementBadges({ requirement }: { requirement: ProjectSkillRequirement }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {([1, 2, 3] as const).map((level) => {
+        const count = requirement[`level_${level}`]
+        return count > 0 ? (
+          <Badge
+            key={level}
+            variant="outline"
+            className="border-green-500/25 bg-green-500/10 text-green-700 dark:text-green-300"
+          >
+            L{level} x {count}
+          </Badge>
+        ) : null
+      })}
+    </div>
+  )
+}
+
+function StepHeading({
+  title,
+  description,
+}: {
+  title: string
+  description: string
+}) {
+  return (
+    <div>
+      <h2 className="text-2xl font-semibold tracking-tight">{title}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+    </div>
+  )
+}
+
+function FieldLabel({ children }: { children: ReactNode }) {
+  return <p className="text-sm font-medium">{children}</p>
+}
+
+function ReadOnlyField({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-3xl border bg-input/40 px-3 py-2 text-sm">{children}</div>
+  )
+}
+
+function ConstraintRow({
+  label,
+  enabled,
+  value,
+}: {
+  label: string
+  enabled: boolean
+  value?: string
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b px-4 py-3 last:border-b-0">
+      <span>{label}</span>
+      <Badge
+        variant="outline"
+        className={
+          enabled
+            ? "border-green-500/25 bg-green-500/10 text-green-700 dark:text-green-300"
+            : "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300"
+        }
+      >
+        {value ?? (enabled ? "On" : "Off")}
+      </Badge>
+    </div>
+  )
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[10rem_minmax(0,1fr)] gap-4 border-b py-3 last:border-b-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm">{value}</span>
+    </div>
+  )
+}
+
+function StatCard({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="rounded-3xl border bg-muted/35 p-4">
+      <p className="mb-2 text-sm text-muted-foreground">{label}</p>
+      {children}
+    </div>
+  )
+}
+
+function ProjectSelectOption({ project }: { project: Project }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <Avatar className="size-6">
+        <AvatarImage src={project.icon_url} alt="" />
+        <AvatarFallback className="text-[0.625rem]">
+          {getInitials(project.project_name)}
+        </AvatarFallback>
+      </Avatar>
+      <span className="min-w-0 truncate">{project.project_name}</span>
+    </span>
+  )
+}
+
+function getRequiredSkillCount(project: Project) {
+  return skillKeys.filter((skill) => getRequirementTotal(project.required_skills[skill]) > 0)
+    .length
+}
+
+function getSuggestionCoveragePercent(suggestion: MatchingRunResponse["suggestions"][number]) {
+  const skillGapTotal = Object.values(suggestion.impact.target_skill_gap ?? {}).reduce(
+    (sum, gap) => sum + Math.max(0, Number(gap ?? 0)),
+    0
+  )
+
+  return suggestion.impact.target_headcount_gap === 0 && skillGapTotal === 0 ? 100 : 75
+}
+
+function impactRank(impact: "low" | "medium" | "high") {
+  const ranks = { low: 1, medium: 2, high: 3 }
+  return ranks[impact]
+}
+
+function getInitials(value: string) {
+  return value
+    .split(" ")
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase()
+}

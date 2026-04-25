@@ -82,6 +82,22 @@ export type MovePlan = {
   employeeImpacts: EmployeeTransitionImpact[]
 }
 
+export type MatchingCreateFlowMetadata = {
+  planName?: string
+  goal?: string
+  targetProjectId?: number
+  targetProjectName?: string
+  policyId?: number
+  policyName?: string
+  candidatePool?: string
+  moveTiming?: string
+  impactTolerance?: string
+  avoidBreakingMinimums?: boolean
+  preferLowerTransitionEffort?: boolean
+  preferFewerMoves?: boolean
+  createdAt?: string
+}
+
 export const skillLabels: Record<SkillKey, string> = {
   android: "Android",
   ios: "iOS",
@@ -228,12 +244,17 @@ function buildPlanFromRecommendation({
   const requests = uniqueRequests(
     movements.map((movement) => movement.request).filter(Boolean) as MoveRequest[]
   )
+  const metadata = getCreateFlowMetadata(bundle.run)
 
   return completePlan({
     id: `run-${bundle.run.id}-${recommendation.candidate_plan_id}`,
     origin: "recommendation",
-    title: `Staff ${targetProject.project_name}`,
-    summary: recommendation.summary || bundle.run.summary || "Generated matching plan.",
+    title: metadata?.planName || `Staff ${targetProject.project_name}`,
+    summary:
+      metadata?.goal ||
+      recommendation.summary ||
+      bundle.run.summary ||
+      "Generated matching plan.",
     targetProject,
     run: bundle.run,
     recommendation,
@@ -242,6 +263,18 @@ function buildPlanFromRecommendation({
     movements,
     employeeById,
   })
+}
+
+export function getCreateFlowMetadata(
+  run: MatchingRun | null
+): MatchingCreateFlowMetadata | null {
+  const metadata = run?.input_snapshot?.matching_create_flow
+
+  if (!metadata || typeof metadata !== "object") {
+    return null
+  }
+
+  return metadata as MatchingCreateFlowMetadata
 }
 
 function buildPlansFromUnmatchedRequests({

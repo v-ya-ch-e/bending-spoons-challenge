@@ -812,6 +812,30 @@ def test_database_health_success_and_failure(client: TestClient, monkeypatch: py
     assert response.json() == {"detail": "Database connection failed"}
 
 
+def test_database_connection_errors_return_503(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        api,
+        "get_database_settings",
+        lambda: api.DatabaseSettings(
+            host="database.example",
+            port=3306,
+            database="app",
+            user="app",
+            password="secret",
+        ),
+    )
+
+    def failing_connect(**_kwargs: object) -> None:
+        raise pymysql.err.OperationalError(2003, "connection timed out")
+
+    monkeypatch.setattr(api.pymysql, "connect", failing_connect)
+
+    response = TestClient(api.app).get("/policies")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Database connection failed."}
+
+
 def test_project_crud_and_validation(client: TestClient) -> None:
     create_response = client.post("/projects", json=project_payload())
     assert create_response.status_code == 201

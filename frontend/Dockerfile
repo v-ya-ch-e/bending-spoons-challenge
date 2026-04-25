@@ -1,9 +1,11 @@
+# syntax=docker/dockerfile:1.7
+
 FROM node:22-alpine AS deps
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 FROM node:22-alpine AS builder
 
@@ -19,7 +21,9 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     DB_API_BASE_URL=${DB_API_BASE_URL} \
     BACKEND_API_BASE_URL=${BACKEND_API_BASE_URL}
 
-RUN npm run build
+RUN --mount=type=cache,target=/root/.npm \
+    --mount=type=cache,target=/app/.next/cache \
+    npm run build
 
 FROM node:22-alpine AS runner
 

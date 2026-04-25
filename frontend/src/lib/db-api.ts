@@ -146,6 +146,23 @@ export type MatchingRun = {
   completed_at: string | null
 }
 
+export type MatchingRunUpdateInput = Partial<{
+  use_case: MatchingRunUseCase
+  target_project_id: number | null
+  status: MatchingRunStatus
+  requested_by: string | null
+  rule_config: Record<string, unknown>
+  input_snapshot: Record<string, unknown> | null
+  candidate_count: number
+  recommendation_count: number
+  hiring_recommendation_count: number
+  selected_candidate_plan_id: string | null
+  summary: string | null
+  error_message: string | null
+  started_at: string | null
+  completed_at: string | null
+}>
+
 export type MatchingCandidateMove = {
   employee_id: number
   from_project_id: number | null
@@ -593,6 +610,20 @@ export function getActiveMatchingPolicy() {
 
 export function listMatchingRuns() {
   return fetchDbApi<MatchingRun[]>("/matching-runs?limit=500")
+}
+
+export function getMatchingRun(runId: number) {
+  return fetchDbApi<MatchingRun>(`/matching-runs/${runId}`)
+}
+
+export function updateMatchingRun(runId: number, run: MatchingRunUpdateInput) {
+  return fetchDbApi<MatchingRun>(`/matching-runs/${runId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(run),
+  })
 }
 
 export function listMatchingCandidates(runId: number) {
