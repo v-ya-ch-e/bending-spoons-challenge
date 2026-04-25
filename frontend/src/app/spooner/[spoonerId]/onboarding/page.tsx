@@ -4,15 +4,15 @@ import { TransitionInstructionScreen } from "@/components/transitions/transition
 
 type EmployeeOnboardingPageProps = {
   params: Promise<{
-    spoonerSlug: string
+    spoonerId: string
   }>
 }
 
 export default async function EmployeeOnboardingPage({
   params,
 }: EmployeeOnboardingPageProps) {
-  const { spoonerSlug } = await params
-  const employeeId = parsePositiveInt(spoonerSlug)
+  const { spoonerId } = await params
+  const employeeId = parsePositiveInt(spoonerId)
 
   if (employeeId === null) {
     notFound()

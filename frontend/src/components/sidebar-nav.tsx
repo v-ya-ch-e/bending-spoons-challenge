@@ -17,6 +17,7 @@ import {
 } from "@hugeicons/core-free-icons"
 
 import type { AppRole, RoleWorkspace } from "@/data/mock-navigation"
+import type { Employee } from "@/lib/db-api"
 import type { ThemeMode } from "@/lib/ui-preferences"
 import {
   Tooltip,
@@ -40,6 +41,9 @@ type SidebarNavProps = {
   collapsed: boolean
   themeMode: ThemeMode
   onThemeModeChange: (mode: ThemeMode) => void
+  spoonerId: number | null
+  spoonerOptions: Employee[]
+  onSpoonerChange: (id: number) => void
 }
 
 const navIcons = {
@@ -64,6 +68,9 @@ export function SidebarNav({
   collapsed,
   themeMode,
   onThemeModeChange,
+  spoonerId,
+  spoonerOptions,
+  onSpoonerChange,
 }: SidebarNavProps) {
   return (
     <aside
@@ -205,6 +212,9 @@ export function SidebarNav({
           compact={collapsed}
           themeMode={themeMode}
           onThemeModeChange={onThemeModeChange}
+          spoonerId={spoonerId}
+          spoonerOptions={spoonerOptions}
+          onSpoonerChange={onSpoonerChange}
         />
       </div>
     </aside>
