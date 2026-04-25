@@ -1,9 +1,19 @@
 services:
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    restart: unless-stopped
+
   db-rest-api:
     build:
       context: ./db-rest-api
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       ROOT_PATH: /db-api
       APP_VERSION: "0.1.0"

@@ -1,3 +1,31 @@
+# Backend Agent Guidelines
+
+This file defines backend-specific guidance for AI/code agents working in `backend/`.
+It extends root guidance in [`../CLAUDE.md`](../CLAUDE.md).
+
+## Current Status
+
+Backend scope is currently lightweight and not yet fully documented.
+When making backend changes, prefer minimal, well-scoped increments tied directly to
+frontend/demo needs.
+
+## Execution Rules
+
+- Implement only what is required for the current task.
+- Keep APIs simple and explicit; avoid premature abstraction layers.
+- Prefer deterministic mock/seed behavior when full infrastructure is not required.
+- Add concise documentation for any new endpoint/service you introduce.
+
+## Safety and Maintainability
+
+- Validate assumptions before adding data models or integration logic.
+- Do not introduce broad architectural refactors unless explicitly requested.
+- Keep interfaces stable and easy for frontend consumers to understand.
+
+## Verification
+
+- Define a clear verification path for every change (request/response examples, tests, or both).
+- If tests are added, keep them focused on behavior changed by your task only.
 # Backend — Agent Notes
 
 Project-specific context for the Atlas backend. The root [CLAUDE.md](../CLAUDE.md) defines general behavioral rules; this file is the backend-only reference. The product brief is in [docs/bending_spoons_internal_platform_brief.md](../docs/bending_spoons_internal_platform_brief.md).
