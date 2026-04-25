@@ -3,7 +3,8 @@ CREATE TABLE IF NOT EXISTS projects (
     project_name VARCHAR(255) NOT NULL UNIQUE,
     project_description TEXT NOT NULL,
     project_phase ENUM('new acquisition', 'growth', 'maintenance') NOT NULL,
-    current_team_members JSON NOT NULL,
+    icon_url VARCHAR(2048) NOT NULL,
+    poster_url VARCHAR(2048) NOT NULL,
     required_people_amount INT NOT NULL,
     required_skills JSON NOT NULL,
     github_repositories JSON NOT NULL
@@ -13,10 +14,17 @@ CREATE TABLE IF NOT EXISTS employees (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     role VARCHAR(255) NOT NULL,
-    current_project VARCHAR(255),
     skills JSON NOT NULL,
     preferences JSON NOT NULL,
     interests JSON NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS project_assignments (
+    employee_id INT NOT NULL,
+    project_id INT NOT NULL,
+    PRIMARY KEY (employee_id, project_id),
+    FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS move_requests (

@@ -41,12 +41,13 @@ docs/
 
 The `fixtures/` directory is created on first run by the generator.
 
-## Schema (three tables)
+## Schema (four tables)
 
 The schema mirrors only what the brief explicitly names. Do not add tables for workflows the brief does not describe.
 
-- `projects`: `project_name`, `project_description`, `project_phase` (enum: `new acquisition`, `growth`, `maintenance`), `current_team_members` JSON, `required_people_amount`, `required_skills` JSON, `github_repositories` JSON.
-- `employees`: `name`, `role`, `current_project`, `skills` JSON, `preferences` JSON, `interests` JSON.
+- `projects`: `project_name`, `project_description`, `project_phase` (enum: `new acquisition`, `growth`, `maintenance`), `icon_url`, `poster_url`, `required_people_amount`, `required_skills` JSON, `github_repositories` JSON.
+- `employees`: `name`, `role`, `skills` JSON, `preferences` JSON, `interests` JSON.
+- `project_assignments`: `employee_id` FK, `project_id` FK, with composite primary key. This is the source of truth for current staffing.
 - `move_requests`: `employee_id` FK, `from_project_id` FK (nullable), `to_project_id` FK, `reason`, `expected_role`, `current_project_impact` enum, `status` enum (`pending`, `accepted`, `rejected`, `clarification_requested`), `created_at`, `responded_at` (nullable).
 
 ### Skill JSON keys (do not change)
@@ -59,9 +60,9 @@ The brief defines six skill categories. Both `employees.skills` and `projects.re
 
 Levels are integers 0-3 as defined in the brief.
 
-### Why join data lives in JSON columns
+### Project assignment source of truth
 
-`employees.current_project` is a string and `projects.current_team_members` is a JSON array of names rather than a join table. This is intentional for the hackathon scope: the brief models them as plain fields, and a join table would add ceremony without unlocking any demo functionality. If a future feature needs assignment history or per-assignment metadata, introduce a `project_assignments` table then, not before.
+`project_assignments` stores employee/project membership by ID. API responses may expose legacy name aliases such as `current_project` and `current_team_members`, but those values must be derived from the join table rather than stored independently.
 
 ## Scripts
 
@@ -71,24 +72,25 @@ All three scripts read environment variables via `python-dotenv`. They expect `D
 
 Applies [db/schema.sql](db/schema.sql) to the configured database. Statements use `CREATE TABLE IF NOT EXISTS`, so reruns are safe.
 
-- `--reset`: drops `move_requests`, `employees`, and `projects` (in FK-safe order with `FOREIGN_KEY_CHECKS = 0`) before recreating them. Use this for a fresh demo state.
+- `--reset`: drops `move_requests`, `project_assignments`, `employees`, and `projects` (in FK-safe order with `FOREIGN_KEY_CHECKS = 0`) before recreating them. Use this for a fresh demo state.
 
 ### `generate_fixtures.py`
 
 Calls the OpenAI Chat Completions `parse()` helper with Pydantic models so the response is validated against the schema before being deserialized.
 
-- Model selection comes from `OPENAI_MODEL` (defaults to `gpt-4o-mini`).
+- Model selection comes from `OPENAI_MODEL` (defaults to `gpt-4o-mini`) or `--model`.
+- Default dataset size is 20 employees, 8 curated real-product projects, and 12 move requests. Override with `--employees`, `--projects`, and `--move-requests`.
 - The Pydantic models in this script are the canonical fixture schema: `Skills`, `Employee`, `Project`, `MoveRequest`, `SeedData`. If you change the SQL schema, update these models in lockstep.
-- After parsing, `validate_cross_references()` ensures every `current_project`, `current_team_members` entry, and move-request name reference resolves, and that all four `move_requests.status` values appear at least once. Failures exit with a non-zero code.
+- After parsing, `normalize_seed_data()` normalizes employee `current_projects` and move-request sources, then `validate_seed_data()` ensures expected counts, every assignment, preference, and move-request reference resolves, every project has at least one member, all project phases appear, and all four `move_requests.status` values appear at least once. Failures retry up to `--attempts`, then exit with a non-zero code.
 - Output path is `--output` (default: `db-rest-api/fixtures/seed_data.json`).
 
 When editing the prompt, keep the hard requirements section authoritative. The prompt is what enforces the brief's enum values and the six skill keys at generation time, even though Pydantic also enforces them at parse time.
 
 ### `load_fixtures.py`
 
-Reads the fixture JSON and inserts in dependency order: `projects` -> `employees` -> `move_requests`.
+Reads the fixture JSON and inserts in dependency order: `projects` -> `employees` -> `project_assignments` -> `move_requests`.
 
-- Names are resolved to numeric IDs at insert time using maps built from `cursor.lastrowid` after each project/employee insert.
+- Employee assignment names and move-request names are resolved to numeric IDs at insert time using maps built from `cursor.lastrowid` after each project/employee insert.
 - All inserts run in a single transaction; any failure rolls back.
 - Re-runs require `init_db.py --reset` first because `name`/`project_name` are unique columns.
 
@@ -97,6 +99,7 @@ Reads the fixture JSON and inserts in dependency order: `projects` -> `employees
 - Keep scripts as plain executable modules (`if __name__ == "__main__"`). Do not introduce a CLI framework or package layout unless asked.
 - Use `json.dumps(...)` when writing into a `JSON` column. `mysql-connector-python` does not auto-serialize dicts/lists.
 - Treat `seed_data.json` as the contract between generation and loading. Adding a column means: update SQL -> update Pydantic model -> update generator prompt -> update loader insert.
+- Treat `db/schema.sql` as the required source of truth for database structure. Any table, column, enum, index, foreign-key, or JSON-shape change must update this file in the same change.
 - Keep `../docs/DB_API_DOCUMENTATION.md` up to date after every DB schema or public API change, including changes to fields, enums, payload shapes, endpoint behavior, error behavior, or foreign-key side effects.
 - Always run `python3 -m pytest db-rest-api/tests` at the end of changes that touch `db-rest-api`, and add or update tests when adding functionality or changing API/schema behavior.
 - Do not commit `.env`. The repo `.gitignore` already excludes it.

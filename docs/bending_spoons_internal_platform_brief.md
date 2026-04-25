@@ -33,15 +33,15 @@ Key capabilities:
 
 ### 2. Employees
 
-The employee view helps each person understand their current assignment, see project move requests, accept or reject reassignment proposals, and receive structured onboarding/offboarding todos.
+The employee view helps each person understand their current assignments, see project move requests, accept or reject reassignment proposals, and receive structured onboarding/offboarding todos.
 
 Key capabilities:
 
-- See current project and role.
+- See current projects and roles.
 - See pending requests to move to another project.
 - Accept or reject move requests.
 - View generated onboarding todos for the new project.
-- View generated offboarding todos for the current project.
+- View generated offboarding todos for the affected current project.
 - Access all relevant project resources: GitHub repos, Notion docs, Slack channels, ownership notes, architecture docs, runbooks, and project context.
 - Eventually trigger automations such as requesting Slack channel access or adding the employee to project resources.
 
@@ -80,7 +80,7 @@ Employee profile data:
 
 - Name.
 - Role.
-- Current project.
+- Current projects.
 - Skills and capabilities, using the core skill categories and level scale below.
 - Preferences (top3 preferred projects)
 - Interests.
@@ -151,7 +151,7 @@ Inputs:
 - Employee interests.
 - Previous project/domain experience.
 - GitHub/Notion/Slack activity signals.
-- Risk of moving someone away from their current project.
+- Risk of moving someone away from one of their current projects.
 
 Outputs:
 
@@ -208,17 +208,17 @@ The employee view should make transitions clear and useful, not bureaucratic.
 
 Core screens:
 
-- Current project overview.
+- Current projects overview.
 - Pending project move request.
 - Accept/reject request action.
 - Onboarding todos for the new project.
-- Offboarding todos for the current project.
+- Offboarding todos for the affected current project.
 - Project resources page.
 - Generated documentation pack.
 
 Example employee move request:
 
-> You have been requested to join the Eventbrite Integration project for 6 weeks.
+> You have been requested to join the Eventbrite project for 6 weeks.
 >
 > Reason: Your recent work on subscription systems and backend reliability makes you a strong fit.
 >

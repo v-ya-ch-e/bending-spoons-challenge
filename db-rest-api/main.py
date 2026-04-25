@@ -70,21 +70,26 @@ class ProjectBase(ApiModel):
     project_name: str = Field(min_length=1, max_length=255)
     project_description: str = Field(min_length=1)
     project_phase: ProjectPhase
-    current_team_members: list[str]
+    icon_url: str = Field(min_length=1, max_length=2048, pattern=r"^https://")
+    poster_url: str = Field(min_length=1, max_length=2048, pattern=r"^https://")
     required_people_amount: int = Field(ge=0)
     required_skills: Skills
     github_repositories: list[str]
 
 
 class ProjectCreate(ProjectBase):
-    pass
+    current_team_member_ids: list[int] | None = None
+    current_team_members: list[str] | None = None
 
 
 class ProjectUpdate(UpdateModel):
     project_name: str = Field(default=None, min_length=1, max_length=255)
     project_description: str = Field(default=None, min_length=1)
     project_phase: ProjectPhase = None
-    current_team_members: list[str] = None
+    icon_url: str = Field(default=None, min_length=1, max_length=2048, pattern=r"^https://")
+    poster_url: str = Field(default=None, min_length=1, max_length=2048, pattern=r"^https://")
+    current_team_member_ids: list[int] | None = None
+    current_team_members: list[str] | None = None
     required_people_amount: int = Field(default=None, ge=0)
     required_skills: Skills = None
     github_repositories: list[str] = None
@@ -92,24 +97,27 @@ class ProjectUpdate(UpdateModel):
 
 class Project(ProjectBase):
     id: int
+    current_team_member_ids: list[int]
+    current_team_members: list[str]
 
 
 class EmployeeBase(ApiModel):
     name: str = Field(min_length=1, max_length=255)
     role: str = Field(min_length=1, max_length=255)
-    current_project: str | None = Field(default=None, max_length=255)
     skills: Skills
     preferences: list[str]
     interests: list[str]
 
 
 class EmployeeCreate(EmployeeBase):
-    pass
+    current_project_ids: list[int] | None = None
+    current_project: str | None = Field(default=None, max_length=255)
 
 
 class EmployeeUpdate(UpdateModel):
     name: str = Field(default=None, min_length=1, max_length=255)
     role: str = Field(default=None, min_length=1, max_length=255)
+    current_project_ids: list[int] | None = None
     current_project: str | None = Field(default=None, max_length=255)
     skills: Skills = None
     preferences: list[str] = None
@@ -118,6 +126,9 @@ class EmployeeUpdate(UpdateModel):
 
 class Employee(EmployeeBase):
     id: int
+    current_project_ids: list[int]
+    current_project_names: list[str]
+    current_project: str | None
 
 
 class MoveRequestCreate(ApiModel):
@@ -250,17 +261,45 @@ def execute_or_raise(cursor: DictCursor, sql: str, params: Sequence[Any] = ()) -
         raise map_database_error(exc) from exc
 
 
-def serialize_project(row: dict[str, Any]) -> dict[str, Any]:
+def unique_int_ids(values: list[int]) -> list[int]:
+    unique_values: list[int] = []
+    seen = set()
+    for value in values:
+        if value <= 0:
+            raise HTTPException(status_code=422, detail="Project and employee IDs must be positive.")
+        if value in seen:
+            continue
+        unique_values.append(value)
+        seen.add(value)
+    return unique_values
+
+
+def serialize_project(
+    row: dict[str, Any],
+    current_team_member_ids: list[int] | None = None,
+    current_team_members: list[str] | None = None,
+) -> dict[str, Any]:
     project = dict(row)
-    for column in ("current_team_members", "required_skills", "github_repositories"):
+    for column in ("required_skills", "github_repositories"):
         project[column] = parse_json_column(project[column])
+    project["current_team_member_ids"] = current_team_member_ids or []
+    project["current_team_members"] = current_team_members or []
     return project
 
 
-def serialize_employee(row: dict[str, Any]) -> dict[str, Any]:
+def serialize_employee(
+    row: dict[str, Any],
+    current_project_ids: list[int] | None = None,
+    current_project_names: list[str] | None = None,
+) -> dict[str, Any]:
     employee = dict(row)
     for column in ("skills", "preferences", "interests"):
         employee[column] = parse_json_column(employee[column])
+    project_ids = current_project_ids or []
+    project_names = current_project_names or []
+    employee["current_project_ids"] = project_ids
+    employee["current_project_names"] = project_names
+    employee["current_project"] = project_names[0] if project_names else None
     return employee
 
 
@@ -268,12 +307,45 @@ def serialize_move_request(row: dict[str, Any]) -> dict[str, Any]:
     return dict(row)
 
 
+def fetch_project_assignments(cursor: DictCursor, project_id: int) -> tuple[list[int], list[str]]:
+    execute_or_raise(
+        cursor,
+        """
+        SELECT employee.id, employee.name
+        FROM project_assignments AS assignment
+        INNER JOIN employees AS employee ON employee.id = assignment.employee_id
+        WHERE assignment.project_id = %s
+        ORDER BY employee.id
+        """,
+        (project_id,),
+    )
+    rows = cursor.fetchall()
+    return [row["id"] for row in rows], [row["name"] for row in rows]
+
+
+def fetch_employee_assignments(cursor: DictCursor, employee_id: int) -> tuple[list[int], list[str]]:
+    execute_or_raise(
+        cursor,
+        """
+        SELECT project.id, project.project_name
+        FROM project_assignments AS assignment
+        INNER JOIN projects AS project ON project.id = assignment.project_id
+        WHERE assignment.employee_id = %s
+        ORDER BY project.id
+        """,
+        (employee_id,),
+    )
+    rows = cursor.fetchall()
+    return [row["id"] for row in rows], [row["project_name"] for row in rows]
+
+
 def fetch_project(cursor: DictCursor, project_id: int) -> dict[str, Any]:
     execute_or_raise(cursor, "SELECT * FROM projects WHERE id = %s", (project_id,))
     row = cursor.fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Project not found.")
-    return serialize_project(row)
+    member_ids, member_names = fetch_project_assignments(cursor, project_id)
+    return serialize_project(row, member_ids, member_names)
 
 
 def fetch_employee(cursor: DictCursor, employee_id: int) -> dict[str, Any]:
@@ -281,7 +353,34 @@ def fetch_employee(cursor: DictCursor, employee_id: int) -> dict[str, Any]:
     row = cursor.fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Employee not found.")
-    return serialize_employee(row)
+    project_ids, project_names = fetch_employee_assignments(cursor, employee_id)
+    return serialize_employee(row, project_ids, project_names)
+
+
+def resolve_employee_ids(cursor: DictCursor, employee_names: list[str] | None) -> list[int]:
+    if employee_names is None:
+        return []
+    employee_ids: list[int] = []
+    for employee_name in employee_names:
+        execute_or_raise(cursor, "SELECT id FROM employees WHERE name = %s", (employee_name,))
+        row = cursor.fetchone()
+        if row is None:
+            raise HTTPException(status_code=400, detail=f"Unknown employee name: {employee_name}")
+        employee_ids.append(row["id"])
+    return unique_int_ids(employee_ids)
+
+
+def resolve_project_ids(cursor: DictCursor, project_names: list[str] | None) -> list[int]:
+    if project_names is None:
+        return []
+    project_ids: list[int] = []
+    for project_name in project_names:
+        execute_or_raise(cursor, "SELECT id FROM projects WHERE project_name = %s", (project_name,))
+        row = cursor.fetchone()
+        if row is None:
+            raise HTTPException(status_code=400, detail=f"Unknown project name: {project_name}")
+        project_ids.append(row["id"])
+    return unique_int_ids(project_ids)
 
 
 MOVE_REQUEST_SELECT = """
@@ -327,9 +426,37 @@ def update_fields_sql(payload: dict[str, Any]) -> tuple[str, list[Any]]:
     return assignments, list(payload.values())
 
 
+def extract_project_member_ids(cursor: DictCursor, payload: dict[str, Any]) -> list[int] | None:
+    missing = object()
+    member_ids = payload.pop("current_team_member_ids", missing)
+    member_names = payload.pop("current_team_members", missing)
+    if member_ids is not missing:
+        if member_ids is None:
+            return []
+        return unique_int_ids(member_ids)
+    if member_names is not missing:
+        return resolve_employee_ids(cursor, member_names)
+    return None
+
+
+def extract_employee_project_ids(cursor: DictCursor, payload: dict[str, Any]) -> list[int] | None:
+    missing = object()
+    project_ids = payload.pop("current_project_ids", missing)
+    current_project = payload.pop("current_project", missing)
+    if project_ids is not missing:
+        if project_ids is None:
+            return []
+        return unique_int_ids(project_ids)
+    if current_project is not missing:
+        if current_project is None:
+            return []
+        return resolve_project_ids(cursor, [current_project])
+    return None
+
+
 def project_payload(payload: dict[str, Any]) -> dict[str, Any]:
     prepared = dict(payload)
-    for column in ("current_team_members", "required_skills", "github_repositories"):
+    for column in ("required_skills", "github_repositories"):
         if column in prepared:
             prepared[column] = json_column(prepared[column])
     return prepared
@@ -352,6 +479,34 @@ def move_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
             else datetime.now(UTC).replace(tzinfo=None)
         )
     return prepared
+
+
+def sync_project_members(cursor: DictCursor, project_id: int, employee_ids: list[int]) -> None:
+    execute_or_raise(
+        cursor,
+        "DELETE FROM project_assignments WHERE project_id = %s",
+        (project_id,),
+    )
+    for employee_id in employee_ids:
+        execute_or_raise(
+            cursor,
+            "INSERT INTO project_assignments (employee_id, project_id) VALUES (%s, %s)",
+            (employee_id, project_id),
+        )
+
+
+def sync_employee_projects(cursor: DictCursor, employee_id: int, project_ids: list[int]) -> None:
+    execute_or_raise(
+        cursor,
+        "DELETE FROM project_assignments WHERE employee_id = %s",
+        (employee_id,),
+    )
+    for project_id in project_ids:
+        execute_or_raise(
+            cursor,
+            "INSERT INTO project_assignments (employee_id, project_id) VALUES (%s, %s)",
+            (employee_id, project_id),
+        )
 
 app = FastAPI(
     title="DB REST API",
@@ -415,22 +570,37 @@ def list_projects(
                 "SELECT * FROM projects ORDER BY id LIMIT %s OFFSET %s",
                 (limit, offset),
             )
-            return [serialize_project(row) for row in cursor.fetchall()]
+            projects = []
+            for row in cursor.fetchall():
+                member_ids, member_names = fetch_project_assignments(cursor, row["id"])
+                projects.append(serialize_project(row, member_ids, member_names))
+            return projects
 
 
 @app.post("/projects", response_model=Project, status_code=status.HTTP_201_CREATED)
 def create_project(project: ProjectCreate) -> dict[str, Any]:
-    payload = project_payload(model_payload(project))
-    columns = ", ".join(payload)
-    placeholders = ", ".join(["%s"] * len(payload))
+    payload = model_payload(project, exclude_unset=True)
     with open_db_connection() as connection:
         with connection.cursor() as cursor:
-            execute_or_raise(
-                cursor,
-                f"INSERT INTO projects ({columns}) VALUES ({placeholders})",
-                list(payload.values()),
-            )
-            return fetch_project(cursor, cursor.lastrowid)
+            try:
+                connection.begin()
+                member_ids = extract_project_member_ids(cursor, payload) or []
+                storage_payload = project_payload(payload)
+                columns = ", ".join(storage_payload)
+                placeholders = ", ".join(["%s"] * len(storage_payload))
+                execute_or_raise(
+                    cursor,
+                    f"INSERT INTO projects ({columns}) VALUES ({placeholders})",
+                    list(storage_payload.values()),
+                )
+                project_id = cursor.lastrowid
+                sync_project_members(cursor, project_id, member_ids)
+                created_project = fetch_project(cursor, project_id)
+                connection.commit()
+                return created_project
+            except Exception:
+                connection.rollback()
+                raise
 
 
 @app.get("/projects/{project_id}", response_model=Project)
@@ -442,16 +612,28 @@ def get_project(project_id: int) -> dict[str, Any]:
 
 @app.put("/projects/{project_id}", response_model=Project)
 def update_project(project_id: int, project: ProjectUpdate) -> dict[str, Any]:
-    payload = project_payload(model_payload(project, exclude_unset=True))
-    assignments, values = update_fields_sql(payload)
+    payload = model_payload(project, exclude_unset=True)
     with open_db_connection() as connection:
         with connection.cursor() as cursor:
-            execute_or_raise(
-                cursor,
-                f"UPDATE projects SET {assignments} WHERE id = %s",
-                [*values, project_id],
-            )
-            return fetch_project(cursor, project_id)
+            try:
+                connection.begin()
+                member_ids = extract_project_member_ids(cursor, payload)
+                storage_payload = project_payload(payload)
+                if storage_payload:
+                    assignments, values = update_fields_sql(storage_payload)
+                    execute_or_raise(
+                        cursor,
+                        f"UPDATE projects SET {assignments} WHERE id = %s",
+                        [*values, project_id],
+                    )
+                if member_ids is not None:
+                    sync_project_members(cursor, project_id, member_ids)
+                updated_project = fetch_project(cursor, project_id)
+                connection.commit()
+                return updated_project
+            except Exception:
+                connection.rollback()
+                raise
 
 
 @app.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -476,22 +658,37 @@ def list_employees(
                 "SELECT * FROM employees ORDER BY id LIMIT %s OFFSET %s",
                 (limit, offset),
             )
-            return [serialize_employee(row) for row in cursor.fetchall()]
+            employees = []
+            for row in cursor.fetchall():
+                project_ids, project_names = fetch_employee_assignments(cursor, row["id"])
+                employees.append(serialize_employee(row, project_ids, project_names))
+            return employees
 
 
 @app.post("/employees", response_model=Employee, status_code=status.HTTP_201_CREATED)
 def create_employee(employee: EmployeeCreate) -> dict[str, Any]:
-    payload = employee_payload(model_payload(employee))
-    columns = ", ".join(payload)
-    placeholders = ", ".join(["%s"] * len(payload))
+    payload = model_payload(employee, exclude_unset=True)
     with open_db_connection() as connection:
         with connection.cursor() as cursor:
-            execute_or_raise(
-                cursor,
-                f"INSERT INTO employees ({columns}) VALUES ({placeholders})",
-                list(payload.values()),
-            )
-            return fetch_employee(cursor, cursor.lastrowid)
+            try:
+                connection.begin()
+                project_ids = extract_employee_project_ids(cursor, payload) or []
+                storage_payload = employee_payload(payload)
+                columns = ", ".join(storage_payload)
+                placeholders = ", ".join(["%s"] * len(storage_payload))
+                execute_or_raise(
+                    cursor,
+                    f"INSERT INTO employees ({columns}) VALUES ({placeholders})",
+                    list(storage_payload.values()),
+                )
+                employee_id = cursor.lastrowid
+                sync_employee_projects(cursor, employee_id, project_ids)
+                created_employee = fetch_employee(cursor, employee_id)
+                connection.commit()
+                return created_employee
+            except Exception:
+                connection.rollback()
+                raise
 
 
 @app.get("/employees/{employee_id}", response_model=Employee)
@@ -503,16 +700,28 @@ def get_employee(employee_id: int) -> dict[str, Any]:
 
 @app.put("/employees/{employee_id}", response_model=Employee)
 def update_employee(employee_id: int, employee: EmployeeUpdate) -> dict[str, Any]:
-    payload = employee_payload(model_payload(employee, exclude_unset=True))
-    assignments, values = update_fields_sql(payload)
+    payload = model_payload(employee, exclude_unset=True)
     with open_db_connection() as connection:
         with connection.cursor() as cursor:
-            execute_or_raise(
-                cursor,
-                f"UPDATE employees SET {assignments} WHERE id = %s",
-                [*values, employee_id],
-            )
-            return fetch_employee(cursor, employee_id)
+            try:
+                connection.begin()
+                project_ids = extract_employee_project_ids(cursor, payload)
+                storage_payload = employee_payload(payload)
+                if storage_payload:
+                    assignments, values = update_fields_sql(storage_payload)
+                    execute_or_raise(
+                        cursor,
+                        f"UPDATE employees SET {assignments} WHERE id = %s",
+                        [*values, employee_id],
+                    )
+                if project_ids is not None:
+                    sync_employee_projects(cursor, employee_id, project_ids)
+                updated_employee = fetch_employee(cursor, employee_id)
+                connection.commit()
+                return updated_employee
+            except Exception:
+                connection.rollback()
+                raise
 
 
 @app.delete("/employees/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)

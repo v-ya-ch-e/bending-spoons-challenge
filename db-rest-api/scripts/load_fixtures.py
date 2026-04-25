@@ -44,9 +44,9 @@ def insert_projects(cursor, projects: list[dict[str, Any]]) -> dict[str, int]:
     sql = """
         INSERT INTO projects (
             project_name, project_description, project_phase,
-            current_team_members, required_people_amount,
+            icon_url, poster_url, required_people_amount,
             required_skills, github_repositories
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """
     name_to_id: dict[str, int] = {}
     for project in projects:
@@ -56,7 +56,8 @@ def insert_projects(cursor, projects: list[dict[str, Any]]) -> dict[str, int]:
                 project["project_name"],
                 project["project_description"],
                 project["project_phase"],
-                json.dumps(project["current_team_members"]),
+                project["icon_url"],
+                project["poster_url"],
                 project["required_people_amount"],
                 json.dumps(project["required_skills"]),
                 json.dumps(project["github_repositories"]),
@@ -69,8 +70,8 @@ def insert_projects(cursor, projects: list[dict[str, Any]]) -> dict[str, int]:
 def insert_employees(cursor, employees: list[dict[str, Any]]) -> dict[str, int]:
     sql = """
         INSERT INTO employees (
-            name, role, current_project, skills, preferences, interests
-        ) VALUES (%s, %s, %s, %s, %s, %s)
+            name, role, skills, preferences, interests
+        ) VALUES (%s, %s, %s, %s, %s)
     """
     name_to_id: dict[str, int] = {}
     for employee in employees:
@@ -79,7 +80,6 @@ def insert_employees(cursor, employees: list[dict[str, Any]]) -> dict[str, int]:
             (
                 employee["name"],
                 employee["role"],
-                employee.get("current_project"),
                 json.dumps(employee["skills"]),
                 json.dumps(employee["preferences"]),
                 json.dumps(employee["interests"]),
@@ -87,6 +87,38 @@ def insert_employees(cursor, employees: list[dict[str, Any]]) -> dict[str, int]:
         )
         name_to_id[employee["name"]] = cursor.lastrowid
     return name_to_id
+
+
+def employee_current_projects(employee: dict[str, Any]) -> list[str]:
+    current_projects = employee.get("current_projects")
+    if current_projects is not None:
+        return current_projects
+    legacy_current_project = employee.get("current_project")
+    return [legacy_current_project] if legacy_current_project else []
+
+
+def insert_project_assignments(
+    cursor,
+    employees: list[dict[str, Any]],
+    employee_ids: dict[str, int],
+    project_ids: dict[str, int],
+) -> int:
+    sql = """
+        INSERT INTO project_assignments (employee_id, project_id)
+        VALUES (%s, %s)
+    """
+    count = 0
+    for employee in employees:
+        employee_id = employee_ids[employee["name"]]
+        for project_name in employee_current_projects(employee):
+            project_id = project_ids.get(project_name)
+            if project_id is None:
+                sys.exit(
+                    f"Employee {employee['name']!r} references unknown project {project_name!r}"
+                )
+            cursor.execute(sql, (employee_id, project_id))
+            count += 1
+    return count
 
 
 def insert_move_requests(
@@ -156,6 +188,9 @@ def main() -> None:
         cursor = connection.cursor()
         project_ids = insert_projects(cursor, data["projects"])
         employee_ids = insert_employees(cursor, data["employees"])
+        assignment_count = insert_project_assignments(
+            cursor, data["employees"], employee_ids, project_ids
+        )
         move_count = insert_move_requests(
             cursor, data["move_requests"], employee_ids, project_ids
         )
@@ -163,7 +198,7 @@ def main() -> None:
         cursor.close()
         print(
             f"Inserted {len(project_ids)} projects, {len(employee_ids)} employees, "
-            f"{move_count} move requests from {args.fixture}."
+            f"{assignment_count} assignments, {move_count} move requests from {args.fixture}."
         )
     except Exception:
         connection.rollback()

@@ -9,7 +9,7 @@ For the canonical agent-facing API contract, payload shapes, schema notes, and s
 ## What this provides
 
 - A FastAPI service with health, version, database connectivity, and CRUD endpoints.
-- A three-table MySQL schema (`projects`, `employees`, `move_requests`) defined in plain SQL.
+- A four-table MySQL schema (`projects`, `employees`, `project_assignments`, `move_requests`) defined in plain SQL.
 - A script to apply the schema to AWS RDS.
 - A script that uses the OpenAI API to generate realistic seed data as JSON.
 - A script that loads that JSON into the database.
@@ -103,14 +103,18 @@ Useful endpoints:
 List endpoints accept `limit` (default `100`, max `500`) and `offset` query parameters.
 `PUT` endpoints accept partial payloads and update only the fields provided.
 
+For frontend work, use `current_team_member_ids` and `current_project_ids` as the canonical staffing fields. Name fields such as `current_team_members`, `current_project_names`, and `current_project` are derived display aliases. Project cards can use `icon_url` for compact imagery and `poster_url` for landscape hero/card imagery.
+
 ### Example project payload
 
 ```json
 {
-  "project_name": "Atlas Staffing",
-  "project_description": "Internal staffing platform for dynamic project allocation.",
+  "project_name": "Evernote",
+  "project_description": "Personal productivity and note-taking app focused on fast sync, collaborative editing, AI-powered search, and reliable capture across devices.",
   "project_phase": "growth",
-  "current_team_members": ["Giulia Rossi"],
+  "icon_url": "https://www.google.com/s2/favicons?domain=evernote.com&sz=128",
+  "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://evernote.com",
+  "current_team_member_ids": [1],
   "required_people_amount": 3,
   "required_skills": {
     "android": 0,
@@ -120,7 +124,7 @@ List endpoints accept `limit` (default `100`, max `500`) and `offset` query para
     "infrastructure": 2,
     "ai": 1
   },
-  "github_repositories": ["https://github.com/bendingspoons/atlas-staffing"]
+  "github_repositories": ["https://github.com/bendingspoons/evernote-core"]
 }
 ```
 
@@ -130,7 +134,7 @@ List endpoints accept `limit` (default `100`, max `500`) and `offset` query para
 {
   "name": "Marco Bianchi",
   "role": "Backend engineer",
-  "current_project": "Atlas Staffing",
+  "current_project_ids": [1, 2],
   "skills": {
     "android": 0,
     "ios": 0,
@@ -139,7 +143,7 @@ List endpoints accept `limit` (default `100`, max `500`) and `offset` query para
     "infrastructure": 2,
     "ai": 1
   },
-  "preferences": ["Atlas Staffing"],
+  "preferences": ["Evernote"],
   "interests": ["platform reliability", "internal tools"]
 }
 ```
@@ -170,7 +174,7 @@ python scripts/init_db.py
 
 This applies [db/schema.sql](db/schema.sql). Statements are idempotent (`CREATE TABLE IF NOT EXISTS`), so running it on an already-initialized database is a no-op.
 
-To wipe and recreate the demo tables (drops `move_requests`, `employees`, `projects` in FK-safe order):
+To wipe and recreate the demo tables (drops `move_requests`, `project_assignments`, `employees`, `projects` in FK-safe order):
 
 ```bash
 python scripts/init_db.py --reset
@@ -182,13 +186,13 @@ python scripts/init_db.py --reset
 python scripts/generate_fixtures.py
 ```
 
-Calls the model defined by `OPENAI_MODEL` and writes a validated dataset to `db-rest-api/fixtures/seed_data.json`. The `fixtures/` directory is created automatically. The script:
+Calls the model defined by `OPENAI_MODEL` and writes a validated dataset to `db-rest-api/fixtures/seed_data.json`. By default, it generates 20 employees, 8 projects, and 12 move requests. The `fixtures/` directory is created automatically. The script:
 
 - Uses the OpenAI SDK's structured-output parsing with Pydantic models, so the response is guaranteed to match the fixture schema or the script exits with the model's refusal.
-- Re-validates cross-references (every `current_project`, every `current_team_members` entry, every move-request name) and ensures all four `move_requests.status` values are present.
+- Uses a curated real-product project catalog, then re-validates cross-references (every `current_projects` entry, every employee preference, every move-request name), checks each project has staffing, and ensures all project phases plus all four `move_requests.status` values are present.
 - Exits non-zero on any validation failure without writing the file.
 
-Use `--output PATH` to write somewhere other than the default.
+Use `--employees`, `--projects`, `--move-requests`, `--attempts`, `--model`, `--timeout`, and `--output PATH` to override the defaults.
 
 ### 3. Load fixtures into MySQL
 
@@ -196,7 +200,7 @@ Use `--output PATH` to write somewhere other than the default.
 python scripts/load_fixtures.py
 ```
 
-Reads `db-rest-api/fixtures/seed_data.json` and inserts in dependency order: `projects` -> `employees` -> `move_requests`. Move-request `employee_name`, `from_project_name`, and `to_project_name` are resolved to numeric IDs using the rows just inserted. The whole load runs inside one transaction; failures roll back.
+Reads `db-rest-api/fixtures/seed_data.json` and inserts in dependency order: `projects` -> `employees` -> `project_assignments` -> `move_requests`. Employee `current_projects` plus move-request `employee_name`, `from_project_name`, and `to_project_name` are resolved to numeric IDs using the rows just inserted. The whole load runs inside one transaction; failures roll back.
 
 Use `--fixture PATH` to load a different file.
 
@@ -213,8 +217,9 @@ You only need to re-run `generate_fixtures.py` when you want a new dataset; the 
 
 See [db/schema.sql](db/schema.sql) for the source of truth. Summary:
 
-- `projects(id, project_name, project_description, project_phase, current_team_members, required_people_amount, required_skills, github_repositories)`
-- `employees(id, name, role, current_project, skills, preferences, interests)`
+- `projects(id, project_name, project_description, project_phase, icon_url, poster_url, required_people_amount, required_skills, github_repositories)`
+- `employees(id, name, role, skills, preferences, interests)`
+- `project_assignments(employee_id FK, project_id FK)`
 - `move_requests(id, employee_id FK, from_project_id FK nullable, to_project_id FK, reason, expected_role, current_project_impact, status, created_at, responded_at)`
 
 `skills` and `required_skills` use the brief's six keys exactly: `android`, `ios`, `web`, `backend`, `infrastructure`, `ai`. Levels are integers 0-3.

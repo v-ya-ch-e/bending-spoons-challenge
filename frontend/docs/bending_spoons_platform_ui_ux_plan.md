@@ -198,6 +198,18 @@ The second option is likely enough for the hackathon demo.
 
 ---
 
+## DB API contract notes
+
+The canonical API contract is [`../../docs/DB_API_DOCUMENTATION.md`](../../docs/DB_API_DOCUMENTATION.md). Frontend code should use these current shapes:
+
+- Project responses include `icon_url`, `poster_url`, canonical `current_team_member_ids`, and display-only `current_team_members`.
+- Employee responses include canonical `current_project_ids`, display `current_project_names`, and compatibility alias `current_project`.
+- Use IDs for staffing logic, matching, and mutations. Use names only for display.
+- `preferences` are still project-name strings.
+- Move request responses include `employee_name`, `from_project_name`, and `to_project_name`, but accepting a move request does not automatically change assignments.
+
+---
+
 # CTO EXPERIENCE
 
 ## 6. CTO primary user goals
@@ -268,17 +280,17 @@ Example rows:
 
 | Project | Phase | Staffing | Docs | Risk | Action |
 |---|---|---|---|---|---|
-| Eventbrite Integration | New acquisition | Needs team | Low | High | Match team |
-| WeTransfer Upload Reliability | Active | Healthy | Medium | Medium | View |
-| Remini AI Pipeline | Growth | Understaffed | High | Medium | Match team |
+| Eventbrite | New acquisition | Needs team | Low | High | Match team |
+| WeTransfer | Growth | Healthy | Medium | Medium | View |
+| Remini | Growth | Understaffed | High | Medium | Match team |
 
 ### Recommended actions panel
 
 Examples:
 
-- “Eventbrite Integration has low documentation coverage. Generate project capsule.”
+- “Eventbrite has low documentation coverage. Generate project capsule.”
 - “3 backend-capable employees become available next week.”
-- “Remini AI Pipeline needs one additional AI/backend profile.”
+- “Remini needs one additional AI/backend profile.”
 
 ### UX principle
 
@@ -322,7 +334,7 @@ Use cards for demo visual polish. Use table if implementation speed matters.
 Example card:
 
 ```txt
-Eventbrite Integration
+Eventbrite
 New acquisition
 Required: Backend 3, Web 2, Infrastructure 2
 Team: 0 assigned
@@ -359,7 +371,7 @@ Fields:
 Example:
 
 ```txt
-Project name: Eventbrite Integration
+Project name: Eventbrite
 Product/company: Eventbrite
 Phase: New acquisition
 Goal: Understand the codebase, stabilize billing, and prepare integration roadmap
@@ -482,7 +494,7 @@ Content:
 - Avatar
 - Name
 - Role
-- Current project
+- Current projects
 - Availability
 - Fit score
 - Matching skill levels
@@ -494,7 +506,7 @@ Example:
 
 ```txt
 Sofia Romano
-Backend Engineer · Current: WeTransfer Upload Reliability
+Backend Engineer · Current: WeTransfer
 Fit: 91%
 Availability: Available in 1 week
 Skills: Backend 3, Infrastructure 2, Web 1
@@ -555,7 +567,7 @@ Columns:
 - Name
 - Source
 - Status
-- Current project/company
+- Current projects/products
 - Skills
 - Availability
 - Action
@@ -653,7 +665,7 @@ This screen can be secondary in the demo, but the documentation generator itself
 
 The employee needs to:
 
-1. See their current project.
+1. See their current projects.
 2. Understand their current responsibilities.
 3. Receive project move requests.
 4. Accept or reject reassignment.
@@ -677,17 +689,17 @@ Give the employee a simple overview of their current assignment and next actions
 Top:
 
 - Greeting/title: “My workspace”
-- Current project card
+- Current projects card
 - Pending request banner if applicable
 
 Main cards:
 
-1. Current project
+1. Current projects
 2. My tasks
 3. Project resources
 4. Documentation status
 
-### Current project card
+### Current projects card
 
 Content:
 
@@ -702,7 +714,7 @@ Example:
 
 ```txt
 Current project
-WeTransfer Upload Reliability
+WeTransfer
 Role: Backend/platform engineer
 Allocation: 80%
 Team: 5 people
@@ -715,7 +727,7 @@ If there is a move request:
 
 ```txt
 New project request
-You have been requested to join Eventbrite Integration for 6 weeks.
+You have been requested to join Eventbrite for 6 weeks.
 [Review request]
 ```
 
@@ -747,7 +759,7 @@ Main sections:
 ### Example content
 
 ```txt
-You have been requested to join Eventbrite Integration.
+You have been requested to join Eventbrite.
 
 Why you:
 - Backend 3 and Infrastructure 2 match the project requirements.
@@ -827,7 +839,7 @@ Main:
 
 ### Purpose
 
-Help the employee leave their current project cleanly.
+Help the employee leave a current project cleanly.
 
 ### Layout
 
@@ -859,7 +871,7 @@ Main:
 Show a Markdown preview:
 
 ```md
-# Handoff Summary — WeTransfer Upload Reliability
+# Handoff Summary — WeTransfer
 
 ## Recent work
 ...
@@ -1052,7 +1064,7 @@ Props:
 - avatar
 - name
 - role
-- current project
+- current projects
 - fit score
 - skills
 - availability
@@ -1135,7 +1147,7 @@ Each should have:
 - role
 - source
 - status
-- current project
+- current projects
 - availability
 - skill levels
 - interests
@@ -1149,7 +1161,9 @@ Example:
   "role": "Backend Engineer",
   "source": "internal",
   "status": "active",
-  "currentProject": "WeTransfer Upload Reliability",
+  "current_project_ids": [3],
+  "current_project_names": ["WeTransfer"],
+  "current_project": "WeTransfer",
   "availability": "Available in 1 week",
   "skills": {
     "android": 0,
@@ -1168,12 +1182,12 @@ Seed 5–6 projects.
 
 Example:
 
-- Eventbrite Integration
-- WeTransfer Upload Reliability
-- Remini AI Pipeline
-- Evernote Sync Modernization
-- Vimeo Creator Analytics
-- Meetup Growth Experiments
+- Eventbrite
+- WeTransfer
+- Remini
+- Evernote
+- Komoot
+- StreamYard
 
 ---
 
@@ -1212,7 +1226,7 @@ This is enough to tell the full story.
 ## 26. Recommended demo sequence
 
 1. Start in CTO Overview.
-2. Show Eventbrite Integration needs a team.
+2. Show Eventbrite needs a team.
 3. Click “Create project” or open existing Eventbrite project.
 4. Connect GitHub/Notion/Slack sources.
 5. Show AI-inferred required skills.
