@@ -68,7 +68,7 @@ export function SidebarNav({
   return (
     <aside
       className={cn(
-        "flex min-h-svh shrink-0 flex-col overflow-hidden border-r border-border bg-sidebar py-5 text-sidebar-foreground transition-[width,padding] duration-200 ease-out",
+        "flex h-svh shrink-0 flex-col overflow-hidden border-r border-border bg-sidebar py-5 text-sidebar-foreground transition-[width,padding] duration-200 ease-out",
         collapsed ? "w-18 px-3" : "w-64 px-4"
       )}
     >
@@ -132,7 +132,7 @@ export function SidebarNav({
         />
       </div>
 
-      <nav className="mt-7 flex flex-1 flex-col gap-0.5" aria-label="Primary">
+      <nav className="mt-7 flex min-h-0 flex-1 flex-col gap-0.5" aria-label="Primary">
         {workspace.navItems.map((item) => {
           const isActive = item.value === activeItem
           const icon = navIcons[item.value as keyof typeof navIcons]
@@ -197,7 +197,7 @@ export function SidebarNav({
         })}
       </nav>
 
-      <div className="mt-6">
+      <div className="mt-auto pt-6">
         <ProfileMenu
           user={user}
           role={role}

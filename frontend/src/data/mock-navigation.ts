@@ -6,6 +6,7 @@ export type NavItem = {
   href: string
   count?: string
   primaryAction?: string
+  primaryActionHref?: string
 }
 
 export type RoleWorkspace = {
@@ -44,6 +45,7 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
         href: "/cto/employees",
         count: "84",
         primaryAction: "Add employee",
+        primaryActionHref: "/cto/employees?create=1",
       },
       {
         label: "Matching",

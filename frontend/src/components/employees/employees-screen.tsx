@@ -1,8 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { Cancel01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 
 import {
   listEmployees,
@@ -12,6 +13,7 @@ import {
   type SkillKey,
   type Skills,
 } from "@/lib/db-api"
+import { CreateEmployeeDialog } from "@/components/employees/create-employee-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -47,7 +49,7 @@ type EmployeesScreenProps = {
   selectedEmployeeId?: string
 }
 
-type FilterKey = "all" | "assigned" | "unassigned" | "backend" | "ai"
+type FilterKey = "all" | "assigned" | "unassigned"
 type SortKey = "name" | "role" | "project"
 
 const skillLabels: Record<SkillKey, string> = {
@@ -66,12 +68,12 @@ const filterItems: Array<{
   { value: "all", label: "All" },
   { value: "assigned", label: "Assigned" },
   { value: "unassigned", label: "Unassigned" },
-  { value: "backend", label: "Backend" },
-  { value: "ai", label: "AI" },
 ]
 
 export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [searchQuery, setSearchQuery] = useState("")
@@ -79,6 +81,8 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
   const [sort, setSort] = useState<SortKey>("name")
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [activeEmployeeId, setActiveEmployeeId] = useState(selectedEmployeeId)
+  const createDialogOpen = searchParams.get("create") === "1"
 
   useEffect(() => {
     let isMounted = true
@@ -122,13 +126,23 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
     }
   }, [])
 
+  useEffect(() => {
+    function handlePopState() {
+      setActiveEmployeeId(getEmployeeIdFromPath(window.location.pathname))
+    }
+
+    window.addEventListener("popstate", handlePopState)
+
+    return () => window.removeEventListener("popstate", handlePopState)
+  }, [])
+
   const projectByName = useMemo(() => {
     return new Map(projects.map((project) => [project.project_name, project]))
   }, [projects])
 
   const selectedEmployee = useMemo(() => {
-    return employees.find((employee) => String(employee.id) === selectedEmployeeId)
-  }, [employees, selectedEmployeeId])
+    return employees.find((employee) => String(employee.id) === activeEmployeeId)
+  }, [activeEmployeeId, employees])
 
   const selectedProject = selectedEmployee?.current_project
     ? projectByName.get(selectedEmployee.current_project)
@@ -144,14 +158,6 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
         }
 
         if (filter === "unassigned" && employee.current_project) {
-          return false
-        }
-
-        if (filter === "backend" && employee.skills.backend < 2) {
-          return false
-        }
-
-        if (filter === "ai" && employee.skills.ai < 1) {
           return false
         }
 
@@ -214,8 +220,60 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
     ]
   }, [employees])
 
+  function handleCreateDialogOpenChange(open: boolean) {
+    if (open) {
+      router.push("/cto/employees?create=1")
+      return
+    }
+
+    router.replace(pathname)
+  }
+
+  function handleEmployeeCreated(employee: Employee) {
+    setEmployees((currentEmployees) => {
+      const exists = currentEmployees.some(
+        (currentEmployee) => currentEmployee.id === employee.id
+      )
+
+      if (exists) {
+        return currentEmployees.map((currentEmployee) =>
+          currentEmployee.id === employee.id ? employee : currentEmployee
+        )
+      }
+
+      return [...currentEmployees, employee]
+    })
+    setError(null)
+    openEmployeeProfile(employee.id, "replace")
+  }
+
+  function openEmployeeProfile(employeeId: number, mode: "push" | "replace" = "push") {
+    const nextPath = `/cto/employees/${employeeId}`
+    setActiveEmployeeId(String(employeeId))
+
+    if (mode === "replace") {
+      window.history.replaceState(null, "", nextPath)
+      return
+    }
+
+    window.history.pushState(null, "", nextPath)
+  }
+
+  function closeEmployeeProfile() {
+    setActiveEmployeeId(undefined)
+    window.history.pushState(null, "", "/cto/employees")
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">
+      {createDialogOpen && (
+        <CreateEmployeeDialog
+          open={createDialogOpen}
+          projects={projects}
+          onOpenChange={handleCreateDialogOpenChange}
+          onCreated={handleEmployeeCreated}
+        />
+      )}
       <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
@@ -261,7 +319,7 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
           {metrics.map((metric) => (
             <div
               key={metric.label}
-              className="rounded-3xl border border-border bg-card px-4 py-3"
+              className="animate-in fade-in-0 slide-in-from-bottom-1 rounded-3xl border border-border bg-card px-4 py-3 duration-300"
             >
               <p className="text-xs font-medium text-muted-foreground">
                 {metric.label}
@@ -293,20 +351,15 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : (
-          <div className="flex min-h-0 flex-1 gap-4">
-            <section
-              className={cn(
-                "min-w-0 flex-1 rounded-3xl border border-border bg-card transition-[flex-basis,width] duration-200 ease-out",
-                selectedEmployeeId && "md:basis-[calc(100%-20rem)] xl:basis-[calc(100%-24rem)]"
-              )}
-            >
+          <div className="relative flex min-h-0 flex-1">
+            <section className="min-w-0 flex-1 rounded-3xl border border-border bg-card">
               {isLoading ? (
                 <EmployeesTableSkeleton />
               ) : filteredEmployees.length > 0 ? (
                 <EmployeesTable
                   employees={filteredEmployees}
-                  selectedEmployeeId={selectedEmployeeId}
-                  onRowOpen={(employeeId) => router.push(`/cto/employees/${employeeId}`)}
+                  selectedEmployeeId={activeEmployeeId}
+                  onRowOpen={openEmployeeProfile}
                 />
               ) : (
                 <EmployeesEmptyState />
@@ -319,11 +372,12 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
               )}
             </section>
 
-            {selectedEmployeeId && (
+            {activeEmployeeId && (
               <EmployeeDetailPanel
                 employee={selectedEmployee}
                 project={selectedProject}
                 isLoading={isLoading}
+                onClose={closeEmployeeProfile}
               />
             )}
           </div>
@@ -346,7 +400,7 @@ function EmployeesTable({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[28%]">Employee</TableHead>
+          <TableHead className="w-[14%]">Employee</TableHead>
           <TableHead>Role</TableHead>
           <TableHead>Current project</TableHead>
           <TableHead>Top skills</TableHead>
@@ -362,7 +416,7 @@ function EmployeesTable({
             <TableRow
               key={employee.id}
               data-state={isSelected ? "selected" : undefined}
-              className="cursor-pointer"
+              className="cursor-pointer transition-[background-color,transform] duration-150 hover:translate-x-0.5"
               onClick={() => onRowOpen(employee.id)}
             >
               <TableCell>
@@ -423,13 +477,24 @@ function EmployeeDetailPanel({
   employee,
   project,
   isLoading,
+  onClose,
 }: {
   employee?: Employee
   project?: Project
   isLoading: boolean
+  onClose: () => void
 }) {
   return (
-    <aside className="hidden w-80 shrink-0 rounded-3xl border border-border bg-card md:flex md:min-h-0 md:flex-col xl:w-96">
+    <aside
+      className="animate-in fade-in-0 slide-in-from-right-8 z-50 flex flex-col border-l border-border bg-background shadow-xl duration-200"
+      style={{
+        position: "fixed",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: "min(100vw, 32rem)",
+      }}
+    >
       <div className="flex items-center justify-between gap-3 border-b border-border p-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -437,8 +502,14 @@ function EmployeeDetailPanel({
           </p>
           <h2 className="mt-1 font-semibold">Profile</h2>
         </div>
-        <Button asChild variant="ghost" size="sm">
-          <Link href="/cto/employees">Close</Link>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          onClick={onClose}
+          aria-label="Close employee detail"
+        >
+          <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
         </Button>
       </div>
 
@@ -699,4 +770,10 @@ function formatPhase(phase: Project["project_phase"]) {
     .split(" ")
     .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
     .join(" ")
+}
+
+function getEmployeeIdFromPath(pathname: string) {
+  const match = pathname.match(/^\/cto\/employees\/([^/]+)$/)
+
+  return match?.[1]
 }

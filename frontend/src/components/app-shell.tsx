@@ -107,6 +107,7 @@ export function AppShell({
               workspace={workspace}
               activeLabel={activeNavItem.label}
               primaryAction={activeNavItem.primaryAction ?? workspace.primaryAction}
+              primaryActionHref={activeNavItem.primaryActionHref}
               sidebarCollapsed={sidebarCollapsed}
               onSidebarCollapsedChange={handleSidebarCollapsedChange}
             />
