@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 type TopbarProps = {
   workspace: RoleWorkspace
   activeLabel: string
+  primaryAction: string
   sidebarCollapsed: boolean
   onSidebarCollapsedChange: (collapsed: boolean) => void
 }
@@ -16,6 +17,7 @@ type TopbarProps = {
 export function Topbar({
   workspace,
   activeLabel,
+  primaryAction,
   sidebarCollapsed,
   onSidebarCollapsedChange,
 }: TopbarProps) {
@@ -54,7 +56,7 @@ export function Topbar({
 
         <div className="flex shrink-0 items-center gap-3">
           <Button type="button" size="sm" className="rounded-full">
-            {workspace.primaryAction}
+            {primaryAction}
           </Button>
         </div>
       </div>

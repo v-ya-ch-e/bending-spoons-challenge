@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import Link from "next/link"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   BookOpen01Icon,
@@ -29,7 +30,6 @@ type SidebarNavProps = {
   role: AppRole
   workspace: RoleWorkspace
   activeItem: string
-  onActiveItemChange: (value: string) => void
   onRoleChange: (role: AppRole) => void
   user: {
     name: string
@@ -59,7 +59,6 @@ export function SidebarNav({
   role,
   workspace,
   activeItem,
-  onActiveItemChange,
   onRoleChange,
   user,
   collapsed,
@@ -139,10 +138,9 @@ export function SidebarNav({
           const icon = navIcons[item.value as keyof typeof navIcons]
 
           const navButton = (
-            <button
+            <Link
               key={item.value}
-              type="button"
-              onClick={() => onActiveItemChange(item.value)}
+              href={item.href}
               className={cn(
                 "group flex h-10 items-center rounded-2xl text-left text-sm transition-[background-color,color,padding,gap,width] duration-200 ease-out",
                 collapsed ? "w-10 justify-center gap-0 px-0" : "w-full gap-3 px-3",
@@ -181,7 +179,7 @@ export function SidebarNav({
                   {item.count}
                 </span>
               )}
-            </button>
+            </Link>
           )
 
           if (!collapsed) {

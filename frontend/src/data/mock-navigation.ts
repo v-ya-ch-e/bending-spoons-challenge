@@ -3,7 +3,9 @@ export type AppRole = "cto" | "spooner"
 export type NavItem = {
   label: string
   value: string
+  href: string
   count?: string
+  primaryAction?: string
 }
 
 export type RoleWorkspace = {
@@ -27,26 +29,32 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
       {
         label: "Overview",
         value: "overview",
+        href: "/cto/overview",
         count: "6",
       },
       {
         label: "Projects",
         value: "projects",
+        href: "/cto/projects",
         count: "12",
       },
       {
         label: "Employees",
         value: "employees",
+        href: "/cto/employees",
         count: "84",
+        primaryAction: "Add employee",
       },
       {
         label: "Matching",
         value: "matching",
+        href: "/cto/matching",
         count: "4",
       },
       {
         label: "Documentation",
         value: "documentation",
+        href: "/cto/documentation",
         count: "9",
       },
     ],
@@ -58,25 +66,30 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
       {
         label: "My Project",
         value: "my-project",
+        href: "/spooner/my-project",
       },
       {
         label: "Requests",
         value: "requests",
+        href: "/spooner/requests",
         count: "1",
       },
       {
         label: "Onboarding",
         value: "onboarding",
+        href: "/spooner/onboarding",
         count: "5",
       },
       {
         label: "Offboarding",
         value: "offboarding",
+        href: "/spooner/offboarding",
         count: "3",
       },
       {
         label: "Resources",
         value: "resources",
+        href: "/spooner/resources",
       },
     ],
   },
