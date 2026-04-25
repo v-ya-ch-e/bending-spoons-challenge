@@ -118,6 +118,9 @@ Notes on input shape:
   expand, or ignore them.
 - Step 1 internal scores are intentionally not forwarded so the LLM ranks on
   the soft signals alone.
+- The wired pipeline sends only the top 8 strict-rule candidates to OpenAI. All
+  strict-rule candidates are still persisted in `matching_candidates`, but the
+  LLM chooses from this compact top set to stay inside demo token limits.
 - Free-text employee or project context (profile summary, repo summary) is not
   included in v1. The schema can accept extra string fields per employee or
   project later without changing the response contract.

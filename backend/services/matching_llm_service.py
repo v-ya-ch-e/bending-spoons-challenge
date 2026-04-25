@@ -60,6 +60,8 @@ async def evaluate_matching(payload: MatchingLlmRequest) -> MatchingLlmResponse:
         )
     except ValidationError as exc:
         raise MatchingLlmError(f"LLM returned invalid response: {exc}") from exc
+    except Exception as exc:
+        raise MatchingLlmError(_public_openai_error(exc)) from exc
 
     parsed = response.output_parsed
     if parsed is None:
@@ -67,6 +69,18 @@ async def evaluate_matching(payload: MatchingLlmRequest) -> MatchingLlmResponse:
         raise MatchingLlmError(f"LLM produced no parsed output: {refusal}")
 
     return _validate_against_input(parsed, payload)
+
+
+def _public_openai_error(exc: Exception) -> str:
+    message = str(exc)
+    if "Request too large" in message or "tokens per min" in message:
+        return (
+            "OpenAI rejected the matching evaluation because the request was too large "
+            "for the current token-per-minute limit."
+        )
+    if "rate_limit" in message.lower() or "429" in message:
+        return "OpenAI rate-limited the matching evaluation."
+    return "OpenAI matching evaluation failed."
 
 
 def _validate_against_input(

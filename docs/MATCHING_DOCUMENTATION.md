@@ -24,7 +24,8 @@ For normal runs with candidates, render `recommendations` as the selectable
 staffing plans and use `selected_candidate_plan_id` for the LLM-selected best
 plan. Keep `candidates` available as the strict-rule audit trail. If strict
 rules produce no candidates, `recommendation_count` is `0` and the main outcome
-may be hiring recommendations.
+may be hiring recommendations. The LLM picks from the top 8 strict-rule
+candidates; all generated candidates remain visible in `candidates`.
 
 Matching never mutates `project_assignments` by itself. A candidate plan is a
 recommendation only.

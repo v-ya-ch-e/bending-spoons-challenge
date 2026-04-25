@@ -39,6 +39,7 @@ from services.matching_llm_service import evaluate_matching
 
 
 PROMPT_VERSION = "matching_llm_evaluator_v1"
+LLM_EVALUATION_CANDIDATE_LIMIT = 8
 LlmEvaluator = Callable[
     [MatchingLlmRequest],
     MatchingLlmResponse | Awaitable[MatchingLlmResponse],
@@ -150,6 +151,7 @@ def run_matching_pipeline(
                 target_project_id=target_project_id,
                 snapshot=snapshot,
                 result=result,
+                candidate_limit=LLM_EVALUATION_CANDIDATE_LIMIT,
             )
             llm_result = _evaluate_matching_sync(llm_request, llm_evaluator)
             selected_candidate_plan_id = llm_result.best.candidate_plan_id
@@ -471,9 +473,11 @@ def _llm_request_from_result(
     target_project_id: int | None,
     snapshot: MatchingSnapshot,
     result: StrictRulesResult,
+    candidate_limit: int,
 ) -> MatchingLlmRequest:
     primary_target_project_id = _primary_target_project_id(target_project_id, result)
     target_project = snapshot.projects[primary_target_project_id]
+    candidate_plans = result.candidate_plans[:candidate_limit]
     return MatchingLlmRequest(
         use_case=use_case,
         target_project=TargetProject(
@@ -485,7 +489,7 @@ def _llm_request_from_result(
         ),
         candidate_plans=[
             _llm_candidate_plan(candidate, snapshot)
-            for candidate in result.candidate_plans
+            for candidate in candidate_plans
         ],
         hiring_gap_hints=[
             HiringGapHint(

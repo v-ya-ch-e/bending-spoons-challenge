@@ -49,7 +49,8 @@ Implemented two-step behavior:
 - Frontend-visible strict-rule progress is saved to `matching_run_events`.
 - When strict rules produce at least one candidate, OpenAI evaluates the bounded
   candidate set, picks the best plan, optionally returns alternatives, and the
-  backend saves those rows to `matching_recommendations`.
+  backend saves those rows to `matching_recommendations`. The LLM request is
+  capped to the top 8 strict-rule candidates to stay within demo TPM limits.
 - Runs with candidates complete with `recommendation_count > 0` and
   `selected_candidate_plan_id` set to the LLM-selected plan. Runs with no strict
   candidates complete without LLM ranking and return hiring gaps when available.

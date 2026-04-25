@@ -13,6 +13,7 @@ from schemas import (
     SkillProfileResponse,
 )
 from services import matching_service, skill_profile_service
+from services.matching_llm_service import MatchingLlmError
 
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -51,6 +52,8 @@ async def run_project_matching(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except MatchingLlmError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/matching/portfolio:rebalance", response_model=MatchingRunResponse)
@@ -68,3 +71,5 @@ async def run_portfolio_rebalance(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except MatchingLlmError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
