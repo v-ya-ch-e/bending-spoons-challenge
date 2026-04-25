@@ -8,15 +8,16 @@ from typing import Any
 
 from clients import DbApiClient, get_openai_model
 from schemas import (
-    MatchingCandidateResponse,
-    MatchingHiringRecommendationResponse,
+    MatchingHiringSuggestionResponse,
     MatchingLlmRequest,
     MatchingLlmResponse,
-    MatchingMoveResponse,
-    MatchingRecommendationResponse,
-    MatchingRunEventResponse,
+    MatchingRunDiagnosticsResponse,
     MatchingRunRequest,
     MatchingRunResponse,
+    MatchingRunSummaryResponse,
+    MatchingSuggestionImpactResponse,
+    MatchingSuggestionMoveResponse,
+    MatchingSuggestionResponse,
 )
 from schemas.matching import (
     CandidatePlan as LlmCandidatePlan,
@@ -40,6 +41,15 @@ from services.matching_llm_service import evaluate_matching
 
 PROMPT_VERSION = "matching_llm_evaluator_v1"
 LLM_EVALUATION_CANDIDATE_LIMIT = 8
+DEFAULT_MATCHING_POLICY_NAME = "Balanced strict matching"
+POLICY_NAME_ALIASES = {
+    "conservative": "Conservative strict matching",
+    "conservative strict matching": "Conservative strict matching",
+    "balanced": DEFAULT_MATCHING_POLICY_NAME,
+    "balanced strict matching": DEFAULT_MATCHING_POLICY_NAME,
+    "aggressive": "Aggressive strict matching",
+    "aggressive strict matching": "Aggressive strict matching",
+}
 LlmEvaluator = Callable[
     [MatchingLlmRequest],
     MatchingLlmResponse | Awaitable[MatchingLlmResponse],
@@ -61,9 +71,9 @@ def run_matching_pipeline(
     failure_stage = "strict_rules"
 
     try:
-        active_policy = client.get_active_policy()
+        policy = _resolve_policy(client, request)
         config = build_rule_config(
-            policy_config=active_policy["config"],
+            policy_config=policy["config"],
         )
         raw_projects = _list_all(client.list_projects)
         raw_employees = _list_all(client.list_employees)
@@ -77,9 +87,9 @@ def run_matching_pipeline(
         final_config = config.to_dict()
         effective_rule_config = {
             **final_config,
-            "policy_id": active_policy["id"],
-            "policy_name": active_policy["name"],
-            "policy_config": active_policy["config"],
+            "policy_id": policy["id"],
+            "policy_name": policy["name"],
+            "policy_config": policy["config"],
             "effective_config": final_config,
         }
 
@@ -129,9 +139,14 @@ def run_matching_pipeline(
         selected_candidate_plan_id: str | None = None
         hiring_recommendation_payloads = [gap.to_payload() for gap in result.hiring_gaps]
         summary = _summary(result)
+        evaluated_candidate_count = 0
 
         if result.candidate_plans:
             failure_stage = "llm_evaluation"
+            evaluated_candidate_count = min(
+                len(result.candidate_plans),
+                LLM_EVALUATION_CANDIDATE_LIMIT,
+            )
             _emit(
                 client,
                 run_id,
@@ -141,7 +156,8 @@ def run_matching_pipeline(
                     message="Started OpenAI evaluation of strict-rule candidates.",
                     stage="llm_evaluation",
                     metadata={
-                        "candidate_count": len(result.candidate_plans),
+                        "generated_candidate_count": len(result.candidate_plans),
+                        "evaluated_candidate_count": evaluated_candidate_count,
                         "hiring_gap_hint_count": len(result.hiring_gaps),
                     },
                 ),
@@ -195,11 +211,12 @@ def run_matching_pipeline(
             target_project_id=target_project_id,
             result=result,
             logs=logs,
-            max_returned_candidates=config.max_candidate_plans,
             recommendations=recommendations,
             selected_candidate_plan_id=selected_candidate_plan_id,
             hiring_recommendation_payloads=hiring_recommendation_payloads,
             summary=summary,
+            policy=policy,
+            evaluated_candidate_count=evaluated_candidate_count,
         )
     except Exception as exc:
         if run_id is not None:
@@ -381,6 +398,18 @@ def _list_all(method: Any, *, page_size: int = 100) -> list[dict]:
         offset += page_size
 
 
+def _resolve_policy(client: DbApiClient, request: MatchingRunRequest) -> dict[str, Any]:
+    if request.policy_id is not None:
+        return client.get_policy(request.policy_id)
+    policy_name = _canonical_policy_name(request.policy_name or DEFAULT_MATCHING_POLICY_NAME)
+    return client.get_policy_by_name(policy_name)
+
+
+def _canonical_policy_name(policy_name: str) -> str:
+    normalized = " ".join(policy_name.strip().lower().split())
+    return POLICY_NAME_ALIASES.get(normalized, policy_name)
+
+
 def _input_snapshot_payload(
     projects: list[dict],
     employees: list[dict],
@@ -406,50 +435,54 @@ def _response_from_result(
     target_project_id: int | None,
     result: StrictRulesResult,
     logs: list[dict[str, Any]],
-    max_returned_candidates: int,
     recommendations: list[dict[str, Any]],
     selected_candidate_plan_id: str | None,
     hiring_recommendation_payloads: list[dict[str, Any]],
     summary: str,
+    policy: dict[str, Any],
+    evaluated_candidate_count: int,
 ) -> MatchingRunResponse:
     return MatchingRunResponse(
         run_id=int(run["id"]),
         use_case=use_case,
         status=run.get("status", "completed"),
         target_project_id=target_project_id,
-        candidate_count=len(result.candidate_plans),
-        recommendation_count=len(recommendations),
-        hiring_recommendation_count=len(hiring_recommendation_payloads),
-        selected_candidate_plan_id=selected_candidate_plan_id,
-        summary=summary,
-        candidates=[
-            _candidate_response(candidate)
-            for candidate in result.candidate_plans[:max_returned_candidates]
-        ],
-        recommendations=[
-            MatchingRecommendationResponse(**recommendation)
-            for recommendation in recommendations
-        ],
-        hiring_recommendations=[
-            MatchingHiringRecommendationResponse(**payload)
+        summary=MatchingRunSummaryResponse(
+            headline=summary,
+            selected_candidate_plan_id=selected_candidate_plan_id,
+            generated_candidate_count=len(result.candidate_plans),
+            evaluated_candidate_count=evaluated_candidate_count,
+            suggestion_count=len(recommendations),
+            hiring_suggestion_count=len(hiring_recommendation_payloads),
+        ),
+        suggestions=_suggestion_responses(result, recommendations),
+        hiring_suggestions=[
+            _hiring_suggestion_response(payload)
             for payload in hiring_recommendation_payloads
         ],
-        logs=[MatchingRunEventResponse(**log) for log in logs],
+        diagnostics=MatchingRunDiagnosticsResponse(
+            policy_id=int(policy["id"]),
+            policy_name=str(policy["name"]),
+            event_count=len(logs),
+            warnings=[
+                str(log["message"])
+                for log in logs
+                if log.get("level") == "warning"
+            ],
+        ),
     )
 
 
-def _candidate_response(candidate: CandidatePlan) -> MatchingCandidateResponse:
-    return MatchingCandidateResponse(
-        candidate_plan_id=candidate.candidate_plan_id,
-        strict_score=candidate.strict_score,
-        summary=candidate.summary,
-        moves=[
-            MatchingMoveResponse(**move.to_payload())
-            for move in candidate.moves
-        ],
-        risks=list(candidate.risks),
-        hard_rule_summary=candidate.hard_rule_summary,
-        plan_payload=candidate.plan_payload(),
+def _hiring_suggestion_response(payload: dict[str, Any]) -> MatchingHiringSuggestionResponse:
+    return MatchingHiringSuggestionResponse(
+        candidate_plan_id=payload.get("candidate_plan_id"),
+        project_id=payload["project_id"],
+        role_title=payload["role_title"],
+        count=payload["count"],
+        required_skills=payload["required_skills"],
+        rationale=payload["reason"],
+        urgency=payload["urgency"],
+        suggested_assignment=payload.get("suggested_assignment"),
     )
 
 
@@ -569,10 +602,17 @@ def _persist_llm_recommendations(
     llm_result: MatchingLlmResponse,
 ) -> list[dict[str, Any]]:
     recommendations = _recommendation_payloads(result, llm_result)
-    created = [
-        client.create_matching_recommendation(run_id, recommendation)
-        for recommendation in recommendations
-    ]
+    created: list[dict[str, Any]] = []
+    for recommendation in recommendations:
+        internal_fields = {
+            key: value for key, value in recommendation.items() if key.startswith("_")
+        }
+        db_payload = {
+            key: value for key, value in recommendation.items() if not key.startswith("_")
+        }
+        stored = client.create_matching_recommendation(run_id, db_payload)
+        stored.update(internal_fields)
+        created.append(stored)
     _emit(
         client,
         run_id,
@@ -639,17 +679,14 @@ def _recommendation_payloads(
     }
     payloads: list[dict[str, Any]] = []
     for rank, recommendation in enumerate(ranked, start=1):
-        explanation = recommendation.reason
         tradeoff = getattr(recommendation, "tradeoff", None)
-        if tradeoff:
-            explanation = f"{recommendation.reason} Tradeoff: {tradeoff}"
         payloads.append(
             {
                 "candidate_plan_id": recommendation.candidate_plan_id,
                 "rank": rank,
                 "fit_score": recommendation.fit_score,
-                "summary": recommendation.reason,
-                "explanation": explanation,
+                "summary": recommendation.title,
+                "explanation": recommendation.rationale,
                 "risks": list(recommendation.risks),
                 "ramp_up_estimate": None,
                 "suggested_moves": _suggested_moves(
@@ -657,6 +694,7 @@ def _recommendation_payloads(
                     recommendation,
                 ),
                 "model_metadata": model_metadata,
+                "_display_tradeoff": tradeoff,
             }
         )
     return payloads
@@ -679,9 +717,67 @@ def _suggested_moves(
         if override is not None:
             payload["suggested_role"] = override.suggested_role
             payload["current_project_impact"] = override.current_project_impact
-        payload["move_request_reason"] = recommendation.reason
+            if override.reason:
+                payload["reason"] = override.reason
+        payload.pop("hard_rule_reasons", None)
+        payload["move_request_reason"] = payload["reason"]
         suggested_moves.append(payload)
     return suggested_moves
+
+
+def _suggestion_responses(
+    result: StrictRulesResult,
+    recommendations: list[dict[str, Any]],
+) -> list[MatchingSuggestionResponse]:
+    candidates_by_id = {
+        candidate.candidate_plan_id: candidate
+        for candidate in result.candidate_plans
+    }
+    suggestions: list[MatchingSuggestionResponse] = []
+    for recommendation in recommendations:
+        candidate = candidates_by_id[recommendation["candidate_plan_id"]]
+        tradeoff = recommendation.get("_display_tradeoff")
+        suggestions.append(
+            MatchingSuggestionResponse(
+                suggestion_id=f"suggestion_{int(recommendation['rank']):02d}",
+                candidate_plan_id=recommendation["candidate_plan_id"],
+                rank=recommendation["rank"],
+                score=recommendation.get("fit_score"),
+                title=recommendation["summary"],
+                rationale=recommendation.get("explanation") or recommendation["summary"],
+                tradeoffs=[tradeoff] if tradeoff else [],
+                risks=list(recommendation.get("risks") or []),
+                moves=[
+                    MatchingSuggestionMoveResponse(**move)
+                    for move in recommendation.get("suggested_moves") or []
+                ],
+                impact=_suggestion_impact(candidate),
+            )
+        )
+    return suggestions
+
+
+def _suggestion_impact(candidate: CandidatePlan) -> MatchingSuggestionImpactResponse:
+    target_project_id = int(candidate.hard_rule_summary["target_project_id"])
+    target_coverage = candidate.project_coverage_after[target_project_id]
+    source_impacts: list[dict[str, Any]] = []
+    seen_project_ids: set[int] = set()
+    for move in candidate.moves:
+        if move.from_project_id is None or move.from_project_id in seen_project_ids:
+            continue
+        seen_project_ids.add(move.from_project_id)
+        source_impacts.append(
+            {
+                "project_id": move.from_project_id,
+                "impact": move.current_project_impact,
+            }
+        )
+    return MatchingSuggestionImpactResponse(
+        target_project_id=target_project_id,
+        target_headcount_gap=target_coverage.headcount_gap,
+        target_skill_gap=target_coverage.skill_gap,
+        source_project_impacts=source_impacts,
+    )
 
 
 def _primary_target_project_id(
@@ -708,18 +804,17 @@ def _llm_summary(
     selected_candidate_plan_id: str,
 ) -> str:
     return (
-        f"Generated {len(result.candidate_plans)} strict-rule candidate plans; "
-        f"OpenAI selected {selected_candidate_plan_id} and returned "
-        f"{recommendation_count} ranked recommendations with "
-        f"{hiring_recommendation_count} hiring recommendations."
+        f"Selected {selected_candidate_plan_id} from {len(result.candidate_plans)} "
+        f"strict-rule candidates, with {recommendation_count} approval-ready "
+        f"suggestions and {hiring_recommendation_count} hiring suggestions."
     )
 
 
 def _summary(result: StrictRulesResult) -> str:
     if result.candidate_plans:
         return (
-            f"Generated {len(result.candidate_plans)} deterministic strict-rule "
-            f"candidate plans and {len(result.hiring_gaps)} hiring gaps."
+            f"Generated {len(result.candidate_plans)} strict-rule candidates and "
+            f"{len(result.hiring_gaps)} hiring suggestions."
         )
     if result.hiring_gaps:
         return (

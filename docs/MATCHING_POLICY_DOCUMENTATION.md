@@ -7,21 +7,46 @@ exactly one policy should be active at a time.
 Every matching run uses this order:
 
 1. Start from backend code defaults.
-2. Apply the active database policy.
+2. Apply the selected database policy. If the API request does not select one,
+   use `Balanced strict matching`.
 3. Save the final effective configuration on the matching run for auditability.
 
-Run endpoints do not accept per-run tuning. To change matching behavior, update
-or activate a policy in the DB API before starting a new run.
+Run endpoints accept `policy_id` or `policy_name` for per-run policy selection.
+They do not accept raw rule overrides. To change durable policy values, update
+or activate a policy in the DB API.
 
-## Current Default Policy
+## Seeded Policies
 
-`Default strict matching` is created automatically when the database has no
-policies. It matches the original backend strict-rule defaults:
+`Conservative strict matching`, `Balanced strict matching`, and
+`Aggressive strict matching` are created automatically when missing. Balanced is
+active and is the default used by matching endpoints.
+
+Conservative:
 
 ```json
 {
   "max_candidate_plans": 25,
-  "max_moves": 3,
+  "max_moves": 1,
+  "max_projects_in_scope": 8,
+  "max_employees_in_scope": 60,
+  "max_employee_project_count": 2,
+  "minimum_remaining_project_coverage": 0.85,
+  "minimum_target_coverage_improvement": 0.1,
+  "allow_unassigned_employees": true,
+  "allow_multi_project_assignment": true,
+  "allow_understaff_current_project": false,
+  "exclude_pending_move_requests": true,
+  "prefer_employee_preferences": true,
+  "emit_hiring_gaps": true
+}
+```
+
+Balanced:
+
+```json
+{
+  "max_candidate_plans": 25,
+  "max_moves": 2,
   "max_projects_in_scope": 8,
   "max_employees_in_scope": 60,
   "max_employee_project_count": 2,
@@ -30,6 +55,26 @@ policies. It matches the original backend strict-rule defaults:
   "allow_unassigned_employees": true,
   "allow_multi_project_assignment": true,
   "allow_understaff_current_project": false,
+  "exclude_pending_move_requests": true,
+  "prefer_employee_preferences": true,
+  "emit_hiring_gaps": true
+}
+```
+
+Aggressive:
+
+```json
+{
+  "max_candidate_plans": 25,
+  "max_moves": 3,
+  "max_projects_in_scope": 8,
+  "max_employees_in_scope": 60,
+  "max_employee_project_count": 2,
+  "minimum_remaining_project_coverage": 0.6,
+  "minimum_target_coverage_improvement": 0.1,
+  "allow_unassigned_employees": true,
+  "allow_multi_project_assignment": true,
+  "allow_understaff_current_project": true,
   "exclude_pending_move_requests": true,
   "prefer_employee_preferences": true,
   "emit_hiring_gaps": true
@@ -77,10 +122,11 @@ Aggressive:
 
 ## Policy Changes
 
-Changing the active policy affects future matching runs for everyone. Existing
-runs remain explainable because `matching_runs.rule_config` stores the active
-policy snapshot and final effective config used at run time.
+Changing the active policy affects consumers that explicitly use
+`/db-api/policies/active`. Backend matching endpoints use balanced by default
+unless the request selects another policy. Existing runs remain explainable
+because `matching_runs.rule_config` stores the selected policy snapshot and
+final effective config used at run time.
 
 Use policy changes for durable organization-wide tuning. For experiments or
-debugging, create a temporary inactive policy, activate it for the test run, and
-then reactivate the previous policy.
+debugging, pass `policy_id` or `policy_name` on a matching run request.

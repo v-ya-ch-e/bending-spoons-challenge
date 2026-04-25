@@ -39,6 +39,20 @@ DEFAULT_POLICY_CONFIG = {
     "prefer_employee_preferences": True,
     "emit_hiring_gaps": True,
 }
+CONSERVATIVE_POLICY_CONFIG = {
+    **DEFAULT_POLICY_CONFIG,
+    "max_moves": 1,
+    "minimum_remaining_project_coverage": 0.85,
+}
+BALANCED_POLICY_CONFIG = {
+    **DEFAULT_POLICY_CONFIG,
+    "max_moves": 2,
+}
+AGGRESSIVE_POLICY_CONFIG = {
+    **DEFAULT_POLICY_CONFIG,
+    "minimum_remaining_project_coverage": 0.6,
+    "allow_understaff_current_project": True,
+}
 
 
 def project_payload(name: str = "Atlas Staffing") -> dict[str, Any]:
@@ -86,10 +100,10 @@ def matching_run_payload(target_project_id: int | None = None) -> dict[str, Any]
     }
 
 
-def policy_payload(name: str = "Balanced strict matching") -> dict[str, Any]:
+def policy_payload(name: str = "Experimental strict matching") -> dict[str, Any]:
     return {
         "name": name,
-        "description": "Balanced matching defaults for staffing recommendations.",
+        "description": "Experimental matching defaults for staffing recommendations.",
         "config": {**DEFAULT_POLICY_CONFIG, "max_moves": 2},
         "is_active": False,
     }
@@ -190,20 +204,40 @@ class InMemoryDatabase:
         self.policies: list[dict[str, Any]] = [
             {
                 "id": 1,
-                "name": "Default strict matching",
-                "description": "Baseline policy matching the original strict-rule defaults.",
-                "config": deepcopy(DEFAULT_POLICY_CONFIG),
+                "name": "Conservative strict matching",
+                "description": "Minimizes disruption by limiting moves and protecting current project coverage.",
+                "config": deepcopy(CONSERVATIVE_POLICY_CONFIG),
+                "is_active": False,
+                "created_at": datetime(2026, 4, 25, 12, 0, 0),
+                "updated_at": datetime(2026, 4, 25, 12, 0, 0),
+                "activated_at": None,
+            },
+            {
+                "id": 2,
+                "name": "Balanced strict matching",
+                "description": "Balanced matching defaults for demos and normal staffing planning.",
+                "config": deepcopy(BALANCED_POLICY_CONFIG),
                 "is_active": True,
                 "created_at": datetime(2026, 4, 25, 12, 0, 0),
                 "updated_at": datetime(2026, 4, 25, 12, 0, 0),
                 "activated_at": datetime(2026, 4, 25, 12, 0, 0),
-            }
+            },
+            {
+                "id": 3,
+                "name": "Aggressive strict matching",
+                "description": "Prioritizes urgent strategic staffing by allowing more source-project risk.",
+                "config": deepcopy(AGGRESSIVE_POLICY_CONFIG),
+                "is_active": False,
+                "created_at": datetime(2026, 4, 25, 12, 0, 0),
+                "updated_at": datetime(2026, 4, 25, 12, 0, 0),
+                "activated_at": None,
+            },
         ]
         self.next_ids = {
             "projects": 1,
             "employees": 1,
             "move_requests": 1,
-            "policies": 2,
+            "policies": 4,
             "matching_runs": 1,
             "matching_candidates": 1,
             "matching_recommendations": 1,
@@ -314,6 +348,10 @@ class InMemoryDatabase:
             cursor._one = deepcopy(
                 sorted(active_policies, key=lambda row: row["id"])[-1]
             ) if active_policies else None
+            return
+        if normalized.startswith("select * from policies where name"):
+            rows = [row for row in self.policies if row["name"] == params[0]]
+            cursor._many = self._limited(rows, params[1:])
             return
         if normalized.startswith("select * from policies order by id"):
             cursor._many = self._limited(self.policies, params)
@@ -704,21 +742,30 @@ def test_metadata_and_openapi_endpoints(client: TestClient) -> None:
 def test_policy_crud_activation_and_active_delete_rejection(client: TestClient) -> None:
     active_policy = client.get("/policies/active")
     assert active_policy.status_code == 200
-    assert active_policy.json()["name"] == "Default strict matching"
-    assert active_policy.json()["config"] == DEFAULT_POLICY_CONFIG
+    assert active_policy.json()["name"] == "Balanced strict matching"
+    assert active_policy.json()["config"] == BALANCED_POLICY_CONFIG
+    assert client.get("/policies", params={"name": "Balanced strict matching"}).json() == [
+        active_policy.json()
+    ]
 
     create_response = client.post("/policies", json=policy_payload())
     assert create_response.status_code == 201
     policy = create_response.json()
-    assert policy["id"] == 2
+    assert policy["id"] == 4
     assert policy["config"]["max_moves"] == 2
     assert policy["is_active"] is False
 
-    assert client.get("/policies").json() == [active_policy.json(), policy]
-    assert client.get("/policies/2").json() == policy
+    policies = client.get("/policies").json()
+    assert [policy["name"] for policy in policies] == [
+        "Conservative strict matching",
+        "Balanced strict matching",
+        "Aggressive strict matching",
+        "Experimental strict matching",
+    ]
+    assert client.get("/policies/4").json() == policy
 
     update_response = client.put(
-        "/policies/2",
+        "/policies/4",
         json={
             "description": "More conservative moves.",
             "config": {**DEFAULT_POLICY_CONFIG, "max_moves": 1},
@@ -728,13 +775,13 @@ def test_policy_crud_activation_and_active_delete_rejection(client: TestClient) 
     assert update_response.json()["description"] == "More conservative moves."
     assert update_response.json()["config"]["max_moves"] == 1
 
-    activate_response = client.post("/policies/2:activate")
+    activate_response = client.post("/policies/4:activate")
     assert activate_response.status_code == 200
     assert activate_response.json()["is_active"] is True
-    assert client.get("/policies/active").json()["id"] == 2
-    assert client.get("/policies/1").json()["is_active"] is False
+    assert client.get("/policies/active").json()["id"] == 4
+    assert client.get("/policies/2").json()["is_active"] is False
 
-    active_delete = client.delete("/policies/2")
+    active_delete = client.delete("/policies/4")
     assert active_delete.status_code == 409
     assert active_delete.json() == {"detail": "Active policy cannot be deleted."}
 

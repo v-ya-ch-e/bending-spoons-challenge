@@ -87,4 +87,6 @@ Current orchestration endpoints:
 
 Matching runs execute the deterministic strict-rule step, persist candidates,
 hiring gaps, and run events through db-rest-api, and leave final
-`matching_recommendations` for the LLM ranking step.
+`matching_recommendations` for the LLM ranking step. Run requests may include
+`policy_id` or `policy_name`; omitted policy selection defaults to
+`Balanced strict matching`.

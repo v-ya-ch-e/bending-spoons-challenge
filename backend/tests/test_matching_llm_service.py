@@ -96,7 +96,9 @@ def _valid_best() -> BestPlan:
     return BestPlan(
         candidate_plan_id="plan_01",
         fit_score=0.9,
-        reason="Closes target gap with low source impact.",
+        title="Low-impact backend coverage",
+        rationale="Closes the target backend gap with low source impact.",
+        tradeoff=None,
         moves=[
             RecommendedMove(
                 employee_id=3,
@@ -105,6 +107,7 @@ def _valid_best() -> BestPlan:
                 action="move",
                 suggested_role="Backend/platform engineer",
                 current_project_impact="low",
+                reason="Covers the backend gap.",
             ),
         ],
         bench_moves=[
@@ -190,7 +193,8 @@ class TestValidateAgainstInput(unittest.TestCase):
         good_alt = AlternativePlan(
             candidate_plan_id="plan_01",
             fit_score=0.7,
-            reason="Same plan, different framing.",
+            title="Same plan with slower ramp",
+            rationale="Same plan, different framing.",
             tradeoff="Slightly slower ramp-up.",
             moves=_valid_best().moves,
             bench_moves=_valid_best().bench_moves,
@@ -241,7 +245,9 @@ class TestSchemaConstraints(unittest.TestCase):
             BestPlan(
                 candidate_plan_id="plan_01",
                 fit_score=1.5,
-                reason="x",
+                title="x",
+                rationale="x",
+                tradeoff=None,
                 moves=[],
                 bench_moves=[],
                 risks=[],
@@ -253,7 +259,8 @@ class TestSchemaConstraints(unittest.TestCase):
         alt = AlternativePlan(
             candidate_plan_id="plan_01",
             fit_score=0.5,
-            reason="x",
+            title="x",
+            rationale="x",
             tradeoff="x",
             moves=[],
             bench_moves=[],
@@ -273,7 +280,8 @@ class TestSchemaConstraints(unittest.TestCase):
             AlternativePlan(
                 candidate_plan_id="plan_01",
                 fit_score=0.5,
-                reason="x",
+                title="x",
+                rationale="x",
                 tradeoff="",
                 moves=[],
                 bench_moves=[],

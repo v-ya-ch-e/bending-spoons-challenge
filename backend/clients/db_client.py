@@ -127,16 +127,29 @@ class DbApiClient:
 
     # ---- policies --------------------------------------------------------
 
-    def list_policies(self, limit: int = 100, offset: int = 0) -> list[dict]:
-        return self._request(
-            "GET", "/policies", params={"limit": limit, "offset": offset}
-        )
+    def list_policies(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        *,
+        name: str | None = None,
+    ) -> list[dict]:
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if name is not None:
+            params["name"] = name
+        return self._request("GET", "/policies", params=params)
 
     def get_active_policy(self) -> dict:
         return self._request("GET", "/policies/active")
 
     def get_policy(self, policy_id: int) -> dict:
         return self._request("GET", f"/policies/{policy_id}")
+
+    def get_policy_by_name(self, name: str) -> dict:
+        policies = self.list_policies(limit=1, name=name)
+        if not policies:
+            raise DbApiError(404, f"Policy not found: {name}")
+        return policies[0]
 
     def create_policy(self, payload: dict) -> dict:
         return self._request("POST", "/policies", json=payload)

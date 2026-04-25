@@ -31,8 +31,9 @@ Step 1 receives a normalized pipeline request:
 }
 ```
 
-Configuration is loaded from the active database policy, not from the run
-request. Step 1 also receives a snapshot loaded through the DB API:
+Configuration is loaded from the selected database policy, defaulting to
+`Balanced strict matching`. Step 1 also receives a snapshot loaded through the
+DB API:
 
 - Projects with `id`, `required_people_amount`, `required_skills`,
   `project_phase`, and `current_team_member_ids`.

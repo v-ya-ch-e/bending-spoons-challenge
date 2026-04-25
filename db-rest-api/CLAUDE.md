@@ -47,7 +47,7 @@ The `fixtures/` directory is created on first run by the generator.
 - `employees`: `name`, `role`, `skills` JSON, `preferences` JSON, `interests` JSON.
 - `project_assignments`: `employee_id` FK, `project_id` FK, with composite primary key. This is the source of truth for current staffing.
 - `move_requests`: `employee_id` FK, `from_project_id` FK (nullable), `to_project_id` FK, `reason`, `expected_role`, `current_project_impact` enum, `status` enum (`pending`, `accepted`, `rejected`, `clarification_requested`), `created_at`, `responded_at` (nullable).
-- `policies`: named/versioned matching rule configurations, exactly one active policy used by backend matching as the default configuration.
+- `policies`: named/versioned matching rule configurations, exactly one active policy. The seeded default is `Balanced strict matching`; backend matching can also select policies per run.
 - `matching_runs`: matching pipeline run lifecycle, target project, effective rule config, immutable input snapshot, counts, summary/error, and timestamps.
 - `matching_candidates`: deterministic strict-rule candidate plans for a matching run.
 - `matching_recommendations`: ranked advisory recommendations with suggested moves, risks, explanations, and model metadata.

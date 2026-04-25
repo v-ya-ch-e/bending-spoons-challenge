@@ -140,13 +140,14 @@ Example request:
 
 ```json
 {
-  "requested_by": "cto@example.com"
+  "requested_by": "cto@example.com",
+  "policy_name": "balanced"
 }
 ```
 
-The body is optional. Matching configuration is not accepted on run endpoints;
-the backend always loads the active policy from the DB API and saves that
-effective configuration on the run.
+The body is optional. Run endpoints accept `policy_id` or `policy_name` for
+stored policy selection, defaulting to `Balanced strict matching`; raw matching
+configuration is not accepted on run endpoints.
 
 Example response:
 
@@ -542,10 +543,10 @@ in the run or recommendation record if needed for audit/debugging.
 
 ## Configuration
 
-Start with defaults in code, then apply the active database policy. Run
-endpoints do not accept configuration overrides; durable organization defaults
-live in the `policies` table, and the active policy is the matching
-configuration source for every new run.
+Start with defaults in code, then apply the selected database policy. Run
+endpoints accept `policy_id` or `policy_name`, default to
+`Balanced strict matching`, and do not accept raw configuration overrides.
+Durable organization defaults live in the `policies` table.
 
 Recommended config groups:
 

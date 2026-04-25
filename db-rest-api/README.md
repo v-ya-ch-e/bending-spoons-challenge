@@ -126,6 +126,7 @@ Useful endpoints:
 - `GET /docs`
 
 List endpoints accept `limit` (default `100`, max `500`) and `offset` query parameters.
+`GET /policies` also accepts an exact `name` filter.
 `PUT` endpoints accept partial payloads and update only the fields provided.
 
 For frontend work, use `current_team_member_ids` and `current_project_ids` as the canonical staffing fields. Name fields such as `current_team_members`, `current_project_names`, and `current_project` are derived display aliases. Project cards can use `icon_url` for compact imagery and `poster_url` for landscape hero/card imagery.

@@ -10,8 +10,9 @@ agent workflows. It summarizes the current backend behavior from
 Matching runs as a synchronous two-step pipeline:
 
 1. The frontend triggers a matching run through the backend API.
-2. The backend loads projects, employees, move requests, and the active policy
-   from the DB API.
+2. The backend loads projects, employees, move requests, and the selected policy
+   from the DB API. When the request does not select a policy, it uses
+   `Balanced strict matching`.
 3. The backend generates deterministic candidate plans, hiring gaps, and
    frontend-visible run events.
 4. When at least one strict-rule candidate exists, OpenAI evaluates only those
@@ -20,12 +21,13 @@ Matching runs as a synchronous two-step pipeline:
    recommendations, and events through the DB API.
 6. The response returns the same run result synchronously.
 
-For normal runs with candidates, render `recommendations` as the selectable
-staffing plans and use `selected_candidate_plan_id` for the LLM-selected best
-plan. Keep `candidates` available as the strict-rule audit trail. If strict
-rules produce no candidates, `recommendation_count` is `0` and the main outcome
-may be hiring recommendations. The LLM picks from the top 8 strict-rule
-candidates; all generated candidates remain visible in `candidates`.
+For normal runs with candidates, render `suggestions` as the selectable staffing
+plans. `summary.selected_candidate_plan_id` identifies the LLM-selected best
+plan. The backend response is intentionally compact; use the DB API child
+endpoints only when an audit/debug screen needs raw strict-rule candidates,
+events, or persisted recommendation rows. If strict rules produce no candidates,
+`summary.suggestion_count` is `0` and the main outcome may be hiring
+suggestions. The LLM picks from the top 8 strict-rule candidates.
 
 Matching never mutates `project_assignments` by itself. A candidate plan is a
 recommendation only.
@@ -64,12 +66,13 @@ Example request:
 
 ```json
 {
-  "requested_by": "cto@example.com"
+  "requested_by": "cto@example.com",
+  "policy_name": "balanced"
 }
 ```
 
 The request body is optional. Send `{}` or omit the body when no audit requester
-is available.
+is available; the backend will use the balanced policy by default.
 
 ### Portfolio Rebalance
 
@@ -86,11 +89,14 @@ The request body is the same as project rebalance. `target_project_id` will be
 ### Request Fields
 
 - `requested_by`: Optional display/audit string.
+- `policy_id`: Optional stored policy id from `/db-api/policies`.
+- `policy_name`: Optional stored policy name. The backend also accepts the
+  aliases `conservative`, `balanced`, and `aggressive`.
 
 Do not send `rule_config`, `max_candidate_plans`, `max_recommendations`, or
-`dry_run`. Matching configuration is loaded from the active database policy only.
-Change `/db-api/policies` when the organization wants different matching
-behavior.
+`dry_run`. Matching configuration is loaded from stored database policies. Use
+`policy_id` or `policy_name` for per-run policy selection, and change
+`/db-api/policies` when the organization wants different durable policy values.
 
 ## Run Response
 
@@ -102,93 +108,68 @@ type MatchingRunResponse = {
   use_case: "portfolio_rebalance" | "project_rebalance" | "project_staffing"
   status: "pending" | "running" | "completed" | "failed"
   target_project_id: number | null
-  candidate_count: number
-  recommendation_count: number
-  hiring_recommendation_count: number
-  selected_candidate_plan_id: string | null
-  summary: string
-  candidates: MatchingCandidate[]
-  recommendations: MatchingRecommendation[]
-  hiring_recommendations: MatchingHiringRecommendation[]
-  logs: MatchingRunEvent[]
+  summary: {
+    headline: string
+    selected_candidate_plan_id: string | null
+    generated_candidate_count: number
+    evaluated_candidate_count: number
+    suggestion_count: number
+    hiring_suggestion_count: number
+  }
+  suggestions: MatchingSuggestion[]
+  hiring_suggestions: MatchingHiringSuggestion[]
+  diagnostics: {
+    policy_id: number
+    policy_name: string
+    event_count: number
+    warnings: string[]
+  }
 }
 ```
 
-Render `summary` near the top of the result. Use the counts to drive badges and
-empty states.
+Render `summary.headline` near the top of the result. Use the summary counts for
+badges and empty states. Show `diagnostics.warnings` in a compact alert or
+details panel.
 
-### Recommendations
+### Suggestions
 
 ```ts
-type MatchingRecommendation = {
+type MatchingSuggestion = {
+  suggestion_id: string
   candidate_plan_id: string
   rank: number
-  fit_score: number | null
-  summary: string
-  explanation: string | null
+  score: number | null
+  title: string
+  rationale: string
+  tradeoffs: string[]
   risks: string[]
-  ramp_up_estimate: string | null
-  suggested_moves: MatchingMove[]
-  model_metadata: {
-    model?: string
-    prompt_version?: string
-  } | null
-}
-```
-
-Display recommendations ordered by `rank`. The first item is the LLM-picked best
-plan. Use `summary`, `explanation`, `fit_score`, `risks`, and
-`suggested_moves` for the primary decision UI.
-
-### Candidates
-
-```ts
-type MatchingCandidate = {
-  candidate_plan_id: string
-  strict_score: number
-  summary: string
-  moves: MatchingMove[]
-  risks: string[]
-  hard_rule_summary: Record<string, unknown>
-  plan_payload: {
-    summary: string
-    moves: MatchingMove[]
-    risks: string[]
-    project_coverage_after: Record<string, ProjectCoverageAfter>
+  moves: MatchingSuggestionMove[]
+  impact: {
+    target_project_id: number
+    target_headcount_gap: number
+    target_skill_gap: Skills
+    source_project_impacts: Array<{
+      project_id: number
+      impact: "low" | "medium" | "high"
+    }>
   }
 }
 
-type MatchingMove = {
+type MatchingSuggestionMove = {
   employee_id: number
   from_project_id: number | null
   to_project_id: number
   action: "assign" | "move" | "add_assignment"
   suggested_role: string
   current_project_impact: "low" | "medium" | "high"
-  hard_rule_reasons: string[]
   reason: string
-  move_request_reason?: string
-}
-
-type ProjectCoverageAfter = {
-  headcount_gap: number
-  skill_gap: Skills
-  available_skills: Skills
-  coverage_ratio: number
+  move_request_reason: string
 }
 ```
 
-Display candidates ordered as returned when showing the strict-rule audit trail
-or debugging why a plan was allowed. A useful card layout:
-
-- Candidate title: `candidate_plan_id` plus `strict_score`.
-- Summary: `summary`.
-- Moves: one row per `moves[]`, resolving employee and project names from cached
-  `/db-api/employees` and `/db-api/projects` data.
-- Reasons: `move.reason` and `move.hard_rule_reasons`.
-- Risks: show `risks` when present.
-- Coverage: show `plan_payload.project_coverage_after` for the target and any
-  source project touched by the plan.
+Display suggestions ordered by `rank`. The first item is the LLM-picked best
+plan. Resolve employee and project names client-side from cached
+`/db-api/employees` and `/db-api/projects` data; IDs remain canonical.
 
 Move action semantics:
 
@@ -197,47 +178,29 @@ Move action semantics:
   target; `from_project_id` is `null`.
 - `move`: employee is recommended to leave `from_project_id` for `to_project_id`.
 
-### Hiring Recommendations
+### Hiring Suggestions
 
 ```ts
-type MatchingHiringRecommendation = {
+type MatchingHiringSuggestion = {
   candidate_plan_id: string | null
   project_id: number
   role_title: string
   count: number
   required_skills: Skills
-  reason: string
+  rationale: string
   urgency: "low" | "medium" | "high"
   suggested_assignment: string | null
 }
 ```
 
-Render hiring recommendations as first-class outcomes, not as errors. They mean
+Render hiring suggestions as first-class outcomes, not as errors. They mean
 the strict rules could not safely solve every gap with internal reassignment.
 
-### Events
+### Audit Data
 
-```ts
-type MatchingRunEvent = {
-  level: "info" | "warning" | "error"
-  stage:
-    | "request"
-    | "snapshot"
-    | "strict_rules"
-    | "hiring_gap"
-    | "llm_evaluation"
-    | "persistence"
-    | "action"
-  event_type: string
-  message: string
-  metadata?: Record<string, unknown>
-}
-```
-
-Use events for a timeline or collapsible audit log. Messages are safe to show in
-the UI. Metadata is compact and should be treated as supporting detail.
-
-Common current event types:
+The backend run response no longer embeds strict-rule candidates, persisted
+recommendation rows, or full event logs. Use the DB API endpoints below for
+debug/audit views. Common current event types include:
 
 - `strict_rules.started`
 - `strict_rules.scope_selected`
@@ -287,7 +250,9 @@ Recommended current UI behavior:
 3. Keep assignment changes separate from move-request creation. Updating a move
    request to `accepted` does not automatically update `project_assignments`.
 
-The action endpoint builds move requests from `recommendation.suggested_moves`.
+The action endpoint builds move requests from the persisted recommendation's
+`suggested_moves`. Backend run responses expose the same actionable data as
+`suggestions[].moves`.
 For reference, each created move request has this shape:
 
 ```json
@@ -306,13 +271,13 @@ For `assign` and `add_assignment`, send `"from_project_id": null`.
 
 ## Empty And Error States
 
-- `status: "failed"`: show the run `summary` or error state and offer retry.
-- `candidate_count: 0` with hiring recommendations: show hiring gap cards as the
-  main result.
-- `candidate_count > 0` and `recommendation_count: 0`: treat the run as failed
-  or incomplete unless the status is still `running`.
-- `candidate_count: 0` and no hiring recommendations: show "No matching action
-  found for the current snapshot."
+- `status: "failed"`: show `summary.headline` or an error state and offer retry.
+- `summary.suggestion_count: 0` with hiring suggestions: show hiring gap cards as
+  the main result.
+- `summary.generated_candidate_count > 0` and `summary.suggestion_count: 0`:
+  treat the run as failed or incomplete unless the status is still `running`.
+- No suggestions and no hiring suggestions: show "No matching action found for
+  the current snapshot."
 - HTTP `400`: request/config problem or unknown target project.
 - HTTP `404` from latest-run reads: no run exists yet; show an initial empty
   state.
@@ -326,7 +291,7 @@ For `assign` and `add_assignment`, send `"from_project_id": null`.
 - Trigger project matching from project detail/create/update flows.
 - Trigger portfolio matching from a CTO staffing dashboard.
 - Resolve employee/project names client-side from canonical IDs.
-- Render recommendations, strict candidates, hiring recommendations, and event
-  timeline separately.
-- Treat `recommendations[0]` as the LLM-picked best plan when present.
+- Render `suggestions` as approval cards and `hiring_suggestions` as gap cards.
+- Use DB API child endpoints only for audit/debug views.
+- Treat `suggestions[0]` as the LLM-picked best plan when present.
 - Never assume accepted move requests automatically mutate assignments.

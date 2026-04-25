@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from schemas.common import Skills
 
@@ -23,6 +23,16 @@ class MatchingRunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     requested_by: str | None = Field(default=None, max_length=255)
+    policy_id: int | None = Field(default=None, gt=0)
+    policy_name: str | None = Field(default=None, max_length=255)
+    policy_id: int | None = Field(default=None, gt=0)
+    policy_name: str | None = Field(default=None, min_length=1, max_length=255)
+
+    @model_validator(mode="after")
+    def require_single_policy_selector(self) -> "MatchingRunRequest":
+        if self.policy_id is not None and self.policy_name is not None:
+            raise ValueError("Use either policy_id or policy_name, not both.")
+        return self
 
 
 class MatchingMoveResponse(BaseModel):
@@ -77,20 +87,78 @@ class MatchingRunEventResponse(BaseModel):
     metadata: dict[str, Any] | None = None
 
 
+class MatchingRunSummaryResponse(BaseModel):
+    headline: str
+    selected_candidate_plan_id: str | None = None
+    generated_candidate_count: int = Field(ge=0)
+    evaluated_candidate_count: int = Field(ge=0)
+    suggestion_count: int = Field(ge=0)
+    hiring_suggestion_count: int = Field(ge=0)
+
+
+class MatchingSuggestionSourceImpactResponse(BaseModel):
+    project_id: int = Field(gt=0)
+    impact: Impact
+
+
+class MatchingSuggestionImpactResponse(BaseModel):
+    target_project_id: int = Field(gt=0)
+    target_headcount_gap: int = Field(ge=0)
+    target_skill_gap: dict[str, int]
+    source_project_impacts: list[MatchingSuggestionSourceImpactResponse]
+
+
+class MatchingSuggestionMoveResponse(BaseModel):
+    employee_id: int = Field(gt=0)
+    from_project_id: int | None = None
+    to_project_id: int = Field(gt=0)
+    action: Literal["assign", "move", "add_assignment"]
+    suggested_role: str
+    current_project_impact: Impact
+    reason: str
+    move_request_reason: str
+
+
+class MatchingSuggestionResponse(BaseModel):
+    suggestion_id: str
+    candidate_plan_id: str
+    rank: int = Field(gt=0)
+    score: float | None = Field(default=None, ge=0.0, le=1.0)
+    title: str
+    rationale: str
+    tradeoffs: list[str]
+    risks: list[str]
+    moves: list[MatchingSuggestionMoveResponse]
+    impact: MatchingSuggestionImpactResponse
+
+
+class MatchingHiringSuggestionResponse(BaseModel):
+    candidate_plan_id: str | None = None
+    project_id: int
+    role_title: str
+    count: int = Field(ge=1)
+    required_skills: dict[str, int]
+    rationale: str
+    urgency: Literal["low", "medium", "high"]
+    suggested_assignment: str | None = None
+
+
+class MatchingRunDiagnosticsResponse(BaseModel):
+    policy_id: int
+    policy_name: str
+    event_count: int = Field(ge=0)
+    warnings: list[str]
+
+
 class MatchingRunResponse(BaseModel):
     run_id: int
     use_case: MatchingUseCase
     status: Literal["pending", "running", "completed", "failed"]
     target_project_id: int | None = None
-    candidate_count: int
-    recommendation_count: int
-    hiring_recommendation_count: int
-    selected_candidate_plan_id: str | None = None
-    summary: str
-    candidates: list[MatchingCandidateResponse]
-    recommendations: list[MatchingRecommendationResponse]
-    hiring_recommendations: list[MatchingHiringRecommendationResponse]
-    logs: list[MatchingRunEventResponse]
+    summary: MatchingRunSummaryResponse
+    suggestions: list[MatchingSuggestionResponse]
+    hiring_suggestions: list[MatchingHiringSuggestionResponse]
+    diagnostics: MatchingRunDiagnosticsResponse
 
 
 # --- Input to the LLM evaluator ---
@@ -171,6 +239,7 @@ class RecommendedMove(BaseModel):
     action: Literal["assign", "move", "add_assignment"]
     suggested_role: str
     current_project_impact: Impact
+    reason: str | None = None
 
 
 class RecommendedBenchMove(BaseModel):
@@ -183,7 +252,9 @@ class RecommendedBenchMove(BaseModel):
 class BestPlan(BaseModel):
     candidate_plan_id: str = Field(min_length=1)
     fit_score: float = Field(ge=0.0, le=1.0)
-    reason: str
+    title: str = Field(min_length=1)
+    rationale: str = Field(min_length=1)
+    tradeoff: str | None = None
     moves: list[RecommendedMove]
     bench_moves: list[RecommendedBenchMove]
     risks: list[str]
@@ -192,7 +263,8 @@ class BestPlan(BaseModel):
 class AlternativePlan(BaseModel):
     candidate_plan_id: str = Field(min_length=1)
     fit_score: float = Field(ge=0.0, le=1.0)
-    reason: str
+    title: str = Field(min_length=1)
+    rationale: str = Field(min_length=1)
     tradeoff: str = Field(min_length=1)
     moves: list[RecommendedMove]
     bench_moves: list[RecommendedBenchMove]

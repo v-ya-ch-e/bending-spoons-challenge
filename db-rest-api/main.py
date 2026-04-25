@@ -1131,14 +1131,22 @@ def delete_move_request(request_id: int) -> Response:
 def list_policies(
     limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
     offset: int = Query(0, ge=0),
+    name: str | None = Query(None, min_length=1, max_length=255),
 ) -> list[dict[str, Any]]:
     with open_db_connection() as connection:
         with connection.cursor() as cursor:
-            execute_or_raise(
-                cursor,
-                "SELECT * FROM policies ORDER BY id LIMIT %s OFFSET %s",
-                (limit, offset),
-            )
+            if name is None:
+                execute_or_raise(
+                    cursor,
+                    "SELECT * FROM policies ORDER BY id LIMIT %s OFFSET %s",
+                    (limit, offset),
+                )
+            else:
+                execute_or_raise(
+                    cursor,
+                    "SELECT * FROM policies WHERE name = %s ORDER BY id LIMIT %s OFFSET %s",
+                    (name, limit, offset),
+                )
             return [serialize_policy(row) for row in cursor.fetchall()]
 
 

@@ -23,7 +23,7 @@ Public environments:
 - JSON columns must be serialized before writes and deserialized before API responses.
 - Project assignments are stored by ID in `project_assignments`; name-based assignment fields are response aliases only.
 - Updating a move request only updates the `move_requests` row. It does not automatically move employees between projects.
-- Matching policies are versioned rows in `policies`; exactly one policy should be active and backend matching runs use the active policy as their default rule configuration.
+- Matching policies are versioned rows in `policies`; exactly one policy should be active. The seeded default active policy is `Balanced strict matching`, and backend matching run endpoints use balanced unless a request selects a different policy.
 - If the DB schema or public API changes, update this document in the same change.
 
 ## Service Metadata Endpoints
@@ -409,9 +409,9 @@ Foreign-key behavior:
 Database table: `policies`
 
 Policies store reusable matching rule configuration. The backend matching service
-loads the active policy before every matching run. Run endpoints do not accept
-configuration overrides; the active policy is the source of matching
-configuration. The final effective config is still stored on
+loads a stored policy before every matching run. Backend run endpoints accept
+`policy_id` or `policy_name`; when neither is provided they use
+`Balanced strict matching`. The final effective config is still stored on
 `matching_runs.rule_config` for auditability.
 
 Stored fields:
@@ -427,7 +427,8 @@ Stored fields:
 
 Default seed:
 
-- `schema.sql` inserts `Default strict matching` when the `policies` table is empty. Its config matches the original strict-rule defaults from backend code.
+- `schema.sql` inserts `Conservative strict matching`, `Balanced strict matching`, and `Aggressive strict matching` when each named row is missing.
+- `Balanced strict matching` is activated by default.
 
 Endpoints:
 
@@ -439,8 +440,8 @@ Endpoints:
 - `POST /policies/{policy_id}:activate`
 - `DELETE /policies/{policy_id}`
 
-`GET /policies` accepts `limit` and `offset`. `GET /policies/active` returns
-HTTP `404` when no active policy exists.
+`GET /policies` accepts `limit`, `offset`, and optional exact `name` filter.
+`GET /policies/active` returns HTTP `404` when no active policy exists.
 
 Create payload:
 
@@ -679,6 +680,12 @@ candidate plans should have `recommendation_count` greater than `0`. Runs with
 no strict-rule candidates can still complete with `recommendation_count` set to
 `0` and hiring recommendations as the main outcome.
 
+The backend orchestration endpoints (`/api/projects/{project_id}/matching:run`
+and `/api/matching/portfolio:rebalance`) return a compact approval response with
+`suggestions`, `hiring_suggestions`, and summary diagnostics. Use these DB API
+child endpoints for persisted audit/debug data or to convert an approved
+recommendation into move requests.
+
 Create recommendation payload:
 
 ```json
@@ -698,6 +705,7 @@ Create recommendation payload:
       "action": "move",
       "suggested_role": "Backend/platform engineer",
       "current_project_impact": "low",
+      "reason": "Covers the target backend gap with low source impact.",
       "move_request_reason": "Backend skills match the target project's needs."
     }
   ],
@@ -754,7 +762,8 @@ Action behavior:
 - The action does not update `project_assignments`.
 - Suggested moves must include `employee_id`, `to_project_id`,
   `current_project_impact`, and either `suggested_role` or `expected_role`.
-  `from_project_id` can be `null`.
+  `from_project_id` can be `null`. The action uses `move_request_reason`, then
+  `reason`, then the recommendation summary as the move-request reason.
 
 Foreign-key behavior:
 

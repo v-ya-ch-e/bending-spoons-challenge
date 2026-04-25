@@ -57,11 +57,34 @@ CREATE TABLE IF NOT EXISTS policies (
 
 INSERT INTO policies (name, description, config, is_active, activated_at)
 SELECT
-    'Default strict matching',
-    'Baseline policy matching the original strict-rule defaults.',
+    'Conservative strict matching',
+    'Minimizes disruption by limiting moves and protecting current project coverage.',
     JSON_OBJECT(
         'max_candidate_plans', 25,
-        'max_moves', 3,
+        'max_moves', 1,
+        'max_projects_in_scope', 8,
+        'max_employees_in_scope', 60,
+        'max_employee_project_count', 2,
+        'minimum_remaining_project_coverage', 0.85,
+        'minimum_target_coverage_improvement', 0.1,
+        'allow_unassigned_employees', TRUE,
+        'allow_multi_project_assignment', TRUE,
+        'allow_understaff_current_project', FALSE,
+        'exclude_pending_move_requests', TRUE,
+        'prefer_employee_preferences', TRUE,
+        'emit_hiring_gaps', TRUE
+    ),
+    FALSE,
+    NULL
+WHERE NOT EXISTS (SELECT 1 FROM policies WHERE name = 'Conservative strict matching');
+
+INSERT INTO policies (name, description, config, is_active, activated_at)
+SELECT
+    'Balanced strict matching',
+    'Balanced matching defaults for demos and normal staffing planning.',
+    JSON_OBJECT(
+        'max_candidate_plans', 25,
+        'max_moves', 2,
         'max_projects_in_scope', 8,
         'max_employees_in_scope', 60,
         'max_employee_project_count', 2,
@@ -76,7 +99,44 @@ SELECT
     ),
     TRUE,
     CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM policies);
+WHERE NOT EXISTS (SELECT 1 FROM policies WHERE name = 'Balanced strict matching');
+
+INSERT INTO policies (name, description, config, is_active, activated_at)
+SELECT
+    'Aggressive strict matching',
+    'Prioritizes urgent strategic staffing by allowing more source-project risk.',
+    JSON_OBJECT(
+        'max_candidate_plans', 25,
+        'max_moves', 3,
+        'max_projects_in_scope', 8,
+        'max_employees_in_scope', 60,
+        'max_employee_project_count', 2,
+        'minimum_remaining_project_coverage', 0.6,
+        'minimum_target_coverage_improvement', 0.1,
+        'allow_unassigned_employees', TRUE,
+        'allow_multi_project_assignment', TRUE,
+        'allow_understaff_current_project', TRUE,
+        'exclude_pending_move_requests', TRUE,
+        'prefer_employee_preferences', TRUE,
+        'emit_hiring_gaps', TRUE
+    ),
+    FALSE,
+    NULL
+WHERE NOT EXISTS (SELECT 1 FROM policies WHERE name = 'Aggressive strict matching');
+
+UPDATE policies
+SET
+    is_active = CASE WHEN name = 'Balanced strict matching' THEN TRUE ELSE FALSE END,
+    activated_at = CASE
+        WHEN name = 'Balanced strict matching' AND activated_at IS NULL THEN CURRENT_TIMESTAMP
+        WHEN name <> 'Balanced strict matching' THEN NULL
+        ELSE activated_at
+    END
+WHERE name IN (
+    'Conservative strict matching',
+    'Balanced strict matching',
+    'Aggressive strict matching'
+) OR is_active = TRUE;
 
 CREATE TABLE IF NOT EXISTS matching_runs (
     id INT AUTO_INCREMENT PRIMARY KEY,
