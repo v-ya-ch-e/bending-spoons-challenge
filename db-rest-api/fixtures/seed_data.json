@@ -1,0 +1,729 @@
+{
+  "employees": [
+    {
+      "name": "Luca Fontana",
+      "role": "iOS Developer",
+      "current_project": "PhotoMagic",
+      "skills": {
+        "android": 1,
+        "ios": 3,
+        "web": 2,
+        "backend": 0,
+        "infrastructure": 1,
+        "ai": 1
+      },
+      "preferences": [
+        "SocialConnect",
+        "WeatherWise"
+      ],
+      "interests": [
+        "iOS Development",
+        "UI/UX Design",
+        "Mobile Apps"
+      ]
+    },
+    {
+      "name": "Giulia Rossi",
+      "role": "Backend Engineer",
+      "current_project": "FitBuddy",
+      "skills": {
+        "android": 0,
+        "ios": 1,
+        "web": 2,
+        "backend": 3,
+        "infrastructure": 1,
+        "ai": 0
+      },
+      "preferences": [
+        "TaskMaster",
+        "HomeBudget"
+      ],
+      "interests": [
+        "Backend Development",
+        "API Design",
+        "Data Security"
+      ]
+    },
+    {
+      "name": "Marco Bianchi",
+      "role": "AI/ML Engineer",
+      "current_project": "Reader's Haven",
+      "skills": {
+        "android": 0,
+        "ios": 0,
+        "web": 1,
+        "backend": 1,
+        "infrastructure": 1,
+        "ai": 3
+      },
+      "preferences": [
+        "PhotoMagic",
+        "SocialConnect"
+      ],
+      "interests": [
+        "Machine Learning",
+        "Data Analysis",
+        "Artificial Intelligence"
+      ]
+    },
+    {
+      "name": "Alessia Conti",
+      "role": "Android Developer",
+      "current_project": "TravelPro",
+      "skills": {
+        "android": 3,
+        "ios": 1,
+        "web": 2,
+        "backend": 1,
+        "infrastructure": 0,
+        "ai": 0
+      },
+      "preferences": [
+        "WeatherWise",
+        "FitBuddy"
+      ],
+      "interests": [
+        "Android Development",
+        "Mobile Gaming",
+        "AR/VR Technologies"
+      ]
+    },
+    {
+      "name": "Francesco Romano",
+      "role": "Web Developer",
+      "current_project": null,
+      "skills": {
+        "android": 0,
+        "ios": 0,
+        "web": 3,
+        "backend": 1,
+        "infrastructure": 0,
+        "ai": 0
+      },
+      "preferences": [
+        "HomeBudget",
+        "TaskMaster"
+      ],
+      "interests": [
+        "Web Development",
+        "SEO Strategies",
+        "Content Management"
+      ]
+    },
+    {
+      "name": "Elena Greco",
+      "role": "Product Engineer",
+      "current_project": "HomeBudget",
+      "skills": {
+        "android": 1,
+        "ios": 2,
+        "web": 2,
+        "backend": 1,
+        "infrastructure": 1,
+        "ai": 0
+      },
+      "preferences": [
+        "Reader's Haven",
+        "TravelPro"
+      ],
+      "interests": [
+        "Product Management",
+        "User Research",
+        "Agile Methodologies"
+      ]
+    },
+    {
+      "name": "Matteo Gallo",
+      "role": "Engineering Manager",
+      "current_project": "SocialConnect",
+      "skills": {
+        "android": 1,
+        "ios": 1,
+        "web": 1,
+        "backend": 2,
+        "infrastructure": 2,
+        "ai": 1
+      },
+      "preferences": [
+        "WeatherWise",
+        "FitBuddy"
+      ],
+      "interests": [
+        "Team Leadership",
+        "Project Planning",
+        "Software Development"
+      ]
+    },
+    {
+      "name": "Sofia Ferrari",
+      "role": "Infrastructure Engineer",
+      "current_project": null,
+      "skills": {
+        "android": 0,
+        "ios": 0,
+        "web": 1,
+        "backend": 1,
+        "infrastructure": 3,
+        "ai": 0
+      },
+      "preferences": [
+        "TaskMaster",
+        "PhotoMagic"
+      ],
+      "interests": [
+        "Cloud Computing",
+        "Network Security",
+        "DevOps"
+      ]
+    },
+    {
+      "name": "Riccardo Mariani",
+      "role": "iOS Developer",
+      "current_project": "WeatherWise",
+      "skills": {
+        "android": 0,
+        "ios": 3,
+        "web": 2,
+        "backend": 1,
+        "infrastructure": 1,
+        "ai": 1
+      },
+      "preferences": [
+        "SocialConnect",
+        "FitBuddy"
+      ],
+      "interests": [
+        "iOS Development",
+        "Mobile Optimization",
+        "User Experience"
+      ]
+    },
+    {
+      "name": "Giovanni Riva",
+      "role": "Backend Engineer",
+      "current_project": "TaskMaster",
+      "skills": {
+        "android": 0,
+        "ios": 0,
+        "web": 2,
+        "backend": 3,
+        "infrastructure": 1,
+        "ai": 0
+      },
+      "preferences": [
+        "HomeBudget",
+        "Reader's Haven"
+      ],
+      "interests": [
+        "Backend Development",
+        "Database Management",
+        "Software Architecture"
+      ]
+    },
+    {
+      "name": "Alberto Conti",
+      "role": "iOS Developer",
+      "current_project": "PhotoMagic",
+      "skills": {
+        "android": 1,
+        "ios": 3,
+        "web": 2,
+        "backend": 1,
+        "infrastructure": 0,
+        "ai": 1
+      },
+      "preferences": [
+        "FitBuddy",
+        "TravelPro"
+      ],
+      "interests": [
+        "iOS Development",
+        "User Experience",
+        "App Design"
+      ]
+    },
+    {
+      "name": "Beatrice Verdi",
+      "role": "Backend Engineer",
+      "current_project": "FitBuddy",
+      "skills": {
+        "android": 0,
+        "ios": 1,
+        "web": 1,
+        "backend": 3,
+        "infrastructure": 1,
+        "ai": 0
+      },
+      "preferences": [
+        "WeatherWise",
+        "SocialConnect"
+      ],
+      "interests": [
+        "API Development",
+        "Microservices",
+        "Cloud Computing"
+      ]
+    },
+    {
+      "name": "Dario Marchetti",
+      "role": "AI Engineer",
+      "current_project": "Reader's Haven",
+      "skills": {
+        "android": 0,
+        "ios": 0,
+        "web": 1,
+        "backend": 1,
+        "infrastructure": 0,
+        "ai": 3
+      },
+      "preferences": [
+        "PhotoMagic",
+        "HomeBudget"
+      ],
+      "interests": [
+        "Machine Learning",
+        "Data Analysis",
+        "Artificial Intelligence"
+      ]
+    },
+    {
+      "name": "Claudia Romano",
+      "role": "Web Developer",
+      "current_project": null,
+      "skills": {
+        "android": 0,
+        "ios": 0,
+        "web": 3,
+        "backend": 1,
+        "infrastructure": 1,
+        "ai": 0
+      },
+      "preferences": [
+        "TravelPro",
+        "TaskMaster"
+      ],
+      "interests": [
+        "Web Development",
+        "JavaScript",
+        "Responsive Design"
+      ]
+    },
+    {
+      "name": "Emanuele Riva",
+      "role": "Android Developer",
+      "current_project": "SocialConnect",
+      "skills": {
+        "android": 3,
+        "ios": 1,
+        "web": 2,
+        "backend": 1,
+        "infrastructure": 0,
+        "ai": 1
+      },
+      "preferences": [
+        "FitBuddy",
+        "WeatherWise"
+      ],
+      "interests": [
+        "Mobile Apps",
+        "Android SDK",
+        "UI Design"
+      ]
+    },
+    {
+      "name": "Francesca Gallo",
+      "role": "Product Engineer",
+      "current_project": "HomeBudget",
+      "skills": {
+        "android": 1,
+        "ios": 2,
+        "web": 2,
+        "backend": 1,
+        "infrastructure": 1,
+        "ai": 0
+      },
+      "preferences": [
+        "Reader's Haven",
+        "TravelPro"
+      ],
+      "interests": [
+        "Product Management",
+        "Agile Methodologies",
+        "User Research"
+      ]
+    },
+    {
+      "name": "Giovanni Ferraro",
+      "role": "Engineering Manager",
+      "current_project": "WeatherWise",
+      "skills": {
+        "android": 0,
+        "ios": 1,
+        "web": 2,
+        "backend": 1,
+        "infrastructure": 3,
+        "ai": 0
+      },
+      "preferences": [
+        "TaskMaster",
+        "FitBuddy"
+      ],
+      "interests": [
+        "Team Leadership",
+        "Technical Strategy",
+        "Project Management"
+      ]
+    },
+    {
+      "name": "Lorenzo Bianchi",
+      "role": "Full Stack Developer",
+      "current_project": "TaskMaster",
+      "skills": {
+        "android": 1,
+        "ios": 1,
+        "web": 3,
+        "backend": 2,
+        "infrastructure": 0,
+        "ai": 0
+      },
+      "preferences": [
+        "PhotoMagic",
+        "SocialConnect"
+      ],
+      "interests": [
+        "Full Stack Development",
+        "DevOps",
+        "Continuous Integration"
+      ]
+    },
+    {
+      "name": "Martina Greco",
+      "role": "Infrastructure Specialist",
+      "current_project": null,
+      "skills": {
+        "android": 0,
+        "ios": 0,
+        "web": 1,
+        "backend": 2,
+        "infrastructure": 3,
+        "ai": 0
+      },
+      "preferences": [
+        "WeatherWise",
+        "HomeBudget"
+      ],
+      "interests": [
+        "Cloud Infrastructure",
+        "DevOps",
+        "System Administration"
+      ]
+    },
+    {
+      "name": "Nicola Fontana",
+      "role": "AI Researcher",
+      "current_project": "TravelPro",
+      "skills": {
+        "android": 0,
+        "ios": 0,
+        "web": 2,
+        "backend": 2,
+        "infrastructure": 1,
+        "ai": 2
+      },
+      "preferences": [
+        "Reader's Haven",
+        "SocialConnect"
+      ],
+      "interests": [
+        "AI Research",
+        "Data Science",
+        "Predictive Analytics"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "project_name": "PhotoMagic",
+      "project_description": "An AI-powered photo editing app that enhances user photos and applies filters.",
+      "project_phase": "new acquisition",
+      "current_team_members": [
+        "Luca Fontana",
+        "Alberto Conti"
+      ],
+      "required_people_amount": 5,
+      "required_skills": {
+        "android": 2,
+        "ios": 2,
+        "web": 1,
+        "backend": 2,
+        "infrastructure": 1,
+        "ai": 3
+      },
+      "github_repositories": [
+        "https://github.com/bendingspoons/photo-magic",
+        "https://github.com/bendingspoons/photo-magic-backend"
+      ]
+    },
+    {
+      "project_name": "FitBuddy",
+      "project_description": "A fitness tracking application that integrates with wearable devices and offers personalized workout plans.",
+      "project_phase": "growth",
+      "current_team_members": [
+        "Giulia Rossi",
+        "Beatrice Verdi"
+      ],
+      "required_people_amount": 4,
+      "required_skills": {
+        "android": 2,
+        "ios": 2,
+        "web": 1,
+        "backend": 2,
+        "infrastructure": 1,
+        "ai": 2
+      },
+      "github_repositories": [
+        "https://github.com/bendingspoons/fitbuddy",
+        "https://github.com/bendingspoons/fitbuddy-ai"
+      ]
+    },
+    {
+      "project_name": "TravelPro",
+      "project_description": "A travel planning platform that aggregates travel deals and helps users plan trips efficiently.",
+      "project_phase": "new acquisition",
+      "current_team_members": [
+        "Alessia Conti",
+        "Nicola Fontana"
+      ],
+      "required_people_amount": 3,
+      "required_skills": {
+        "android": 1,
+        "ios": 1,
+        "web": 2,
+        "backend": 2,
+        "infrastructure": 1,
+        "ai": 1
+      },
+      "github_repositories": [
+        "https://github.com/bendingspoons/travelpro",
+        "https://github.com/bendingspoons/travelpro-backend"
+      ]
+    },
+    {
+      "project_name": "HomeBudget",
+      "project_description": "A personal finance management app that helps users track spending and savings.",
+      "project_phase": "maintenance",
+      "current_team_members": [
+        "Elena Greco",
+        "Francesca Gallo"
+      ],
+      "required_people_amount": 2,
+      "required_skills": {
+        "android": 1,
+        "ios": 1,
+        "web": 2,
+        "backend": 1,
+        "infrastructure": 1,
+        "ai": 0
+      },
+      "github_repositories": [
+        "https://github.com/bendingspoons/homebudget"
+      ]
+    },
+    {
+      "project_name": "SocialConnect",
+      "project_description": "A social networking app focused on connecting users with shared interests and activities.",
+      "project_phase": "growth",
+      "current_team_members": [
+        "Matteo Gallo",
+        "Emanuele Riva"
+      ],
+      "required_people_amount": 6,
+      "required_skills": {
+        "android": 3,
+        "ios": 3,
+        "web": 3,
+        "backend": 2,
+        "infrastructure": 2,
+        "ai": 2
+      },
+      "github_repositories": [
+        "https://github.com/bendingspoons/socialconnect",
+        "https://github.com/bendingspoons/socialconnect-backend"
+      ]
+    },
+    {
+      "project_name": "Reader's Haven",
+      "project_description": "An eBook reader app that offers a large library of titles and personalized recommendations.",
+      "project_phase": "new acquisition",
+      "current_team_members": [
+        "Marco Bianchi",
+        "Dario Marchetti"
+      ],
+      "required_people_amount": 4,
+      "required_skills": {
+        "android": 2,
+        "ios": 2,
+        "web": 2,
+        "backend": 2,
+        "infrastructure": 1,
+        "ai": 1
+      },
+      "github_repositories": [
+        "https://github.com/bendingspoons/readershaven"
+      ]
+    },
+    {
+      "project_name": "TaskMaster",
+      "project_description": "A project management tool designed for teams to organize tasks and collaborate effectively.",
+      "project_phase": "maintenance",
+      "current_team_members": [
+        "Giovanni Riva",
+        "Lorenzo Bianchi"
+      ],
+      "required_people_amount": 3,
+      "required_skills": {
+        "android": 1,
+        "ios": 1,
+        "web": 3,
+        "backend": 2,
+        "infrastructure": 1,
+        "ai": 0
+      },
+      "github_repositories": [
+        "https://github.com/bendingspoons/taskmaster",
+        "https://github.com/bendingspoons/taskmaster-backend"
+      ]
+    },
+    {
+      "project_name": "WeatherWise",
+      "project_description": "A weather forecasting app that provides accurate and timely weather updates and alerts.",
+      "project_phase": "growth",
+      "current_team_members": [
+        "Riccardo Mariani",
+        "Giovanni Ferraro"
+      ],
+      "required_people_amount": 5,
+      "required_skills": {
+        "android": 2,
+        "ios": 2,
+        "web": 2,
+        "backend": 2,
+        "infrastructure": 1,
+        "ai": 1
+      },
+      "github_repositories": [
+        "https://github.com/bendingspoons/weatherwise"
+      ]
+    }
+  ],
+  "move_requests": [
+    {
+      "employee_name": "Luca Fontana",
+      "from_project_name": "PhotoMagic",
+      "to_project_name": "SocialConnect",
+      "reason": "Luca has extensive iOS skills and SocialConnect needs additional iOS expertise.",
+      "expected_role": "iOS Developer",
+      "current_project_impact": "high",
+      "status": "pending"
+    },
+    {
+      "employee_name": "Giulia Rossi",
+      "from_project_name": "FitBuddy",
+      "to_project_name": "HomeBudget",
+      "reason": "Giulia's backend expertise is required for HomeBudget's growth phase.",
+      "expected_role": "Backend Engineer",
+      "current_project_impact": "medium",
+      "status": "accepted"
+    },
+    {
+      "employee_name": "Marco Bianchi",
+      "from_project_name": "Reader's Haven",
+      "to_project_name": "PhotoMagic",
+      "reason": "Marco wants to leverage his AI skills in PhotoMagic for improved features.",
+      "expected_role": "AI/ML Engineer",
+      "current_project_impact": "medium",
+      "status": "clarification_requested"
+    },
+    {
+      "employee_name": "Alessia Conti",
+      "from_project_name": "TravelPro",
+      "to_project_name": "FitBuddy",
+      "reason": "Alessia's Android skills can help stabilize FitBuddy's development.",
+      "expected_role": "Android Developer",
+      "current_project_impact": "low",
+      "status": "accepted"
+    },
+    {
+      "employee_name": "Francesco Romano",
+      "from_project_name": null,
+      "to_project_name": "HomeBudget",
+      "reason": "Francesco seeks to contribute his web skills to HomeBudget's team.",
+      "expected_role": "Web Developer",
+      "current_project_impact": "low",
+      "status": "pending"
+    },
+    {
+      "employee_name": "Elena Greco",
+      "from_project_name": "HomeBudget",
+      "to_project_name": "TaskMaster",
+      "reason": "Elena's versatile skills can help TaskMaster during its maintenance phase.",
+      "expected_role": "Product Engineer",
+      "current_project_impact": "medium",
+      "status": "rejected"
+    },
+    {
+      "employee_name": "Riccardo Mariani",
+      "from_project_name": "WeatherWise",
+      "to_project_name": "SocialConnect",
+      "reason": "Riccardo wants to enhance SocialConnect with his iOS development experience.",
+      "expected_role": "iOS Developer",
+      "current_project_impact": "high",
+      "status": "pending"
+    },
+    {
+      "employee_name": "Giovanni Riva",
+      "from_project_name": "TaskMaster",
+      "to_project_name": "Reader's Haven",
+      "reason": "Giovanni's backend expertise is essential for Reader's Haven's new features.",
+      "expected_role": "Backend Engineer",
+      "current_project_impact": "high",
+      "status": "accepted"
+    },
+    {
+      "employee_name": "Sofia Ferrari",
+      "from_project_name": null,
+      "to_project_name": "PhotoMagic",
+      "reason": "Sofia is eager to apply her infrastructure skills to support PhotoMagic.",
+      "expected_role": "Infrastructure Engineer",
+      "current_project_impact": "low",
+      "status": "clarification_requested"
+    },
+    {
+      "employee_name": "Francesca Gallo",
+      "from_project_name": "HomeBudget",
+      "to_project_name": "TravelPro",
+      "reason": "Francesca's product skills can benefit TravelPro's development team.",
+      "expected_role": "Product Engineer",
+      "current_project_impact": "medium",
+      "status": "rejected"
+    },
+    {
+      "employee_name": "Dario Marchetti",
+      "from_project_name": "Reader's Haven",
+      "to_project_name": "PhotoMagic",
+      "reason": "Dario believes his AI expertise can significantly enhance PhotoMagic's features.",
+      "expected_role": "AI Engineer",
+      "current_project_impact": "high",
+      "status": "pending"
+    },
+    {
+      "employee_name": "Claudia Romano",
+      "from_project_name": null,
+      "to_project_name": "TaskMaster",
+      "reason": "Claudia wants to utilize her web development skills in a dynamic environment.",
+      "expected_role": "Web Developer",
+      "current_project_impact": "low",
+      "status": "accepted"
+    }
+  ]
+}

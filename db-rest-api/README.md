@@ -182,13 +182,13 @@ python scripts/init_db.py --reset
 python scripts/generate_fixtures.py
 ```
 
-Calls the model defined by `OPENAI_MODEL` and writes a validated dataset to `db-rest-api/fixtures/seed_data.json`. The `fixtures/` directory is created automatically. The script:
+Calls the model defined by `OPENAI_MODEL` and writes a validated dataset to `db-rest-api/fixtures/seed_data.json`. By default, it generates 20 employees, 8 projects, and 12 move requests. The `fixtures/` directory is created automatically. The script:
 
 - Uses the OpenAI SDK's structured-output parsing with Pydantic models, so the response is guaranteed to match the fixture schema or the script exits with the model's refusal.
-- Re-validates cross-references (every `current_project`, every `current_team_members` entry, every move-request name) and ensures all four `move_requests.status` values are present.
+- Normalizes denormalized project team membership from each employee's `current_project`, then re-validates cross-references (every `current_project`, every employee preference, every move-request name), checks project/team symmetry, and ensures all project phases plus all four `move_requests.status` values are present.
 - Exits non-zero on any validation failure without writing the file.
 
-Use `--output PATH` to write somewhere other than the default.
+Use `--employees`, `--projects`, `--move-requests`, `--attempts`, `--model`, `--timeout`, and `--output PATH` to override the defaults.
 
 ### 3. Load fixtures into MySQL
 

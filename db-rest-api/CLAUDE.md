@@ -77,9 +77,10 @@ Applies [db/schema.sql](db/schema.sql) to the configured database. Statements us
 
 Calls the OpenAI Chat Completions `parse()` helper with Pydantic models so the response is validated against the schema before being deserialized.
 
-- Model selection comes from `OPENAI_MODEL` (defaults to `gpt-4o-mini`).
+- Model selection comes from `OPENAI_MODEL` (defaults to `gpt-4o-mini`) or `--model`.
+- Default dataset size is 20 employees, 8 projects, and 12 move requests. Override with `--employees`, `--projects`, and `--move-requests`.
 - The Pydantic models in this script are the canonical fixture schema: `Skills`, `Employee`, `Project`, `MoveRequest`, `SeedData`. If you change the SQL schema, update these models in lockstep.
-- After parsing, `validate_cross_references()` ensures every `current_project`, `current_team_members` entry, and move-request name reference resolves, and that all four `move_requests.status` values appear at least once. Failures exit with a non-zero code.
+- After parsing, `normalize_seed_data()` derives project team membership from `employees.current_project`, then `validate_seed_data()` ensures expected counts, every `current_project`, preference, and move-request reference resolves, project membership is symmetric, all project phases appear, and all four `move_requests.status` values appear at least once. Failures retry up to `--attempts`, then exit with a non-zero code.
 - Output path is `--output` (default: `db-rest-api/fixtures/seed_data.json`).
 
 When editing the prompt, keep the hard requirements section authoritative. The prompt is what enforces the brief's enum values and the six skill keys at generation time, even though Pydantic also enforces them at parse time.
@@ -97,6 +98,7 @@ Reads the fixture JSON and inserts in dependency order: `projects` -> `employees
 - Keep scripts as plain executable modules (`if __name__ == "__main__"`). Do not introduce a CLI framework or package layout unless asked.
 - Use `json.dumps(...)` when writing into a `JSON` column. `mysql-connector-python` does not auto-serialize dicts/lists.
 - Treat `seed_data.json` as the contract between generation and loading. Adding a column means: update SQL -> update Pydantic model -> update generator prompt -> update loader insert.
+- Treat `db/schema.sql` as the required source of truth for database structure. Any table, column, enum, index, foreign-key, or JSON-shape change must update this file in the same change.
 - Keep `../docs/DB_API_DOCUMENTATION.md` up to date after every DB schema or public API change, including changes to fields, enums, payload shapes, endpoint behavior, error behavior, or foreign-key side effects.
 - Always run `python3 -m pytest db-rest-api/tests` at the end of changes that touch `db-rest-api`, and add or update tests when adding functionality or changing API/schema behavior.
 - Do not commit `.env`. The repo `.gitignore` already excludes it.

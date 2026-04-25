@@ -68,6 +68,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 - `db-rest-api/` is the FastAPI service exposed publicly under `https://doubleu.team/db-api/...` for production and `https://dev.doubleu.team/db-api/...` for development.
 - `docs/DB_API_DOCUMENTATION.md` is the canonical agent-facing DB API contract. Read it before changing database-backed API behavior, frontend API calls, schema, fixtures, or seed loading.
+- Any database structure change must update `db-rest-api/db/schema.sql` in the same change; also update API models, fixture tooling, tests, and `docs/DB_API_DOCUMENTATION.md` when the schema change affects them.
 - Deployments are branch-based: pushes to `main` deploy production, and pushes to `dev` deploy development. See `docs/deployment.md` before changing CI/CD, nginx, TLS, compose project names, server paths, or exposed ports.
 - The EC2 host runs production and development as separate Docker Compose projects: `bsc-prod` on localhost port `8001`, and `bsc-dev` on localhost port `8002`.
 - MySQL RDS credentials live in the repository root `.env` file as `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`. Never commit or print their values.
