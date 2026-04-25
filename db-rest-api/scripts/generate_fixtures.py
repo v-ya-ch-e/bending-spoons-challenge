@@ -8,7 +8,7 @@ import os
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -42,7 +42,7 @@ class Skills(StrictBaseModel):
 class Employee(StrictBaseModel):
     name: str
     role: str
-    current_project: str | None
+    current_projects: list[str] = Field(max_length=3)
     skills: Skills
     preferences: list[str] = Field(max_length=3)
     interests: list[str] = Field(min_length=2, max_length=4)
@@ -52,7 +52,8 @@ class Project(StrictBaseModel):
     project_name: str
     project_description: str
     project_phase: Literal["new acquisition", "growth", "maintenance"]
-    current_team_members: list[str]
+    icon_url: str
+    poster_url: str
     required_people_amount: int = Field(ge=0)
     required_skills: Skills
     github_repositories: list[str] = Field(min_length=1, max_length=3)
@@ -74,10 +75,6 @@ class SeedData(StrictBaseModel):
     move_requests: list[MoveRequest]
 
 
-class ProjectBatch(StrictBaseModel):
-    projects: list[Project]
-
-
 class EmployeeBatch(StrictBaseModel):
     employees: list[Employee]
 
@@ -94,14 +91,161 @@ Hard requirements:
 - project_phase must be one of: "new acquisition", "growth", "maintenance", and the dataset must include every phase at least once.
 - move_requests current_project_impact must be one of: "low", "medium", "high".
 - move_requests status must cover all four values: "pending", "accepted", "rejected", "clarification_requested".
-- Every employee.current_project must be either null or match a project_name from projects.
-- Every project.current_team_members entry must match an employee name from employees.
-- Project membership must be symmetric: if an employee has current_project set, that employee must appear in that project's current_team_members; if a project lists a member, that employee's current_project must be that project.
+- Every employee.current_projects entry must match a project_name from projects.
 - Every employee.preferences entry must match a project_name from projects.
 - Every move_request.employee_name must match an employee name; from_project_name (if not null) and to_project_name must match a project_name.
-- A move request's from_project_name must match that employee's current_project, and to_project_name must be different from from_project_name.
-- Vary roles, seniority, skill profiles, project mixes, and staffing gaps. Include multiple acquired-company projects in the "new acquisition" phase when the requested project count allows it.
+- A move request's from_project_name must be one of that employee's current_projects, and to_project_name must be different from from_project_name.
+- Vary roles, seniority, skill profiles, project mixes, and staffing gaps.
 """
+
+
+def favicon_url(domain: str) -> str:
+    return f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+
+
+def poster_url(product_url: str) -> str:
+    return f"https://image.thum.io/get/width/1200/crop/630/{product_url}"
+
+
+PRODUCT_CATALOG: list[dict[str, Any]] = [
+    {
+        "project_name": "Evernote",
+        "project_description": "Personal productivity and note-taking app focused on fast sync, collaborative editing, AI-powered search, and reliable capture across devices.",
+        "project_phase": "growth",
+        "domain": "evernote.com",
+        "product_url": "https://evernote.com",
+        "required_people_amount": 5,
+        "required_skills": {"android": 2, "ios": 2, "web": 3, "backend": 3, "infrastructure": 2, "ai": 2},
+        "github_repositories": ["https://github.com/bendingspoons/evernote-core", "https://github.com/bendingspoons/evernote-sync"],
+    },
+    {
+        "project_name": "Remini",
+        "project_description": "AI photo enhancement and generation product for restoring blurry images, creating professional portraits, and scaling generative image models.",
+        "project_phase": "growth",
+        "domain": "remini.ai",
+        "product_url": "https://remini.ai",
+        "required_people_amount": 6,
+        "required_skills": {"android": 2, "ios": 2, "web": 2, "backend": 3, "infrastructure": 3, "ai": 3},
+        "github_repositories": ["https://github.com/bendingspoons/remini-app", "https://github.com/bendingspoons/remini-ml"],
+    },
+    {
+        "project_name": "WeTransfer",
+        "project_description": "Creative file-sharing platform focused on large transfer reliability, faster upload flows, expired-transfer recovery, and creator-friendly collaboration.",
+        "project_phase": "growth",
+        "domain": "wetransfer.com",
+        "product_url": "https://wetransfer.com",
+        "required_people_amount": 5,
+        "required_skills": {"android": 1, "ios": 1, "web": 3, "backend": 3, "infrastructure": 3, "ai": 1},
+        "github_repositories": ["https://github.com/bendingspoons/wetransfer-web", "https://github.com/bendingspoons/wetransfer-storage"],
+    },
+    {
+        "project_name": "Meetup",
+        "project_description": "Community platform for discovering groups, organizing events, and helping people meet around shared interests with modern mobile and web experiences.",
+        "project_phase": "maintenance",
+        "domain": "meetup.com",
+        "product_url": "https://www.meetup.com",
+        "required_people_amount": 3,
+        "required_skills": {"android": 2, "ios": 2, "web": 2, "backend": 2, "infrastructure": 1, "ai": 1},
+        "github_repositories": ["https://github.com/bendingspoons/meetup-app", "https://github.com/bendingspoons/meetup-events"],
+    },
+    {
+        "project_name": "Komoot",
+        "project_description": "Outdoor route-planning product for hiking and cycling, with offline maps, sport-specific routing, and strong wearable integrations.",
+        "project_phase": "growth",
+        "domain": "komoot.com",
+        "product_url": "https://www.komoot.com",
+        "required_people_amount": 4,
+        "required_skills": {"android": 3, "ios": 3, "web": 2, "backend": 2, "infrastructure": 2, "ai": 1},
+        "github_repositories": ["https://github.com/bendingspoons/komoot-mobile", "https://github.com/bendingspoons/komoot-routing"],
+    },
+    {
+        "project_name": "StreamYard",
+        "project_description": "Browser-based live streaming and recording studio for creators and businesses, including 4K local recordings and AI-assisted editing workflows.",
+        "project_phase": "maintenance",
+        "domain": "streamyard.com",
+        "product_url": "https://streamyard.com",
+        "required_people_amount": 4,
+        "required_skills": {"android": 0, "ios": 1, "web": 3, "backend": 3, "infrastructure": 3, "ai": 2},
+        "github_repositories": ["https://github.com/bendingspoons/streamyard-studio", "https://github.com/bendingspoons/streamyard-recording"],
+    },
+    {
+        "project_name": "Brightcove",
+        "project_description": "Enterprise video platform for live streaming, video hosting, monetization, DRM, vertical video, and AI-assisted publishing workflows.",
+        "project_phase": "new acquisition",
+        "domain": "brightcove.com",
+        "product_url": "https://www.brightcove.com",
+        "required_people_amount": 5,
+        "required_skills": {"android": 1, "ios": 1, "web": 3, "backend": 3, "infrastructure": 3, "ai": 2},
+        "github_repositories": ["https://github.com/bendingspoons/brightcove-video", "https://github.com/bendingspoons/brightcove-ai"],
+    },
+    {
+        "project_name": "Eventbrite",
+        "project_description": "Event discovery and ticketing marketplace undergoing initial integration work around organizer tooling, search, payments, and attendee mobile flows.",
+        "project_phase": "new acquisition",
+        "domain": "eventbrite.com",
+        "product_url": "https://www.eventbrite.com",
+        "required_people_amount": 6,
+        "required_skills": {"android": 2, "ios": 2, "web": 3, "backend": 3, "infrastructure": 2, "ai": 1},
+        "github_repositories": ["https://github.com/bendingspoons/eventbrite-marketplace", "https://github.com/bendingspoons/eventbrite-payments"],
+    },
+    {
+        "project_name": "Vimeo",
+        "project_description": "Video creation, hosting, and collaboration product focused on AI captions, language expansion, team workflows, and high-quality playback.",
+        "project_phase": "new acquisition",
+        "domain": "vimeo.com",
+        "product_url": "https://vimeo.com",
+        "required_people_amount": 6,
+        "required_skills": {"android": 1, "ios": 2, "web": 3, "backend": 3, "infrastructure": 3, "ai": 2},
+        "github_repositories": ["https://github.com/bendingspoons/vimeo-video", "https://github.com/bendingspoons/vimeo-ai"],
+    },
+    {
+        "project_name": "AOL",
+        "project_description": "Consumer internet and mail product portfolio in early improvement work across account reliability, web surfaces, mobile clients, and legacy modernization.",
+        "project_phase": "new acquisition",
+        "domain": "aol.com",
+        "product_url": "https://www.aol.com",
+        "required_people_amount": 5,
+        "required_skills": {"android": 1, "ios": 1, "web": 3, "backend": 3, "infrastructure": 3, "ai": 1},
+        "github_repositories": ["https://github.com/bendingspoons/aol-mail", "https://github.com/bendingspoons/aol-platform"],
+    },
+    {
+        "project_name": "Splice",
+        "project_description": "Mobile video editor for quick, polished content creation with creator-friendly templates, media editing tools, and subscription growth experiments.",
+        "project_phase": "maintenance",
+        "domain": "spliceapp.com",
+        "product_url": "https://spliceapp.com",
+        "required_people_amount": 3,
+        "required_skills": {"android": 2, "ios": 3, "web": 1, "backend": 2, "infrastructure": 1, "ai": 1},
+        "github_repositories": ["https://github.com/bendingspoons/splice-editor", "https://github.com/bendingspoons/splice-media"],
+    },
+    {
+        "project_name": "Issuu",
+        "project_description": "Digital publishing platform for transforming documents into shareable web publications, marketing assets, and reader analytics.",
+        "project_phase": "maintenance",
+        "domain": "issuu.com",
+        "product_url": "https://issuu.com",
+        "required_people_amount": 3,
+        "required_skills": {"android": 1, "ios": 1, "web": 3, "backend": 2, "infrastructure": 2, "ai": 1},
+        "github_repositories": ["https://github.com/bendingspoons/issuu-reader", "https://github.com/bendingspoons/issuu-publishing"],
+    },
+]
+
+
+def build_curated_projects(project_count: int) -> list[Project]:
+    selected_products = PRODUCT_CATALOG[:project_count]
+    return [
+        Project(
+            project_name=product["project_name"],
+            project_description=product["project_description"],
+            project_phase=product["project_phase"],
+            icon_url=favicon_url(product["domain"]),
+            poster_url=poster_url(product["product_url"]),
+            required_people_amount=product["required_people_amount"],
+            required_skills=Skills(**product["required_skills"]),
+            github_repositories=product["github_repositories"],
+        )
+        for product in selected_products
+    ]
 
 
 def positive_int(value: str) -> int:
@@ -109,17 +253,6 @@ def positive_int(value: str) -> int:
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be a positive integer")
     return parsed
-
-
-def build_project_prompt(project_count: int) -> str:
-    return f"""Generate exactly {project_count} projects.
-
-Project guidance:
-- Span all three project_phase values: "new acquisition", "growth", and "maintenance".
-- Use a mix of internal platforms, scaled consumer apps, growth products, and recent acquisitions.
-- Set current_team_members to an empty array for every project; employees will be generated in a later step.
-- Set required_people_amount to the number of additional people the project still needs, not total team size.
-- Each project should have 1-3 github_repositories formatted as "https://github.com/bendingspoons/<repo-slug>"."""
 
 
 def build_employee_prompt(
@@ -145,9 +278,9 @@ Existing employee names to avoid:
 {existing_employee_names}
 
 Employee guidance:
-- Use only these project names for current_project and preferences: {project_names}.
+- Use only these project names for current_projects and preferences: {project_names}.
 - Assign at least one employee to every project.
-- Assign most employees to a current_project, but leave a few employees unassigned by setting current_project to null.
+- Assign most employees to 1-2 current_projects, but leave a few employees unassigned by setting current_projects to an empty array.
 - Do not reuse any existing employee name.
 - Use varied roles across iOS, Android, web, backend, infrastructure, AI/ML, product engineering, tech lead, and engineering manager profiles.
 - Use realistic European/international names.
@@ -165,7 +298,7 @@ def build_move_request_prompt(
         {
             "name": employee.name,
             "role": employee.role,
-            "current_project": employee.current_project,
+            "current_projects": employee.current_projects,
             "skills": employee.skills.model_dump(),
             "preferences": employee.preferences,
         }
@@ -183,7 +316,7 @@ Move-request guidance:
 - Use only employee names from the available employees list.
 - Use only project names from the available projects list.
 - Cover all four status values: "pending", "accepted", "rejected", "clarification_requested".
-- For each request, from_project_name must match the employee's current_project. If current_project is null, from_project_name must be null.
+- For each request, from_project_name must be one of the employee's current_projects. If current_projects is empty, from_project_name must be null.
 - to_project_name must be different from from_project_name.
 - Make reasons specific and grounded in the employee's skills, preferences, and the target project's needs.
 - Make some requests low impact because the source project is stable, and some medium/high impact because a key skill would leave."""
@@ -194,75 +327,46 @@ def duplicates(values: list[str]) -> list[str]:
 
 
 def normalize_seed_data(data: SeedData) -> None:
-    """Use employees as the source of truth for denormalized team membership."""
-    members_by_project = {project.project_name: [] for project in data.projects}
-
+    """Normalize null-like values and keep move requests aligned with assignments."""
     for employee in data.employees:
-        if employee.current_project == "null":
-            employee.current_project = None
+        employee.current_projects = [
+            project_name
+            for project_name in employee.current_projects
+            if project_name and project_name != "null"
+        ]
     for request in data.move_requests:
         if request.from_project_name == "null":
             request.from_project_name = None
 
     employee_projects = {
-        employee.name: employee.current_project for employee in data.employees
+        employee.name: set(employee.current_projects) for employee in data.employees
     }
 
-    for employee in data.employees:
-        if employee.current_project in members_by_project:
-            members_by_project[employee.current_project].append(employee.name)
-
-    for project in data.projects:
-        project.current_team_members = members_by_project[project.project_name]
-
     for request in data.move_requests:
-        if request.employee_name in employee_projects:
-            request.from_project_name = employee_projects[request.employee_name]
+        assigned_projects = employee_projects.get(request.employee_name, set())
+        if not assigned_projects:
+            request.from_project_name = None
+        elif request.from_project_name not in assigned_projects:
+            request.from_project_name = sorted(assigned_projects)[0]
 
 
 def ensure_project_staffing(employees: list[Employee], projects: list[Project]) -> None:
     project_names = [project.project_name for project in projects]
-    if not project_names:
+    if not project_names or not employees:
         return
 
     for index, project_name in enumerate(project_names):
         has_member = any(
-            employee.current_project == project_name for employee in employees
+            project_name in employee.current_projects for employee in employees
         )
         if has_member:
             continue
 
-        unassigned = next(
-            (employee for employee in employees if employee.current_project is None),
-            None,
+        employee = min(
+            employees,
+            key=lambda candidate: (len(candidate.current_projects), index % len(employees)),
         )
-        if unassigned is not None:
-            unassigned.current_project = project_name
-            continue
-
-        source_project_counts = Counter(
-            employee.current_project
-            for employee in employees
-            if employee.current_project is not None
-        )
-        source_project = next(
-            (
-                name
-                for name, _ in source_project_counts.most_common()
-                if name != project_name and source_project_counts[name] > 1
-            ),
-            None,
-        )
-        if source_project is None:
-            employees[index % len(employees)].current_project = project_name
-            continue
-
-        employee_to_move = next(
-            employee
-            for employee in employees
-            if employee.current_project == source_project
-        )
-        employee_to_move.current_project = project_name
+        employee.current_projects.append(project_name)
 
 
 def dedupe_employees(employees: list[Employee]) -> list[Employee]:
@@ -288,10 +392,7 @@ def validate_seed_data(
     employee_name_set = set(employee_names)
     project_name_set = set(project_names)
     employee_projects = {
-        employee.name: employee.current_project for employee in data.employees
-    }
-    project_members = {
-        project.project_name: set(project.current_team_members) for project in data.projects
+        employee.name: set(employee.current_projects) for employee in data.employees
     }
 
     if len(data.employees) != expected_employee_count:
@@ -317,11 +418,12 @@ def validate_seed_data(
         errors.append(f"Missing project phases: {sorted(missing_phases)}")
 
     for employee in data.employees:
-        if employee.current_project is not None and employee.current_project not in project_name_set:
-            errors.append(
-                f"Employee {employee.name!r} references unknown project "
-                f"{employee.current_project!r}"
-            )
+        for current_project in employee.current_projects:
+            if current_project not in project_name_set:
+                errors.append(
+                    f"Employee {employee.name!r} references unknown project "
+                    f"{current_project!r}"
+                )
         for preference in employee.preferences:
             if preference not in project_name_set:
                 errors.append(
@@ -329,39 +431,27 @@ def validate_seed_data(
                 )
 
     for project in data.projects:
-        if not project.current_team_members:
+        assigned_employees = [
+            employee.name
+            for employee in data.employees
+            if project.project_name in employee.current_projects
+        ]
+        if not assigned_employees:
             errors.append(f"Project {project.project_name!r} has no current team members")
-        for member in project.current_team_members:
-            if member not in employee_name_set:
-                errors.append(
-                    f"Project {project.project_name!r} lists unknown member {member!r}"
-                )
-                continue
-            if employee_projects[member] != project.project_name:
-                errors.append(
-                    f"Project {project.project_name!r} lists {member!r}, but that "
-                    f"employee.current_project is {employee_projects[member]!r}"
-                )
+        if not project.icon_url.startswith("https://"):
+            errors.append(f"Project {project.project_name!r} has invalid icon_url")
+        if not project.poster_url.startswith("https://"):
+            errors.append(f"Project {project.project_name!r} has invalid poster_url")
         for repo in project.github_repositories:
             if not repo.startswith("https://github.com/bendingspoons/"):
                 errors.append(
                     f"Project {project.project_name!r} has invalid GitHub repo URL {repo!r}"
                 )
 
-    for employee in data.employees:
-        if employee.current_project is None:
-            continue
-        members = project_members.get(employee.current_project, set())
-        if employee.name not in members:
-            errors.append(
-                f"Employee {employee.name!r} has current_project "
-                f"{employee.current_project!r} but is not listed on that project"
-            )
-
     statuses_seen = set()
     for request in data.move_requests:
         statuses_seen.add(request.status)
-        employee_project = employee_projects.get(request.employee_name)
+        assigned_projects = employee_projects.get(request.employee_name, set())
         if request.employee_name not in employee_name_set:
             errors.append(
                 f"Move request references unknown employee {request.employee_name!r}"
@@ -375,11 +465,20 @@ def validate_seed_data(
             errors.append(
                 f"Move request references unknown to_project {request.to_project_name!r}"
             )
-        if request.employee_name in employee_name_set and request.from_project_name != employee_project:
+        if (
+            request.employee_name in employee_name_set
+            and request.from_project_name is not None
+            and request.from_project_name not in assigned_projects
+        ):
             errors.append(
                 f"Move request for {request.employee_name!r} has from_project_name "
-                f"{request.from_project_name!r}, but employee.current_project is "
-                f"{employee_project!r}"
+                f"{request.from_project_name!r}, but employee.current_projects are "
+                f"{sorted(assigned_projects)!r}"
+            )
+        if request.employee_name in employee_name_set and not assigned_projects and request.from_project_name is not None:
+            errors.append(
+                f"Move request for unassigned employee {request.employee_name!r} "
+                f"has from_project_name {request.from_project_name!r}"
             )
         if request.from_project_name == request.to_project_name:
             errors.append(
@@ -469,37 +568,25 @@ def generate_seed_data(
     attempts: int,
     temperature: float,
 ) -> SeedData:
+    projects = build_curated_projects(project_count)
+    project_data = SeedData(employees=[], projects=projects, move_requests=[])
+    project_errors = validate_seed_data(
+        project_data,
+        expected_employee_count=0,
+        expected_project_count=project_count,
+        expected_move_request_count=0,
+    )
+    project_errors = [
+        error
+        for error in project_errors
+        if "has no current team members" not in error
+        and "Missing move_request statuses" not in error
+    ]
+    if project_errors:
+        log_errors(project_errors)
+        sys.exit("Curated project fixtures failed validation.")
+
     for attempt in range(1, attempts + 1):
-        print(
-            f"Requesting projects from model {model} "
-            f"(attempt {attempt}/{attempts})..."
-        )
-        projects_batch = request_parsed(
-            client,
-            model,
-            build_project_prompt(project_count),
-            temperature,
-            ProjectBatch,
-        )
-        projects = projects_batch.projects
-
-        project_data = SeedData(employees=[], projects=projects, move_requests=[])
-        project_errors = validate_seed_data(
-            project_data,
-            expected_employee_count=0,
-            expected_project_count=project_count,
-            expected_move_request_count=0,
-        )
-        project_errors = [
-            error
-            for error in project_errors
-            if "has no current team members" not in error
-            and "Missing move_request statuses" not in error
-        ]
-        if project_errors:
-            log_errors(project_errors)
-            continue
-
         employees = request_employees(
             client,
             model,
@@ -622,6 +709,8 @@ def parse_args() -> argparse.Namespace:
 
     if args.projects < len(PROJECT_PHASES):
         parser.error(f"--projects must be at least {len(PROJECT_PHASES)}")
+    if args.projects > len(PRODUCT_CATALOG):
+        parser.error(f"--projects must be at most {len(PRODUCT_CATALOG)}")
     if args.move_requests < len(MOVE_STATUSES):
         parser.error(f"--move-requests must be at least {len(MOVE_STATUSES)}")
     if args.employees < args.projects:

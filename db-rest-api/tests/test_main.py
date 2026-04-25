@@ -30,7 +30,8 @@ def project_payload(name: str = "Atlas Staffing") -> dict[str, Any]:
         "project_name": name,
         "project_description": "Internal staffing platform.",
         "project_phase": "growth",
-        "current_team_members": ["Marco Bianchi"],
+        "icon_url": "https://www.google.com/s2/favicons?domain=evernote.com&sz=128",
+        "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://evernote.com",
         "required_people_amount": 3,
         "required_skills": deepcopy(SKILLS),
         "github_repositories": ["https://github.com/bendingspoons/atlas-staffing"],
@@ -41,7 +42,6 @@ def employee_payload(name: str = "Marco Bianchi") -> dict[str, Any]:
     return {
         "name": name,
         "role": "Backend engineer",
-        "current_project": "Atlas Staffing",
         "skills": deepcopy(SKILLS),
         "preferences": ["Atlas Staffing"],
         "interests": ["platform reliability", "internal tools"],
@@ -91,6 +91,15 @@ class FakeConnection:
     def cursor(self) -> FakeCursor:
         return FakeCursor(self.database)
 
+    def begin(self) -> None:
+        return None
+
+    def commit(self) -> None:
+        return None
+
+    def rollback(self) -> None:
+        return None
+
     def close(self) -> None:
         self.closed = True
 
@@ -99,6 +108,7 @@ class InMemoryDatabase:
     def __init__(self) -> None:
         self.projects: list[dict[str, Any]] = []
         self.employees: list[dict[str, Any]] = []
+        self.project_assignments: list[dict[str, int]] = []
         self.move_requests: list[dict[str, Any]] = []
         self.next_ids = {"projects": 1, "employees": 1, "move_requests": 1}
 
@@ -119,6 +129,16 @@ class InMemoryDatabase:
         if normalized.startswith("select * from projects where id"):
             cursor._one = self._find(self.projects, params[0])
             return
+        if normalized.startswith("select id from projects where project_name"):
+            cursor._one = next(
+                (
+                    {"id": project["id"]}
+                    for project in self.projects
+                    if project["project_name"] == params[0]
+                ),
+                None,
+            )
+            return
         if normalized.startswith("insert into projects"):
             self._insert(cursor, sql, params, "projects", unique_field="project_name")
             return
@@ -135,6 +155,16 @@ class InMemoryDatabase:
         if normalized.startswith("select * from employees where id"):
             cursor._one = self._find(self.employees, params[0])
             return
+        if normalized.startswith("select id from employees where name"):
+            cursor._one = next(
+                (
+                    {"id": employee["id"]}
+                    for employee in self.employees
+                    if employee["name"] == params[0]
+                ),
+                None,
+            )
+            return
         if normalized.startswith("insert into employees"):
             self._insert(cursor, sql, params, "employees", unique_field="name")
             return
@@ -143,6 +173,22 @@ class InMemoryDatabase:
             return
         if normalized.startswith("delete from employees where id"):
             self._delete(cursor, params[0], self.employees)
+            return
+
+        if normalized.startswith("select employee.id, employee.name from project_assignments"):
+            cursor._many = self._project_assignment_employees(params[0])
+            return
+        if normalized.startswith("select project.id, project.project_name from project_assignments"):
+            cursor._many = self._project_assignment_projects(params[0])
+            return
+        if normalized.startswith("delete from project_assignments where project_id"):
+            self._delete_project_assignments(cursor, "project_id", params[0])
+            return
+        if normalized.startswith("delete from project_assignments where employee_id"):
+            self._delete_project_assignments(cursor, "employee_id", params[0])
+            return
+        if normalized.startswith("insert into project_assignments"):
+            self._insert_project_assignment(cursor, params)
             return
 
         if "from move_requests as mr" in normalized and "where mr.id" in normalized:
@@ -233,6 +279,49 @@ class InMemoryDatabase:
         original_count = len(rows)
         rows[:] = [row for row in rows if row["id"] != row_id]
         cursor.rowcount = original_count - len(rows)
+
+    def _project_assignment_employees(self, project_id: int) -> list[dict[str, Any]]:
+        rows = []
+        for assignment in sorted(self.project_assignments, key=lambda row: row["employee_id"]):
+            if assignment["project_id"] != project_id:
+                continue
+            employee = self._find(self.employees, assignment["employee_id"])
+            if employee is not None:
+                rows.append({"id": employee["id"], "name": employee["name"]})
+        return rows
+
+    def _project_assignment_projects(self, employee_id: int) -> list[dict[str, Any]]:
+        rows = []
+        for assignment in sorted(self.project_assignments, key=lambda row: row["project_id"]):
+            if assignment["employee_id"] != employee_id:
+                continue
+            project = self._find(self.projects, assignment["project_id"])
+            if project is not None:
+                rows.append({"id": project["id"], "project_name": project["project_name"]})
+        return rows
+
+    def _delete_project_assignments(
+        self,
+        cursor: FakeCursor,
+        field: str,
+        value: int,
+    ) -> None:
+        original_count = len(self.project_assignments)
+        self.project_assignments[:] = [
+            row for row in self.project_assignments if row[field] != value
+        ]
+        cursor.rowcount = original_count - len(self.project_assignments)
+
+    def _insert_project_assignment(self, cursor: FakeCursor, params: list[Any]) -> None:
+        employee_id, project_id = params
+        if self._find(self.employees, employee_id) is None:
+            raise pymysql.err.IntegrityError(1452, "Missing employee")
+        if self._find(self.projects, project_id) is None:
+            raise pymysql.err.IntegrityError(1452, "Missing project")
+        assignment = {"employee_id": employee_id, "project_id": project_id}
+        if assignment not in self.project_assignments:
+            self.project_assignments.append(assignment)
+        cursor.rowcount = 1
 
     def _move_request_row(self, request_id: int) -> dict[str, Any] | None:
         request = self._find(self.move_requests, request_id)

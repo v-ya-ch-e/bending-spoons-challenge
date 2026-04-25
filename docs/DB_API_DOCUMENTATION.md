@@ -21,8 +21,8 @@ Public environments:
 - Do not print, log, commit, or return database credentials. They live in the repo root `.env`.
 - Reuse `open_db_connection()` or `get_db_connection()` from `db-rest-api/main.py` for DB-backed endpoints.
 - JSON columns must be serialized before writes and deserialized before API responses.
-- Keep `employees.current_project` as a project-name string and `projects.current_team_members` as an array of employee names unless the schema is intentionally redesigned.
-- Updating a move request only updates the `move_requests` row. It does not automatically move employees between projects or rewrite project team-member JSON.
+- Project assignments are stored by ID in `project_assignments`; name-based assignment fields are response aliases only.
+- Updating a move request only updates the `move_requests` row. It does not automatically move employees between projects.
 - If the DB schema or public API changes, update this document in the same change.
 
 ## Service Metadata Endpoints
@@ -71,6 +71,15 @@ Common DB error mapping:
 - Referenced row does not exist: HTTP `400`.
 - Row is referenced by another row and cannot be deleted: HTTP `409`.
 - DB operation or connection failure: HTTP `500` or `503` with a generic public message.
+
+## Frontend Integration Notes
+
+- Treat numeric IDs as canonical for current staffing. Use `projects[].current_team_member_ids` and `employees[].current_project_ids` for logic, mutations, cache keys, and comparisons.
+- Treat name aliases as display helpers only. `projects[].current_team_members`, `employees[].current_project_names`, and `employees[].current_project` are derived from `project_assignments`.
+- `employees[].current_project` is a compatibility alias for the first assigned project name. It can be `null` even though the canonical field is always `current_project_ids: []`.
+- `employees[].preferences` still contains project-name strings, not IDs.
+- Project cards can use `icon_url` for compact/app-icon UI and `poster_url` for wide hero/card imagery.
+- Updating a move request status does not change `project_assignments`; a frontend should not assume accepted requests automatically move employees.
 
 ## Canonical Enum Values
 
@@ -124,10 +133,23 @@ Stored fields:
 - `project_name`: required string, unique, maximum 255 characters.
 - `project_description`: required text.
 - `project_phase`: required enum, one of `new acquisition`, `growth`, `maintenance`.
-- `current_team_members`: required JSON array of employee names.
+- `icon_url`: required HTTPS URL string, maximum 2048 characters.
+- `poster_url`: required HTTPS URL string for a landscape poster, maximum 2048 characters.
 - `required_people_amount`: required integer, minimum `0`.
 - `required_skills`: required JSON object matching the skill contract.
 - `github_repositories`: required JSON array of repository URLs.
+
+Assignment fields:
+
+- `current_team_member_ids`: canonical array of employee IDs assigned through `project_assignments`.
+- `current_team_members`: legacy/display alias array of employee names derived from `project_assignments`.
+
+Write behavior:
+
+- Create/update accepts `current_team_member_ids` as the preferred assignment field.
+- Create/update also accepts legacy `current_team_members` employee-name arrays and resolves them to IDs.
+- If both assignment fields are provided, `current_team_member_ids` wins.
+- Assignment updates replace the full project team for that project.
 
 Endpoints:
 
@@ -141,10 +163,12 @@ Create payload:
 
 ```json
 {
-  "project_name": "Atlas Staffing",
-  "project_description": "Internal staffing platform for dynamic project allocation.",
+  "project_name": "Evernote",
+  "project_description": "Personal productivity and note-taking app focused on fast sync, collaborative editing, AI-powered search, and reliable capture across devices.",
   "project_phase": "growth",
-  "current_team_members": ["Giulia Rossi"],
+  "icon_url": "https://www.google.com/s2/favicons?domain=evernote.com&sz=128",
+  "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://evernote.com",
+  "current_team_member_ids": [1],
   "required_people_amount": 3,
   "required_skills": {
     "android": 0,
@@ -154,7 +178,7 @@ Create payload:
     "infrastructure": 2,
     "ai": 1
   },
-  "github_repositories": ["https://github.com/bendingspoons/atlas-staffing"]
+  "github_repositories": ["https://github.com/bendingspoons/evernote-core"]
 }
 ```
 
@@ -163,9 +187,12 @@ Response shape:
 ```json
 {
   "id": 1,
-  "project_name": "Atlas Staffing",
-  "project_description": "Internal staffing platform for dynamic project allocation.",
+  "project_name": "Evernote",
+  "project_description": "Personal productivity and note-taking app focused on fast sync, collaborative editing, AI-powered search, and reliable capture across devices.",
   "project_phase": "growth",
+  "icon_url": "https://www.google.com/s2/favicons?domain=evernote.com&sz=128",
+  "poster_url": "https://image.thum.io/get/width/1200/crop/630/https://evernote.com",
+  "current_team_member_ids": [1],
   "current_team_members": ["Giulia Rossi"],
   "required_people_amount": 3,
   "required_skills": {
@@ -176,7 +203,7 @@ Response shape:
     "infrastructure": 2,
     "ai": 1
   },
-  "github_repositories": ["https://github.com/bendingspoons/atlas-staffing"]
+  "github_repositories": ["https://github.com/bendingspoons/evernote-core"]
 }
 ```
 
@@ -184,7 +211,7 @@ Project delete behavior:
 
 - `move_requests.to_project_id` uses `ON DELETE CASCADE`, so deleting a target project deletes related move requests.
 - `move_requests.from_project_id` uses `ON DELETE SET NULL`.
-- JSON references in `employees.current_project` and `projects.current_team_members` are not automatically rewritten.
+- `project_assignments.project_id` uses `ON DELETE CASCADE`, so deleting a project deletes related assignment rows.
 
 ## Employees
 
@@ -195,10 +222,22 @@ Stored fields:
 - `id`: integer primary key, auto-incremented.
 - `name`: required string, unique, maximum 255 characters.
 - `role`: required string, maximum 255 characters.
-- `current_project`: nullable string, maximum 255 characters. This is a project name, not a foreign key.
 - `skills`: required JSON object matching the skill contract.
 - `preferences`: required JSON array of project-name strings.
 - `interests`: required JSON array of short interest strings.
+
+Assignment fields:
+
+- `current_project_ids`: canonical array of project IDs assigned through `project_assignments`.
+- `current_project_names`: display array of assigned project names derived from `project_assignments`.
+- `current_project`: legacy/display alias for the first assigned project name, or `null` when unassigned.
+
+Write behavior:
+
+- Create/update accepts `current_project_ids` as the preferred assignment field.
+- Create/update also accepts legacy `current_project` as a single project-name string or `null`.
+- If both assignment fields are provided, `current_project_ids` wins.
+- Assignment updates replace the full project list for that employee.
 
 Endpoints:
 
@@ -214,7 +253,7 @@ Create payload:
 {
   "name": "Marco Bianchi",
   "role": "Backend engineer",
-  "current_project": "Atlas Staffing",
+  "current_project_ids": [1, 2],
   "skills": {
     "android": 0,
     "ios": 0,
@@ -223,7 +262,7 @@ Create payload:
     "infrastructure": 2,
     "ai": 1
   },
-  "preferences": ["Atlas Staffing"],
+  "preferences": ["Evernote"],
   "interests": ["platform reliability", "internal tools"]
 }
 ```
@@ -235,7 +274,9 @@ Response shape:
   "id": 1,
   "name": "Marco Bianchi",
   "role": "Backend engineer",
-  "current_project": "Atlas Staffing",
+  "current_project_ids": [1, 2],
+  "current_project_names": ["Evernote", "Remini"],
+  "current_project": "Evernote",
   "skills": {
     "android": 0,
     "ios": 0,
@@ -244,7 +285,7 @@ Response shape:
     "infrastructure": 2,
     "ai": 1
   },
-  "preferences": ["Atlas Staffing"],
+  "preferences": ["Evernote"],
   "interests": ["platform reliability", "internal tools"]
 }
 ```
@@ -252,7 +293,7 @@ Response shape:
 Employee delete behavior:
 
 - `move_requests.employee_id` uses `ON DELETE CASCADE`, so deleting an employee deletes related move requests.
-- JSON references in `projects.current_team_members` are not automatically rewritten.
+- `project_assignments.employee_id` uses `ON DELETE CASCADE`, so deleting an employee deletes related assignment rows.
 
 ## Move Requests
 
@@ -307,9 +348,9 @@ Response shape:
   "employee_id": 1,
   "employee_name": "Marco Bianchi",
   "from_project_id": 1,
-  "from_project_name": "Atlas Staffing",
+  "from_project_name": "Evernote",
   "to_project_id": 2,
-  "to_project_name": "Eventbrite Integration",
+  "to_project_name": "Remini",
   "reason": "Backend and infrastructure experience match the target project's needs.",
   "expected_role": "Backend/platform engineer",
   "current_project_impact": "low",
@@ -340,7 +381,8 @@ projects(
   project_name,
   project_description,
   project_phase,
-  current_team_members,
+  icon_url,
+  poster_url,
   required_people_amount,
   required_skills,
   github_repositories
@@ -350,10 +392,14 @@ employees(
   id,
   name,
   role,
-  current_project,
   skills,
   preferences,
   interests
+)
+
+project_assignments(
+  employee_id,
+  project_id
 )
 
 move_requests(
