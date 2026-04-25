@@ -4,9 +4,11 @@ Small FastAPI service exposed publicly behind nginx at `/db-api`, plus the MySQL
 
 Production is served at `https://doubleu.team/db-api/...`; development is served at `https://dev.doubleu.team/db-api/...`. Both environments keep `ROOT_PATH=/db-api`; the split is by hostname, not by path.
 
+For the canonical agent-facing API contract, payload shapes, schema notes, and safe update workflow, see [../docs/DB_API_DOCUMENTATION.md](../docs/DB_API_DOCUMENTATION.md).
+
 ## What this provides
 
-- A FastAPI service with health, version, and database connectivity endpoints.
+- A FastAPI service with health, version, database connectivity, and CRUD endpoints.
 - A three-table MySQL schema (`projects`, `employees`, `move_requests`) defined in plain SQL.
 - A script to apply the schema to AWS RDS.
 - A script that uses the OpenAI API to generate realistic seed data as JSON.
@@ -62,13 +64,90 @@ Use `get_db_connection` as a FastAPI dependency or `open_db_connection()` as a c
 
 ## API Usage
 
+The full CRUD contract is documented in [../docs/DB_API_DOCUMENTATION.md](../docs/DB_API_DOCUMENTATION.md). Keep that file in sync with any database schema or public API changes.
+
 Useful endpoints:
 
 - `GET /`
 - `GET /health`
 - `GET /health/db`
 - `GET /version`
+- `GET /projects`
+- `POST /projects`
+- `GET /projects/{project_id}`
+- `PUT /projects/{project_id}`
+- `DELETE /projects/{project_id}`
+- `GET /employees`
+- `POST /employees`
+- `GET /employees/{employee_id}`
+- `PUT /employees/{employee_id}`
+- `DELETE /employees/{employee_id}`
+- `GET /move-requests`
+- `POST /move-requests`
+- `GET /move-requests/{request_id}`
+- `PUT /move-requests/{request_id}`
+- `DELETE /move-requests/{request_id}`
 - `GET /docs`
+
+List endpoints accept `limit` (default `100`, max `500`) and `offset` query parameters.
+`PUT` endpoints accept partial payloads and update only the fields provided.
+
+### Example project payload
+
+```json
+{
+  "project_name": "Atlas Staffing",
+  "project_description": "Internal staffing platform for dynamic project allocation.",
+  "project_phase": "growth",
+  "current_team_members": ["Giulia Rossi"],
+  "required_people_amount": 3,
+  "required_skills": {
+    "android": 0,
+    "ios": 0,
+    "web": 2,
+    "backend": 3,
+    "infrastructure": 2,
+    "ai": 1
+  },
+  "github_repositories": ["https://github.com/bendingspoons/atlas-staffing"]
+}
+```
+
+### Example employee payload
+
+```json
+{
+  "name": "Marco Bianchi",
+  "role": "Backend engineer",
+  "current_project": "Atlas Staffing",
+  "skills": {
+    "android": 0,
+    "ios": 0,
+    "web": 1,
+    "backend": 3,
+    "infrastructure": 2,
+    "ai": 1
+  },
+  "preferences": ["Atlas Staffing"],
+  "interests": ["platform reliability", "internal tools"]
+}
+```
+
+### Example move-request payload
+
+```json
+{
+  "employee_id": 1,
+  "from_project_id": 1,
+  "to_project_id": 2,
+  "reason": "Backend and infrastructure experience match the target project's needs.",
+  "expected_role": "Backend/platform engineer",
+  "current_project_impact": "low",
+  "status": "pending"
+}
+```
+
+Move-request responses include joined names (`employee_name`, `from_project_name`, and `to_project_name`) in addition to the stored IDs. When `status` is updated to `accepted`, `rejected`, or `clarification_requested`, the API sets `responded_at`; updating the status back to `pending` clears it.
 
 ## Data Setup
 
