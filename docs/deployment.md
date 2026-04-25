@@ -1,9 +1,9 @@
 # Deployment
 
-This repository deploys the DB REST API to one EC2 instance with two isolated Docker Compose environments:
+This repository deploys the frontend, backend API, and DB REST API to one EC2 instance with two isolated Docker Compose environments:
 
-- Production deploys from `main` to `https://doubleu.team/db-api/...`.
-- Development deploys from `dev` to `https://dev.doubleu.team/db-api/...`.
+- Production deploys from `main` to `https://doubleu.team/`, `https://doubleu.team/api/...`, and `https://doubleu.team/db-api/...`.
+- Development deploys from `dev` to `https://dev.doubleu.team/`, `https://dev.doubleu.team/api/...`, and `https://dev.doubleu.team/db-api/...`.
 
 Both environments currently use the same MySQL credentials, but they run from separate server directories, Docker Compose project names, and localhost ports.
 
@@ -18,10 +18,10 @@ It runs on pushes to:
 
 The workflow maps branches as follows:
 
-| Branch | GitHub Environment | Server path | Compose project | Local port |
-| --- | --- | --- | --- | --- |
-| `main` | `production` | `/home/ubuntu/bending-spoons-challenge-prod` | `bsc-prod` | `8001` |
-| `dev` | `development` | `/home/ubuntu/bending-spoons-challenge-dev` | `bsc-dev` | `8002` |
+| Branch | GitHub Environment | Server path | Compose project | Frontend port | Backend port | DB API port |
+| --- | --- | --- | --- | --- | --- | --- |
+| `main` | `production` | `/home/ubuntu/bending-spoons-challenge-prod` | `bsc-prod` | `3001` | `8011` | `8001` |
+| `dev` | `development` | `/home/ubuntu/bending-spoons-challenge-dev` | `bsc-dev` | `3000` | `8012` | `8002` |
 
 Required GitHub Environment secrets for both `production` and `development`:
 
@@ -42,7 +42,7 @@ The EC2 host has one checkout per environment:
 /home/ubuntu/bending-spoons-challenge-dev
 ```
 
-Each directory needs its own root `.env` file. The file is intentionally not committed and must contain:
+Each directory needs its own root `.env` file for database-backed behavior. The file is intentionally not committed and must contain:
 
 ```text
 DB_HOST=...
@@ -56,35 +56,46 @@ Never print these values in deploy logs.
 
 ## Docker Compose
 
-[docker-compose.yml](../docker-compose.yml) exposes the API only on localhost:
+[docker-compose.yml](../docker-compose.yml) exposes services only on localhost:
 
 ```yaml
 ports:
+  - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+  - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
   - "127.0.0.1:${DB_REST_API_PORT:-8001}:8000"
 ```
 
-The workflow sets `DB_REST_API_PORT` to `8001` for production and `8002` for development. The default `8001` keeps local and production behavior compatible when the variable is unset.
+The workflow sets separate localhost ports for production and development so both environments can run on the same EC2 host without port conflicts. The defaults keep local development behavior compatible when variables are unset.
+
+The backend talks to the DB REST API through Docker DNS (`DB_API_BASE_URL=http://db-rest-api:8000`) inside Compose. Local non-Docker backend runs can still use `.env` to point `DB_API_BASE_URL` at a localhost or public `/db-api` endpoint.
 
 Manual server commands:
 
 ```bash
 cd /home/ubuntu/bending-spoons-challenge-prod
-DB_REST_API_PORT=8001 docker compose -p bsc-prod up -d --build --remove-orphans
+FRONTEND_PORT=3001 BACKEND_PORT=8011 DB_REST_API_PORT=8001 docker compose -p bsc-prod up -d --build --remove-orphans
 
 cd /home/ubuntu/bending-spoons-challenge-dev
-DB_REST_API_PORT=8002 docker compose -p bsc-dev up -d --build --remove-orphans
+FRONTEND_PORT=3000 BACKEND_PORT=8012 DB_REST_API_PORT=8002 docker compose -p bsc-dev up -d --build --remove-orphans
 ```
 
 ## Nginx
 
-Nginx terminates public traffic and proxies `/db-api/` to the environment-specific localhost port:
+Nginx terminates public traffic and proxies the site root, `/api/`, and `/db-api/` to the environment-specific localhost ports:
 
 ```text
+doubleu.team      /        -> http://127.0.0.1:3001
+doubleu.team      /api/    -> http://127.0.0.1:8011/
 doubleu.team      /db-api/ -> http://127.0.0.1:8001/
+dev.doubleu.team  /        -> http://127.0.0.1:3000
+dev.doubleu.team  /api/    -> http://127.0.0.1:8012/
 dev.doubleu.team  /db-api/ -> http://127.0.0.1:8002/
 ```
 
-The FastAPI app keeps `ROOT_PATH=/db-api` in both environments because the environment split happens by hostname, not by URL path.
+The FastAPI apps keep fixed root paths in both environments because the environment split happens by hostname, not by URL path:
+
+- `backend` uses `BACKEND_ROOT_PATH=/api`.
+- `db-rest-api` uses `ROOT_PATH=/db-api`.
 
 ## TLS for Development
 
@@ -123,18 +134,26 @@ docker ps --format "table {{.Names}}\t{{.Ports}}"
 Expected ports:
 
 ```text
+bsc-prod-frontend-1     127.0.0.1:3001->3000/tcp
+bsc-prod-backend-1      127.0.0.1:8011->8000/tcp
 bsc-prod-db-rest-api-1  127.0.0.1:8001->8000/tcp
+bsc-dev-frontend-1      127.0.0.1:3000->3000/tcp
+bsc-dev-backend-1       127.0.0.1:8012->8000/tcp
 bsc-dev-db-rest-api-1   127.0.0.1:8002->8000/tcp
 ```
 
-Check health endpoints:
+Check public endpoints:
 
 ```bash
+curl -fsS https://doubleu.team/
+curl -fsS https://dev.doubleu.team/
+curl -fsS https://doubleu.team/api/health
+curl -fsS https://dev.doubleu.team/api/health
 curl -fsS https://doubleu.team/db-api/health
 curl -fsS https://dev.doubleu.team/db-api/health
 ```
 
-Both should return:
+The root URLs should return the frontend HTML. The health endpoints should return:
 
 ```json
 {"status":"ok"}
