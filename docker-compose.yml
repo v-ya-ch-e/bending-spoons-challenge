@@ -4,11 +4,8 @@ services:
       context: ./backend
     env_file:
       - .env
-    environment:
-      ROOT_PATH: /api
-      APP_VERSION: "0.1.0"
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${BACKEND_PORT}:8000"
     restart: unless-stopped
 
   db-rest-api:
@@ -16,9 +13,6 @@ services:
       context: ./db-rest-api
     env_file:
       - .env
-    environment:
-      ROOT_PATH: /db-api
-      APP_VERSION: "0.1.0"
     ports:
-      - "127.0.0.1:8001:8000"
+      - "127.0.0.1:${DB_REST_API_PORT}:8000"
     restart: unless-stopped
