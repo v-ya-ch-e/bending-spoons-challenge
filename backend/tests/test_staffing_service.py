@@ -6,17 +6,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from schemas import SkillProfileSuggestRequest, ProjectStatus, StaffingSuggestion
+from schemas import ProjectPhase, SkillProfileSuggestRequest, StaffingSuggestion
 from services.skill_profile_service import suggest_skill_profile
 
-ALLOWED_SKILL_CATEGORIES = {
-    "Android",
-    "iOS",
-    "Backend",
-    "Web",
-    "Infrastructure",
-    "AI/ML",
-}
+ALLOWED_SKILL_KEYS = {"android", "ios", "web", "backend", "infrastructure", "ai"}
 
 class TestStaffingService(unittest.TestCase):
     def test_suggest_skill_profile_returns_real_staffing_answer(self):
@@ -27,7 +20,7 @@ class TestStaffingService(unittest.TestCase):
         async def run_test():
             payload = SkillProfileSuggestRequest(
                 github_repo_url="https://github.com/fastapi/fastapi",
-                project_status=ProjectStatus.GROWTH,
+                project_phase=ProjectPhase.GROWTH,
                 task_description=(
                     "Extend a production Python API framework with better "
                     "documentation, CI, and deployment workflows."
@@ -53,13 +46,14 @@ class TestStaffingService(unittest.TestCase):
                 self.assertTrue(role.reasoning.strip())
                 self.assertTrue(role.required_skills)
 
-                for category, level in role.required_skills.items():
-                    self.assertIn(category, ALLOWED_SKILL_CATEGORIES)
+                for key, level in role.required_skills.model_dump().items():
+                    self.assertIn(key, ALLOWED_SKILL_KEYS)
                     self.assertIn(level, {0, 1, 2, 3})
-                    suggested_categories.add(category)
+                    if level > 0:
+                        suggested_categories.add(key)
 
             self.assertTrue(
-                {"Backend", "Infrastructure", "Web"} & suggested_categories,
+                {"backend", "infrastructure", "web"} & suggested_categories,
                 f"Expected repo-relevant skills, got {suggested_categories}",
             )
 
