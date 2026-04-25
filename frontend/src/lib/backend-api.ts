@@ -28,6 +28,14 @@ export type SkillProfileSuggestInput = {
 }
 
 const backendApiBasePath = "/api"
+const backendSkillKeys: SkillKey[] = [
+  "android",
+  "ios",
+  "web",
+  "backend",
+  "infrastructure",
+  "ai",
+]
 
 export class BackendApiError extends Error {
   constructor(
@@ -147,40 +155,19 @@ function formatDetailEntry(entry: unknown): string {
 }
 
 export function suggestProjectRequirements(input: SkillProfileSuggestInput) {
-  const path =
-    input.projectId === undefined
-      ? "/skill-profile/suggest"
-      : `/projects/${input.projectId}/skill-profile/suggest`
   const payload = {
-    github_repo_url: input.github_repo_url ?? input.github_repo_urls[0],
-    github_repo_urls: input.github_repo_urls,
-    project_phase: input.project_phase,
-    task_description: input.task_description,
+    project_id: input.projectId ?? 1,
+    github_page: input.github_repo_url ?? input.github_repo_urls[0] ?? "",
+    project_description: input.task_description?.trim() || "Project requirement extraction request.",
   }
 
-  return fetchBackendApi<StaffingSuggestion>(path, {
+  return fetchBackendApi<StaffingSuggestion | LegacySkillProfileResponse>("/skill-profile", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
-  }).catch((error) => {
-    if (input.projectId !== undefined || !(error instanceof BackendApiError)) {
-      throw error
-    }
-
-    if (error.status !== 404) {
-      throw error
-    }
-
-    return fetchBackendApi<StaffingSuggestion>("/projects/0/skill-profile/suggest", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    })
-  })
+  }).then(normalizeSkillProfileResponse)
 }
 
 export function suggestProjectRequirementsFromRepoRoute(
@@ -189,11 +176,42 @@ export function suggestProjectRequirementsFromRepoRoute(
   return suggestProjectRequirements(input)
 }
 
-export const skillKeys: SkillKey[] = [
-  "android",
-  "ios",
-  "web",
-  "backend",
-  "infrastructure",
-  "ai",
-]
+export const skillKeys = backendSkillKeys
+
+type LegacySkillProfileResponse = {
+  required_people_amount: number
+  required_skills_per_person: Skills[]
+}
+
+function normalizeSkillProfileResponse(
+  payload: StaffingSuggestion | LegacySkillProfileResponse
+): StaffingSuggestion {
+  if ("required_skills" in payload && "total_headcount" in payload) {
+    return payload
+  }
+
+  const requiredSkills: ProjectSkillRequirements = {
+    android: { level_1: 0, level_2: 0, level_3: 0 },
+    ios: { level_1: 0, level_2: 0, level_3: 0 },
+    web: { level_1: 0, level_2: 0, level_3: 0 },
+    backend: { level_1: 0, level_2: 0, level_3: 0 },
+    infrastructure: { level_1: 0, level_2: 0, level_3: 0 },
+    ai: { level_1: 0, level_2: 0, level_3: 0 },
+  }
+
+  for (const personSkills of payload.required_skills_per_person) {
+    for (const skill of backendSkillKeys) {
+      const level = personSkills[skill]
+      if (level === 1) requiredSkills[skill].level_1 += 1
+      else if (level === 2) requiredSkills[skill].level_2 += 1
+      else if (level === 3) requiredSkills[skill].level_3 += 1
+    }
+  }
+
+  return {
+    roles: [],
+    required_skills: requiredSkills,
+    total_headcount: payload.required_people_amount,
+    summary: "Generated from backend skill profile analysis.",
+  }
+}
