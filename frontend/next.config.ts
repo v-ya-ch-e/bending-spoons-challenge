@@ -8,7 +8,9 @@ const nextConfig: NextConfig = {
 
     if (!dbApiBaseUrl) {
       console.warn(
-        "DB_API_BASE_URL is not set; falling back to https://dev.doubleu.team/db-api"
+        `DB_API_BASE_URL is not set; falling back to ${
+          isDevelopment ? "http://127.0.0.1:8001" : "https://dev.doubleu.team/db-api"
+        }`
       );
     }
 
@@ -21,7 +23,8 @@ const nextConfig: NextConfig = {
     }
 
     const resolvedUrl = (
-      dbApiBaseUrl ?? "https://dev.doubleu.team/db-api"
+      dbApiBaseUrl ??
+      (isDevelopment ? "http://127.0.0.1:8001" : "https://dev.doubleu.team/db-api")
     ).replace(/\/$/, "");
     const resolvedBackendUrl = (
       backendApiBaseUrl ??

@@ -8,6 +8,14 @@ export type SkillKey =
 
 export type Skills = Record<SkillKey, number>
 
+export type ProjectSkillRequirement = {
+  level_1: number
+  level_2: number
+  level_3: number
+}
+
+export type ProjectSkillRequirements = Record<SkillKey, ProjectSkillRequirement>
+
 export type ProjectPhase = "new acquisition" | "growth" | "maintenance"
 
 export type Employee = {
@@ -43,7 +51,7 @@ export type Project = {
   current_team_member_ids: number[]
   current_team_members: string[]
   required_people_amount: number
-  required_skills: Skills
+  required_skills: ProjectSkillRequirements
   github_repositories: string[]
 }
 
@@ -61,12 +69,22 @@ const dbApiBasePath = process.env.NEXT_PUBLIC_DB_API_BASE_URL ?? "/db-api"
 export class DbApiError extends Error {
   constructor(
     message: string,
-    readonly status: number
+    readonly status: number,
+    readonly detail?: unknown
   ) {
     super(message)
     this.name = "DbApiError"
   }
 }
+
+const skillKeys: SkillKey[] = [
+  "android",
+  "ios",
+  "web",
+  "backend",
+  "infrastructure",
+  "ai",
+]
 
 async function fetchDbApi<T>(
   path: string,
@@ -81,41 +99,154 @@ async function fetchDbApi<T>(
   })
 
   if (!response.ok) {
+    const detail = await readErrorDetail(response)
     throw new DbApiError(
-      `DB API request failed with status ${response.status}`,
-      response.status
+      formatDbApiErrorMessage(response.status, detail),
+      response.status,
+      detail
     )
   }
 
   return response.json() as Promise<T>
 }
 
+async function readErrorDetail(response: Response) {
+  try {
+    const payload = await response.json()
+    return payload?.detail ?? payload
+  } catch {
+    return null
+  }
+}
+
+function formatDbApiErrorMessage(status: number, detail: unknown) {
+  const formattedDetail = formatErrorDetail(detail)
+
+  return formattedDetail
+    ? `DB API request failed with status ${status}: ${formattedDetail}`
+    : `DB API request failed with status ${status}`
+}
+
+function formatErrorDetail(detail: unknown): string | null {
+  if (!detail) {
+    return null
+  }
+
+  if (typeof detail === "string") {
+    return detail
+  }
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (!item || typeof item !== "object") {
+          return String(item)
+        }
+
+        const error = item as { loc?: unknown[]; msg?: unknown }
+        const location = Array.isArray(error.loc) ? error.loc.join(".") : null
+        const message = typeof error.msg === "string" ? error.msg : JSON.stringify(item)
+
+        return location ? `${location}: ${message}` : message
+      })
+      .join("; ")
+  }
+
+  return JSON.stringify(detail)
+}
+
+function normalizeProjectSkillRequirements(
+  requiredSkills: unknown
+): ProjectSkillRequirements {
+  const rawSkills =
+    requiredSkills && typeof requiredSkills === "object"
+      ? (requiredSkills as Record<string, unknown>)
+      : {}
+
+  return skillKeys.reduce<ProjectSkillRequirements>((nextSkills, skill) => {
+    const rawRequirement = rawSkills[skill]
+
+    if (rawRequirement && typeof rawRequirement === "object") {
+      const requirement = rawRequirement as Partial<ProjectSkillRequirement>
+      const legacyRequirement = rawRequirement as {
+        count?: unknown
+        minimum_level?: unknown
+      }
+
+      if (
+        "level_1" in requirement ||
+        "level_2" in requirement ||
+        "level_3" in requirement
+      ) {
+        nextSkills[skill] = {
+          level_1: Math.max(0, Math.round(Number(requirement.level_1 ?? 0))),
+          level_2: Math.max(0, Math.round(Number(requirement.level_2 ?? 0))),
+          level_3: Math.max(0, Math.round(Number(requirement.level_3 ?? 0))),
+        }
+        return nextSkills
+      }
+
+      const count = Math.max(0, Math.round(Number(legacyRequirement.count ?? 0)))
+      const minimumLevel = Math.min(
+        3,
+        Math.max(0, Math.round(Number(legacyRequirement.minimum_level ?? 0)))
+      )
+
+      nextSkills[skill] = {
+        level_1: count > 0 && minimumLevel === 1 ? count : 0,
+        level_2: count > 0 && minimumLevel === 2 ? count : 0,
+        level_3: count > 0 && minimumLevel === 3 ? count : 0,
+      }
+      return nextSkills
+    }
+
+    const level = Math.min(3, Math.max(0, Math.round(Number(rawRequirement ?? 0))))
+    nextSkills[skill] = {
+      level_1: level === 1 ? 1 : 0,
+      level_2: level === 2 ? 1 : 0,
+      level_3: level === 3 ? 1 : 0,
+    }
+
+    return nextSkills
+  }, {} as ProjectSkillRequirements)
+}
+
+function normalizeProject(project: Project): Project {
+  return {
+    ...project,
+    required_skills: normalizeProjectSkillRequirements(project.required_skills),
+  }
+}
+
 export function listEmployees() {
   return fetchDbApi<Employee[]>("/employees?limit=500")
 }
 
-export function listProjects() {
-  return fetchDbApi<Project[]>("/projects?limit=500")
+export async function listProjects() {
+  const projects = await fetchDbApi<Project[]>("/projects?limit=500")
+  return projects.map(normalizeProject)
 }
 
-export function createProject(project: ProjectCreateInput) {
-  return fetchDbApi<Project>("/projects", {
+export async function createProject(project: ProjectCreateInput) {
+  const savedProject = await fetchDbApi<Project>("/projects", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(project),
   })
+  return normalizeProject(savedProject)
 }
 
-export function updateProject(projectId: number, project: ProjectUpdateInput) {
-  return fetchDbApi<Project>(`/projects/${projectId}`, {
+export async function updateProject(projectId: number, project: ProjectUpdateInput) {
+  const savedProject = await fetchDbApi<Project>(`/projects/${projectId}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(project),
   })
+  return normalizeProject(savedProject)
 }
 
 export function createEmployee(employee: EmployeeCreateInput) {

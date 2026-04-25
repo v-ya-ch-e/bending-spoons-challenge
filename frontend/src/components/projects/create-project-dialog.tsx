@@ -28,9 +28,10 @@ import {
   type Project,
   type ProjectCreateInput,
   type ProjectPhase,
+  type ProjectSkillRequirement,
+  type ProjectSkillRequirements,
   type ProjectUpdateInput,
   type SkillKey,
-  type Skills,
 } from "@/lib/db-api"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -109,6 +110,16 @@ const skillIconMap = {
   ai: Notification03Icon,
 }
 
+const skillRequirementLevels = [1, 2, 3] as const
+type SkillRequirementLevel = (typeof skillRequirementLevels)[number]
+type SkillRequirementLevelField = `level_${SkillRequirementLevel}`
+
+const skillLevelLabels: Record<SkillRequirementLevel, string> = {
+  1: "Basic",
+  2: "Working",
+  3: "Expert",
+}
+
 const steps: Array<{
   id: StepId
   label: string
@@ -141,13 +152,13 @@ const steps: Array<{
   },
 ]
 
-const emptySkills: Skills = {
-  android: 0,
-  ios: 0,
-  web: 0,
-  backend: 0,
-  infrastructure: 0,
-  ai: 0,
+const emptyProjectSkillRequirements: ProjectSkillRequirements = {
+  android: { level_1: 0, level_2: 0, level_3: 0 },
+  ios: { level_1: 0, level_2: 0, level_3: 0 },
+  web: { level_1: 0, level_2: 0, level_3: 0 },
+  backend: { level_1: 0, level_2: 0, level_3: 0 },
+  infrastructure: { level_1: 0, level_2: 0, level_3: 0 },
+  ai: { level_1: 0, level_2: 0, level_3: 0 },
 }
 
 function getInitialFormState(project?: Project): FormState {
@@ -197,14 +208,15 @@ export function CreateProjectDialog({
     getInitialFormState(project)
   )
   const [suggestion, setSuggestion] = useState<StaffingSuggestion | null>(null)
-  const [requirements, setRequirements] = useState<Skills>(
-    () => project?.required_skills ?? emptySkills
+  const [requirements, setRequirements] = useState<ProjectSkillRequirements>(
+    () => project?.required_skills ?? cloneProjectSkillRequirements(emptyProjectSkillRequirements)
   )
   const [requiredPeopleAmount, setRequiredPeopleAmount] = useState(
     () => project?.required_people_amount ?? 0
   )
   const [validationError, setValidationError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isManualRequirementsEnabled, setIsManualRequirementsEnabled] = useState(false)
   const [isExtracting, setIsExtracting] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -212,7 +224,8 @@ export function CreateProjectDialog({
   const isFirstStep = stepIndex === 0
   const isReviewStep = currentStep.id === "review"
   const isRequirementsStep = currentStep.id === "requirements"
-  const hasRequirements = Boolean(suggestion) || Boolean(isEditMode)
+  const hasRequirements =
+    Boolean(suggestion) || Boolean(isEditMode) || isManualRequirementsEnabled
 
   const media = useMemo(
     () => getProjectMedia(formState.websiteUrl),
@@ -237,11 +250,17 @@ export function CreateProjectDialog({
     setValidationError(null)
   }
 
-  function updateRequirement(skill: SkillKey, nextLevel: number) {
-    const clampedLevel = Math.min(3, Math.max(0, nextLevel))
+  function updateRequirement(
+    skill: SkillKey,
+    nextRequirement: Partial<ProjectSkillRequirement>
+  ) {
+    setIsManualRequirementsEnabled(true)
     setRequirements((current) => ({
       ...current,
-      [skill]: clampedLevel,
+      [skill]: normalizeProjectSkillRequirement({
+        ...current[skill],
+        ...nextRequirement,
+      }),
     }))
   }
 
@@ -340,7 +359,7 @@ export function CreateProjectDialog({
       })
 
       setSuggestion(nextSuggestion)
-      setRequirements(aggregateRequiredSkills(nextSuggestion.roles))
+      setRequirements(nextSuggestion.required_skills)
       setRequiredPeopleAmount(nextSuggestion.total_headcount)
     } catch (error) {
       if (error instanceof BackendApiError && error.status === 501) {
@@ -352,9 +371,17 @@ export function CreateProjectDialog({
             : "Unable to extract project requirements."
         )
       }
+      setIsManualRequirementsEnabled(true)
     } finally {
       setIsExtracting(false)
     }
+  }
+
+  function handleManualRequirements() {
+    setIsManualRequirementsEnabled(true)
+    setValidationError(null)
+    setSubmitError(null)
+    setStepIndex(2)
   }
 
   async function handleSave() {
@@ -465,6 +492,7 @@ export function CreateProjectDialog({
                     requirements={requirements}
                     requiredPeopleAmount={requiredPeopleAmount}
                     onExtract={handleExtractRequirements}
+                    onManualEntry={handleManualRequirements}
                     onPeopleAmountChange={setRequiredPeopleAmount}
                     onRequirementChange={updateRequirement}
                   />
@@ -899,17 +927,22 @@ function RequirementsStep({
   requirements,
   requiredPeopleAmount,
   onExtract,
+  onManualEntry,
   onPeopleAmountChange,
   onRequirementChange,
 }: {
   isExtracting: boolean
   hasRequirements: boolean
   suggestion: StaffingSuggestion | null
-  requirements: Skills
+  requirements: ProjectSkillRequirements
   requiredPeopleAmount: number
   onExtract: () => void
+  onManualEntry: () => void
   onPeopleAmountChange: (value: number) => void
-  onRequirementChange: (skill: SkillKey, nextLevel: number) => void
+  onRequirementChange: (
+    skill: SkillKey,
+    nextRequirement: Partial<ProjectSkillRequirement>
+  ) => void
 }) {
   return (
     <section className="animate-in fade-in-0 slide-in-from-right-2 flex flex-col gap-6 duration-200">
@@ -918,7 +951,11 @@ function RequirementsStep({
         description={
           isExtracting
             ? "Analyzing the connected repository to estimate the minimum staffing requirements."
-            : "Review the minimum staffing requirements extracted from the backend."
+            : hasRequirements
+              ? suggestion
+                ? "Review the minimum staffing requirements extracted from the backend."
+                : "Add the minimum staffing requirements manually."
+              : "Extract requirements from GitHub or enter them manually."
         }
       />
 
@@ -933,7 +970,10 @@ function RequirementsStep({
       ) : hasRequirements ? (
         <>
           <div className="grid gap-3 sm:grid-cols-3">
-            <MiniStat label="Suggested roles" value={`${suggestion?.roles.length ?? 0}`} />
+            <MiniStat
+              label={suggestion ? "Suggested roles" : "Entry mode"}
+              value={suggestion ? `${suggestion.roles.length}` : "Manual"}
+            />
             <MiniStat label="Minimum team" value={`${requiredPeopleAmount} people`} />
             <MiniStat label="Required skills" value={`${countRequiredSkills(requirements)}`} />
           </div>
@@ -970,13 +1010,15 @@ function RequirementsStep({
                 </Button>
               </div>
             </div>
-            <div className="flex flex-col divide-y divide-border">
+            <div className="grid gap-3">
               {skillKeys.map((skill) => (
                 <SkillRequirementControl
                   key={skill}
                   skill={skill}
-                  level={requirements[skill]}
-                  onChange={(nextLevel) => onRequirementChange(skill, nextLevel)}
+                  requirement={requirements[skill]}
+                  onChange={(nextRequirement) =>
+                    onRequirementChange(skill, nextRequirement)
+                  }
                 />
               ))}
             </div>
@@ -1008,6 +1050,9 @@ function RequirementsStep({
           <Button type="button" onClick={onExtract}>
             Extract requirements
           </Button>
+          <Button type="button" variant="outline" onClick={onManualEntry}>
+            Enter manually
+          </Button>
         </div>
       )}
     </section>
@@ -1027,7 +1072,7 @@ function ReviewStep({
   iconUrl: string
   githubRepoUrls: string[]
   suggestion: StaffingSuggestion | null
-  requirements: Skills
+  requirements: ProjectSkillRequirements
   requiredPeopleAmount: number
   onEditStep: (stepIndex: number) => void
 }) {
@@ -1079,11 +1124,18 @@ function ReviewStep({
         <div className="grid gap-2 text-sm sm:grid-cols-[8rem_1fr]">
           <span className="text-muted-foreground">Skills</span>
           <div className="flex flex-wrap gap-1.5">
-            {skillKeys.map((skill) => (
-              <Badge key={skill} variant={requirements[skill] > 0 ? "secondary" : "outline"}>
-                {skillLabels[skill]} L{requirements[skill]}
-              </Badge>
-            ))}
+            {skillKeys.map((skill) => {
+              const requirement = requirements[skill]
+
+              return (
+                <Badge
+                  key={skill}
+                  variant={getRequirementTotal(requirement) > 0 ? "secondary" : "outline"}
+                >
+                  {formatRequirementBadge(skill, requirement)}
+                </Badge>
+              )
+            })}
           </div>
         </div>
         {suggestion && (
@@ -1189,46 +1241,95 @@ function ExtractionChecklist() {
 
 function SkillRequirementControl({
   skill,
-  level,
+  requirement,
   onChange,
 }: {
   skill: SkillKey
-  level: number
-  onChange: (nextLevel: number) => void
+  requirement: ProjectSkillRequirement
+  onChange: (nextRequirement: Partial<ProjectSkillRequirement>) => void
+}) {
+  const totalCount = getRequirementTotal(requirement)
+
+  return (
+    <div className="rounded-2xl border border-border bg-background p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <SkillIcon skill={skill} />
+          <div className="min-w-0">
+            <p className="font-medium">{skillLabels[skill]}</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {skillDescriptions[skill]}
+            </p>
+          </div>
+        </div>
+        <Badge variant={totalCount > 0 ? "secondary" : "outline"} className="shrink-0">
+          {totalCount} total
+        </Badge>
+      </div>
+      <div className="mt-4 flex flex-col gap-2.5">
+        <SkillLevelBar requirement={requirement} />
+        {skillRequirementLevels.map((level) => {
+          const field = getRequirementLevelField(level)
+          const value = requirement[field]
+
+          return (
+            <SkillRequirementLevelRow
+              key={field}
+              skill={skill}
+              level={level}
+              value={value}
+              onDecrease={() => onChange({ [field]: value - 1 })}
+              onIncrease={() => onChange({ [field]: value + 1 })}
+            />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function SkillRequirementLevelRow({
+  skill,
+  level,
+  value,
+  onDecrease,
+  onIncrease,
+}: {
+  skill: SkillKey
+  level: SkillRequirementLevel
+  value: number
+  onDecrease: () => void
+  onIncrease: () => void
 }) {
   return (
-    <div className="grid gap-4 py-4 sm:grid-cols-[12rem_1fr_auto] sm:items-center">
-      <div className="flex items-start gap-3">
-        <SkillIcon skill={skill} />
-        <div>
-          <p className="font-medium">{skillLabels[skill]}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {skillDescriptions[skill]}
-          </p>
-        </div>
+    <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/20 p-3 sm:grid-cols-[7rem_1fr_auto] sm:items-center">
+      <div>
+        <p className="text-sm font-medium">Level {level}</p>
+        <p className="text-xs text-muted-foreground">{skillLevelLabels[level]}</p>
       </div>
-      <SkillLevelBar level={level} />
-      <div className="flex items-center gap-2">
+      <p className="text-xs text-muted-foreground">
+        Engineers with at least L{level} {skillLabels[skill]} capability.
+      </p>
+      <div className="flex items-center gap-2 sm:justify-end">
         <Button
           type="button"
           variant="outline"
           size="icon-sm"
-          onClick={() => onChange(level - 1)}
-          disabled={level === 0}
-          aria-label={`Decrease ${skillLabels[skill]} level`}
+          onClick={onDecrease}
+          disabled={value === 0}
+          aria-label={`Decrease ${skillLabels[skill]} level ${level} engineer count`}
         >
           -
         </Button>
-        <span className="grid size-8 place-items-center rounded-2xl bg-muted text-sm font-medium">
-          {level}
+        <span className="grid min-w-12 place-items-center rounded-2xl bg-background px-2 py-1.5 text-sm font-medium ring-1 ring-border">
+          {value}x
         </span>
         <Button
           type="button"
           variant="outline"
           size="icon-sm"
-          onClick={() => onChange(level + 1)}
-          disabled={level === 3}
-          aria-label={`Increase ${skillLabels[skill]} level`}
+          onClick={onIncrease}
+          aria-label={`Increase ${skillLabels[skill]} level ${level} engineer count`}
         >
           +
         </Button>
@@ -1270,18 +1371,22 @@ function SkillIcon({ skill }: { skill: SkillKey }) {
   )
 }
 
-function SkillLevelBar({ level }: { level: number }) {
+function SkillLevelBar({ requirement }: { requirement: ProjectSkillRequirement }) {
   return (
     <div className="grid grid-cols-3 gap-1.5">
-      {Array.from({ length: 3 }).map((_, index) => (
+      {skillRequirementLevels.map((level) => {
+        const value = requirement[getRequirementLevelField(level)]
+
+        return (
         <span
-          key={index}
+          key={level}
           className={cn(
             "h-2 rounded-full",
-            index < level ? "bg-primary" : "bg-muted"
+            value > 0 ? "bg-primary" : "bg-muted"
           )}
         />
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -1366,24 +1471,63 @@ function MiniStat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function aggregateRequiredSkills(roles: RoleRequirement[]): Skills {
-  return roles.reduce<Skills>(
-    (nextSkills, role) => {
-      skillKeys.forEach((skill) => {
-        nextSkills[skill] = Math.max(
-          nextSkills[skill],
-          role.required_skills[skill] ?? 0
-        )
-      })
-
-      return nextSkills
-    },
-    { ...emptySkills }
-  )
+function normalizeProjectSkillRequirement(
+  requirement: ProjectSkillRequirement
+): ProjectSkillRequirement {
+  return {
+    level_1: normalizeRequirementCount(requirement.level_1),
+    level_2: normalizeRequirementCount(requirement.level_2),
+    level_3: normalizeRequirementCount(requirement.level_3),
+  }
 }
 
-function countRequiredSkills(skills: Skills) {
-  return skillKeys.filter((skill) => skills[skill] > 0).length
+function cloneProjectSkillRequirements(
+  requirements: ProjectSkillRequirements
+): ProjectSkillRequirements {
+  return skillKeys.reduce<ProjectSkillRequirements>((nextRequirements, skill) => {
+    nextRequirements[skill] = normalizeProjectSkillRequirement(requirements[skill])
+    return nextRequirements
+  }, {} as ProjectSkillRequirements)
+}
+
+function countRequiredSkills(skills: ProjectSkillRequirements) {
+  return skillKeys.filter((skill) => getRequirementTotal(skills[skill]) > 0).length
+}
+
+function formatRequirementBadge(
+  skill: SkillKey,
+  requirement: ProjectSkillRequirement
+) {
+  const parts = skillRequirementLevels
+    .map((level) => {
+      const count = requirement[getRequirementLevelField(level)]
+      return count > 0 ? `${count}x L${level}` : null
+    })
+    .filter(Boolean)
+
+  if (parts.length === 0) {
+    return `${skillLabels[skill]} 0x`
+  }
+
+  return `${skillLabels[skill]} ${parts.join(", ")}`
+}
+
+function normalizeRequirementCount(value: number) {
+  return Math.max(0, Math.round(value))
+}
+
+function getRequirementLevelField(
+  level: SkillRequirementLevel
+): SkillRequirementLevelField {
+  return `level_${level}`
+}
+
+function getRequirementTotal(requirement: ProjectSkillRequirement) {
+  return (
+    requirement.level_1 +
+    requirement.level_2 +
+    requirement.level_3
+  )
 }
 
 function getProjectMedia(websiteUrl: string) {

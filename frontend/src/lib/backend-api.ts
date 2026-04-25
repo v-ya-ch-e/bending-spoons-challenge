@@ -1,4 +1,9 @@
-import type { ProjectPhase, SkillKey, Skills } from "@/lib/db-api"
+import type {
+  ProjectPhase,
+  ProjectSkillRequirements,
+  SkillKey,
+  Skills,
+} from "@/lib/db-api"
 
 export type RoleRequirement = {
   role_name: string
@@ -9,6 +14,7 @@ export type RoleRequirement = {
 
 export type StaffingSuggestion = {
   roles: RoleRequirement[]
+  required_skills: ProjectSkillRequirements
   summary: string
   total_headcount: number
 }

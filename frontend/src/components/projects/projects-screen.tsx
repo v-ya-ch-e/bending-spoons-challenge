@@ -6,7 +6,13 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Cancel01Icon, GridViewIcon, ListViewIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
-import { listProjects, type Project, type SkillKey, type Skills } from "@/lib/db-api"
+import {
+  listProjects,
+  type Project,
+  type ProjectSkillRequirement,
+  type ProjectSkillRequirements,
+  type SkillKey,
+} from "@/lib/db-api"
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog"
 import {
   Accordion,
@@ -76,6 +82,9 @@ const skillLabels: Record<SkillKey, string> = {
   infrastructure: "Infra",
   ai: "AI",
 }
+
+const skillRequirementLevels = [1, 2, 3] as const
+type SkillRequirementLevel = (typeof skillRequirementLevels)[number]
 
 const filterItems: Array<{
   value: FilterKey
@@ -169,8 +178,10 @@ export function ProjectsScreen() {
           ...project.current_team_members,
           ...project.github_repositories,
           ...skillEntries(project.required_skills)
-            .filter(([, level]) => level > 0)
-            .map(([skill]) => skillLabels[skill]),
+            .filter(([, requirement]) => getRequirementTotal(requirement) > 0)
+            .map(([skill, requirement]) =>
+              `${skillLabels[skill]} ${formatRequirementParts(requirement).join(" ")}`
+            ),
         ]
           .join(" ")
           .toLowerCase()
@@ -821,8 +832,14 @@ function ProjectsEmptyState() {
   )
 }
 
-function RequiredSkillsDistribution({ skills }: { skills: Skills }) {
-  const requiredSkillsCount = skillEntries(skills).filter(([, level]) => level > 0).length
+function RequiredSkillsDistribution({
+  skills,
+}: {
+  skills: ProjectSkillRequirements
+}) {
+  const requiredSkillsCount = skillEntries(skills).filter(
+    ([, requirement]) => getRequirementTotal(requirement) > 0
+  ).length
 
   return (
     <DetailSection title="Required skills">
@@ -841,8 +858,8 @@ function RequiredSkillsDistribution({ skills }: { skills: Skills }) {
           </AccordionTrigger>
           <AccordionContent>
             <div className="flex flex-col gap-3">
-              {skillEntries(skills).map(([skill, level]) => (
-                <SkillLevel key={skill} skill={skill} level={level} />
+              {skillEntries(skills).map(([skill, requirement]) => (
+                <SkillLevel key={skill} skill={skill} requirement={requirement} />
               ))}
             </div>
           </AccordionContent>
@@ -914,8 +931,16 @@ function TeamAvatars({
   )
 }
 
-function SkillBadges({ skills, compact }: { skills: Skills; compact?: boolean }) {
-  const entries = skillEntries(skills).filter(([, level]) => level > 0)
+function SkillBadges({
+  skills,
+  compact,
+}: {
+  skills: ProjectSkillRequirements
+  compact?: boolean
+}) {
+  const entries = skillEntries(skills).filter(
+    ([, requirement]) => getRequirementTotal(requirement) > 0
+  )
   const visibleEntries = compact ? entries.slice(0, 3) : entries
 
   if (visibleEntries.length === 0) {
@@ -924,9 +949,9 @@ function SkillBadges({ skills, compact }: { skills: Skills; compact?: boolean })
 
   return (
     <div className="flex flex-wrap gap-1.5">
-      {visibleEntries.map(([skill, level]) => (
+      {visibleEntries.map(([skill, requirement]) => (
         <Badge key={skill} variant="secondary">
-          {skillLabels[skill]} {level}
+          {formatRequirementBadge(skill, requirement)}
         </Badge>
       ))}
       {compact && entries.length > visibleEntries.length && (
@@ -936,30 +961,84 @@ function SkillBadges({ skills, compact }: { skills: Skills; compact?: boolean })
   )
 }
 
-function SkillLevel({ skill, level }: { skill: SkillKey; level: number }) {
+function SkillLevel({
+  skill,
+  requirement,
+}: {
+  skill: SkillKey
+  requirement: ProjectSkillRequirement
+}) {
+  const hasCount = getRequirementTotal(requirement) > 0
+
   return (
-    <div className="grid grid-cols-[6rem_1fr_1.5rem] items-center gap-3">
+    <div className="grid grid-cols-[6rem_12rem_minmax(0,1fr)] items-center gap-3">
       <span className="text-sm text-muted-foreground">{skillLabels[skill]}</span>
       <div className="grid grid-cols-3 gap-1.5">
-        {Array.from({ length: 3 }).map((_, index) => (
+        {skillRequirementLevels.map((level) => (
           <span
-            key={index}
+            key={level}
             className={cn(
               "h-2 rounded-full",
-              index < level ? "bg-primary" : "bg-muted"
+              requirement[getRequirementLevelField(level)] > 0
+                ? "bg-primary"
+                : "bg-muted"
             )}
           />
         ))}
       </div>
-      <span className="text-right text-sm font-medium">{level}</span>
+      <span
+        className={cn(
+          "text-right text-sm font-medium",
+          !hasCount && "text-muted-foreground"
+        )}
+      >
+        {hasCount ? formatRequirementParts(requirement).join(", ") : "0x"}
+      </span>
     </div>
   )
 }
 
-function skillEntries(skills: Skills): Array<[SkillKey, number]> {
-  return (Object.entries(skills) as Array<[SkillKey, number]>).sort(
-    ([, leftLevel], [, rightLevel]) => rightLevel - leftLevel
+function skillEntries(
+  skills: ProjectSkillRequirements
+): Array<[SkillKey, ProjectSkillRequirement]> {
+  return (
+    Object.entries(skills) as Array<[SkillKey, ProjectSkillRequirement]>
+  ).sort(
+    ([, leftRequirement], [, rightRequirement]) =>
+      getRequirementTotal(rightRequirement) - getRequirementTotal(leftRequirement) ||
+      getHighestRequirementLevel(rightRequirement) -
+        getHighestRequirementLevel(leftRequirement)
   )
+}
+
+function formatRequirementBadge(
+  skill: SkillKey,
+  requirement: ProjectSkillRequirement
+) {
+  return `${skillLabels[skill]} ${formatRequirementParts(requirement).join(", ")}`
+}
+
+function formatRequirementParts(requirement: ProjectSkillRequirement) {
+  return skillRequirementLevels
+    .map((level) => {
+      const count = requirement[getRequirementLevelField(level)]
+      return count > 0 ? `${count}x L${level}` : null
+    })
+    .filter((part): part is string => Boolean(part))
+}
+
+function getRequirementLevelField(level: SkillRequirementLevel) {
+  return `level_${level}` as const
+}
+
+function getRequirementTotal(requirement: ProjectSkillRequirement) {
+  return requirement.level_1 + requirement.level_2 + requirement.level_3
+}
+
+function getHighestRequirementLevel(requirement: ProjectSkillRequirement) {
+  return [...skillRequirementLevels]
+    .reverse()
+    .find((level) => requirement[getRequirementLevelField(level)] > 0) ?? 0
 }
 
 function getStaffingGap(project: Project) {

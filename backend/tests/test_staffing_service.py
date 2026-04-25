@@ -38,6 +38,7 @@ class TestStaffingService(unittest.TestCase):
             self.assertGreater(result.total_headcount, 0)
             self.assertGreater(len(result.roles), 0)
             self.assertTrue(result.summary.strip())
+            self.assertTrue(result.required_skills)
 
             counted_headcount = sum(role.count for role in result.roles)
             self.assertEqual(result.total_headcount, counted_headcount)
@@ -54,6 +55,14 @@ class TestStaffingService(unittest.TestCase):
                     self.assertIn(level, {0, 1, 2, 3})
                     if level > 0:
                         suggested_categories.add(key)
+
+            for key, requirement in result.required_skills.model_dump().items():
+                self.assertIn(key, ALLOWED_SKILL_KEYS)
+                self.assertGreaterEqual(requirement["level_1"], 0)
+                self.assertGreaterEqual(requirement["level_2"], 0)
+                self.assertGreaterEqual(requirement["level_3"], 0)
+                if sum(requirement.values()) > 0:
+                    suggested_categories.add(key)
 
             self.assertTrue(
                 {"backend", "infrastructure", "web"} & suggested_categories,

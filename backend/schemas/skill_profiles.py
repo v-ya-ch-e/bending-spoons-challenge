@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, model_validator
 
-from schemas.common import ProjectPhase, Skills
+from schemas.common import ProjectPhase, ProjectSkillRequirements, Skills
 
 
 class SkillProfileSuggestRequest(BaseModel):
@@ -26,6 +26,7 @@ class RoleRequirement(BaseModel):
 
 class StaffingSuggestion(BaseModel):
     roles: list[RoleRequirement]
+    required_skills: ProjectSkillRequirements
     summary: str
     total_headcount: int
 

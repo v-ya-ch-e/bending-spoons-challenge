@@ -103,7 +103,7 @@ Common DB error mapping:
 
 ## Skill JSON Contract
 
-Both `employees.skills` and `projects.required_skills` must use exactly these six keys. Values are integers from `0` to `3`.
+`employees.skills` must use exactly these six keys. Values are integers from `0` to `3`.
 
 ```json
 {
@@ -123,6 +123,26 @@ Skill levels:
 - `2`: strong working capability, can work independently.
 - `3`: expert, can lead, review, and onboard others.
 
+`projects.required_skills` uses the same six keys, but each value describes how
+many engineers need that skill at each minimum acceptable level:
+
+```json
+{
+  "android": { "level_1": 0, "level_2": 0, "level_3": 0 },
+  "ios": { "level_1": 0, "level_2": 0, "level_3": 0 },
+  "web": { "level_1": 0, "level_2": 2, "level_3": 0 },
+  "backend": { "level_1": 1, "level_2": 1, "level_3": 0 },
+  "infrastructure": { "level_1": 0, "level_2": 1, "level_3": 0 },
+  "ai": { "level_1": 0, "level_2": 0, "level_3": 0 }
+}
+```
+
+Each level bucket is a count of engineers whose minimum acceptable level for that
+skill is that bucket. This supports requirements like one Backend engineer at L1
+and another at L2. Older stored project rows with integer skill values or the
+previous `{ "count": n, "minimum_level": level }` shape are normalized on read
+into the matching `level_n` bucket.
+
 ## Projects
 
 Database table: `projects`
@@ -136,7 +156,7 @@ Stored fields:
 - `icon_url`: required HTTPS URL string, maximum 2048 characters.
 - `poster_url`: required HTTPS URL string for a landscape poster, maximum 2048 characters.
 - `required_people_amount`: required integer, minimum `0`.
-- `required_skills`: required JSON object matching the skill contract.
+- `required_skills`: required JSON object matching the project skill requirement contract.
 - `github_repositories`: required JSON array of repository URLs.
 
 Assignment fields:
@@ -171,12 +191,12 @@ Create payload:
   "current_team_member_ids": [1],
   "required_people_amount": 3,
   "required_skills": {
-    "android": 0,
-    "ios": 0,
-    "web": 2,
-    "backend": 3,
-    "infrastructure": 2,
-    "ai": 1
+    "android": { "level_1": 0, "level_2": 0, "level_3": 0 },
+    "ios": { "level_1": 0, "level_2": 0, "level_3": 0 },
+    "web": { "level_1": 0, "level_2": 2, "level_3": 0 },
+    "backend": { "level_1": 1, "level_2": 1, "level_3": 0 },
+    "infrastructure": { "level_1": 0, "level_2": 1, "level_3": 0 },
+    "ai": { "level_1": 0, "level_2": 0, "level_3": 0 }
   },
   "github_repositories": ["https://github.com/bendingspoons/evernote-core"]
 }
@@ -196,12 +216,12 @@ Response shape:
   "current_team_members": ["Giulia Rossi"],
   "required_people_amount": 3,
   "required_skills": {
-    "android": 0,
-    "ios": 0,
-    "web": 2,
-    "backend": 3,
-    "infrastructure": 2,
-    "ai": 1
+    "android": { "level_1": 0, "level_2": 0, "level_3": 0 },
+    "ios": { "level_1": 0, "level_2": 0, "level_3": 0 },
+    "web": { "level_1": 0, "level_2": 2, "level_3": 0 },
+    "backend": { "level_1": 1, "level_2": 1, "level_3": 0 },
+    "infrastructure": { "level_1": 0, "level_2": 1, "level_3": 0 },
+    "ai": { "level_1": 0, "level_2": 0, "level_3": 0 }
   },
   "github_repositories": ["https://github.com/bendingspoons/evernote-core"]
 }

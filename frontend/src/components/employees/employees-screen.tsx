@@ -10,6 +10,7 @@ import {
   listProjects,
   type Employee,
   type Project,
+  type ProjectSkillRequirements,
   type SkillKey,
   type Skills,
 } from "@/lib/db-api"
@@ -60,6 +61,9 @@ const skillLabels: Record<SkillKey, string> = {
   infrastructure: "Infra",
   ai: "AI",
 }
+
+const skillRequirementLevels = [1, 2, 3] as const
+type SkillRequirementLevel = (typeof skillRequirementLevels)[number]
 
 const filterItems: Array<{
   value: FilterKey
@@ -622,7 +626,10 @@ function EmployeeDetailPanel({
                       Required skills
                     </p>
                     <div className="mt-2">
-                      <SkillBadges skills={project.required_skills} compact />
+                      <ProjectRequirementBadges
+                        skills={project.required_skills}
+                        compact
+                      />
                     </div>
                   </div>
                   <div>
@@ -746,6 +753,36 @@ function SkillBadges({ skills, compact }: { skills: Skills; compact?: boolean })
   )
 }
 
+function ProjectRequirementBadges({
+  skills,
+  compact,
+}: {
+  skills: ProjectSkillRequirements
+  compact?: boolean
+}) {
+  const entries = projectRequirementEntries(skills).filter(
+    ([, requirement]) => getRequirementTotal(requirement) > 0
+  )
+  const visibleEntries = compact ? entries.slice(0, 3) : entries
+
+  if (visibleEntries.length === 0) {
+    return <span className="text-muted-foreground">No skills</span>
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {visibleEntries.map(([skill, requirement]) => (
+        <Badge key={skill} variant="secondary">
+          {skillLabels[skill]} {formatRequirementParts(requirement).join(", ")}
+        </Badge>
+      ))}
+      {compact && entries.length > visibleEntries.length && (
+        <Badge variant="outline">+{entries.length - visibleEntries.length}</Badge>
+      )}
+    </div>
+  )
+}
+
 function SkillLevel({ skill, level }: { skill: SkillKey; level: number }) {
   return (
     <div className="grid grid-cols-[6rem_1fr_1.5rem] items-center gap-3">
@@ -792,6 +829,44 @@ function skillEntries(skills: Skills): Array<[SkillKey, number]> {
   return (Object.entries(skills) as Array<[SkillKey, number]>).sort(
     ([, leftLevel], [, rightLevel]) => rightLevel - leftLevel
   )
+}
+
+function projectRequirementEntries(
+  skills: ProjectSkillRequirements
+): Array<[SkillKey, ProjectSkillRequirements[SkillKey]]> {
+  return (
+    Object.entries(skills) as Array<[SkillKey, ProjectSkillRequirements[SkillKey]]>
+  ).sort(
+    ([, leftRequirement], [, rightRequirement]) =>
+      getRequirementTotal(rightRequirement) - getRequirementTotal(leftRequirement) ||
+      getHighestRequirementLevel(rightRequirement) -
+        getHighestRequirementLevel(leftRequirement)
+  )
+}
+
+function formatRequirementParts(
+  requirement: ProjectSkillRequirements[SkillKey]
+) {
+  return skillRequirementLevels
+    .map((level) => {
+      const count = requirement[getRequirementLevelField(level)]
+      return count > 0 ? `${count}x L${level}` : null
+    })
+    .filter((part): part is string => Boolean(part))
+}
+
+function getRequirementLevelField(level: SkillRequirementLevel) {
+  return `level_${level}` as const
+}
+
+function getRequirementTotal(requirement: ProjectSkillRequirements[SkillKey]) {
+  return requirement.level_1 + requirement.level_2 + requirement.level_3
+}
+
+function getHighestRequirementLevel(requirement: ProjectSkillRequirements[SkillKey]) {
+  return [...skillRequirementLevels]
+    .reverse()
+    .find((level) => requirement[getRequirementLevelField(level)] > 0) ?? 0
 }
 
 function getInitials(name: string) {
