@@ -3,10 +3,10 @@ services:
     build:
       context: ./frontend
       args:
-        DB_API_BASE_URL: http://db-rest-api:8000
+        DB_API_BASE_URL: http://db-rest-api:8000/db-api
     environment:
       NEXT_TELEMETRY_DISABLED: "1"
-      DB_API_BASE_URL: http://db-rest-api:8000
+      DB_API_BASE_URL: http://db-rest-api:8000/db-api
     depends_on:
       - db-rest-api
     ports:
