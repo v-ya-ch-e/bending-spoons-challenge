@@ -68,7 +68,7 @@ export function SidebarNav({
   return (
     <aside
       className={cn(
-        "flex h-svh shrink-0 flex-col overflow-hidden border-r border-border bg-sidebar py-5 text-sidebar-foreground transition-[width,padding] duration-200 ease-out",
+        "sticky top-0 flex h-svh shrink-0 flex-col overflow-hidden border-r border-border bg-sidebar py-5 text-sidebar-foreground transition-[width,padding] duration-200 ease-out",
         collapsed ? "w-18 px-3" : "w-64 px-4"
       )}
     >
