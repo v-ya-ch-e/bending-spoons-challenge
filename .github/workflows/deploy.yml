@@ -44,10 +44,6 @@ jobs:
 
           mkdir -p "$DEPLOY_PATH"
           cd "$DEPLOY_PATH"
-          cleanup_remote() {
-            git remote set-url origin "https://github.com/${REPO}.git" 2>/dev/null || true
-          }
-          trap cleanup_remote EXIT
 
           if [ ! -d .git ]; then
             tmp_dir=$(mktemp -d)
@@ -56,10 +52,9 @@ jobs:
             rm -rf "$tmp_dir"
           fi
 
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
-          git fetch origin
-          git reset --hard "origin/${BRANCH}"
-          cleanup_remote
+          git remote set-url origin "https://github.com/${REPO}.git"
+          git fetch "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$BRANCH"
+          git reset --hard FETCH_HEAD
 
           # Tear down stale containers from previous deploy layouts only during
           # production deploys so development deploys cannot disturb production.
