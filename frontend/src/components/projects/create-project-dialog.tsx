@@ -365,11 +365,7 @@ export function CreateProjectDialog({
       if (error instanceof BackendApiError && error.status === 501) {
         setSubmitError("Requirement extraction is not available in this backend.")
       } else {
-        setSubmitError(
-          error instanceof Error
-            ? error.message
-            : "Unable to extract project requirements."
-        )
+        setSubmitError(formatExtractionError(error, normalizedGithubRepoUrls))
       }
       setIsManualRequirementsEnabled(true)
     } finally {
@@ -1643,5 +1639,44 @@ function formatPhase(phase: ProjectPhase) {
   return phase
     .split(" ")
     .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
+    .join(" ")
+}
+
+function formatExtractionError(error: unknown, repositoryUrls: string[]) {
+  const repositories =
+    repositoryUrls.length > 0
+      ? `Repositories: ${repositoryUrls.join(", ")}.`
+      : "No repositories were provided."
+
+  if (error instanceof BackendApiError) {
+    if (error.status === 404) {
+      return [
+        "Requirements extraction endpoint was not found (404).",
+        "Verify backend is running and API rewrites point to the correct backend URL.",
+        repositories,
+        error.detail ? `Details: ${error.detail}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    }
+
+    if (error.status === 0) {
+      return [
+        "Could not reach the backend extraction endpoint.",
+        "Verify backend server is running and reachable from the frontend.",
+        repositories,
+        error.detail ? `Details: ${error.detail}` : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    }
+  }
+
+  return [
+    "Unable to extract project requirements.",
+    repositories,
+    error instanceof Error ? `Details: ${error.message}` : "",
+  ]
+    .filter(Boolean)
     .join(" ")
 }

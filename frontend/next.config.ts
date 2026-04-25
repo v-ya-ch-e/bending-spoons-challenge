@@ -4,7 +4,9 @@ const nextConfig: NextConfig = {
   async rewrites() {
     const dbApiBaseUrl = process.env.DB_API_BASE_URL;
     const backendApiBaseUrl = process.env.BACKEND_API_BASE_URL;
-    const isDevelopment = process.env.NODE_ENV === "development";
+    // Some local shells run `next dev` without NODE_ENV explicitly set to "development".
+    // Treat any non-production value as local-development behavior.
+    const isDevelopment = process.env.NODE_ENV !== "production";
 
     if (!dbApiBaseUrl) {
       console.warn(
