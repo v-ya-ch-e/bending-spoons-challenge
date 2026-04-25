@@ -1,0 +1,70 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+    env:
+      BRANCH: ${{ github.ref_name }}
+      DEPLOY_PATH: ${{ github.ref_name == 'main' && '/home/ubuntu/bending-spoons-challenge-prod' || '/home/ubuntu/bending-spoons-challenge-dev' }}
+      COMPOSE_PROJECT_NAME: ${{ github.ref_name == 'main' && 'bsc-prod' || 'bsc-dev' }}
+      DB_REST_API_PORT: ${{ github.ref_name == 'main' && '8001' || '8002' }}
+
+    steps:
+    - name: Deploy to EC2
+      uses: appleboy/ssh-action@v1.0.3
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        BRANCH: ${{ env.BRANCH }}
+        DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
+        COMPOSE_PROJECT_NAME: ${{ env.COMPOSE_PROJECT_NAME }}
+        DB_REST_API_PORT: ${{ env.DB_REST_API_PORT }}
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        envs: GH_TOKEN,REPO,BRANCH,DEPLOY_PATH,COMPOSE_PROJECT_NAME,DB_REST_API_PORT
+        script_stop: false
+        script: |
+          set -euo pipefail
+
+          if [ -z "$DEPLOY_PATH" ] || [ -z "$COMPOSE_PROJECT_NAME" ] || [ -z "$DB_REST_API_PORT" ]; then
+            echo "Missing required deployment configuration"
+            exit 1
+          fi
+
+          mkdir -p "$DEPLOY_PATH"
+          cd "$DEPLOY_PATH"
+
+          if [ ! -d .git ]; then
+            tmp_dir=$(mktemp -d)
+            git clone "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$tmp_dir"
+            cp -a "$tmp_dir"/. "$DEPLOY_PATH"/
+            rm -rf "$tmp_dir"
+          fi
+
+          git remote set-url origin "https://github.com/${REPO}.git"
+          git fetch "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "$BRANCH"
+          git reset --hard FETCH_HEAD
+
+          # Tear down stale containers from previous deploy layouts only during
+          # production deploys so development deploys cannot disturb production.
+          if [ "$BRANCH" = "main" ]; then
+            for project in bending-spoons-challenge backend; do
+              stale=$(docker ps -aq --filter "label=com.docker.compose.project=${project}")
+              if [ -n "$stale" ]; then
+                docker rm -f $stale
+              fi
+            done
+          fi
+
+          docker compose -p "$COMPOSE_PROJECT_NAME" up -d --build --remove-orphans
+
+          docker image prune -f
