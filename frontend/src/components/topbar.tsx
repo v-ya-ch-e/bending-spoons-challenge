@@ -51,7 +51,7 @@ export function Topbar({
             className="flex min-w-0 items-center gap-2 text-sm"
             aria-label="Breadcrumb"
           >
-            <span className="shrink-0 font-medium">Talent OS</span>
+            <span className="shrink-0 font-medium">Mixing Spooners</span>
             <span className="shrink-0 text-muted-foreground">/</span>
             <span className="shrink-0 text-muted-foreground">
               {workspace.label}

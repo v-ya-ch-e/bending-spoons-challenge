@@ -80,7 +80,7 @@ export function SidebarNav({
       >
         <Image
           src="/logo_bending_spoons.svg"
-          alt="Bending Spoons"
+          alt="Mixing Spooners"
           width={410}
           height={190}
           priority
@@ -93,7 +93,7 @@ export function SidebarNav({
         />
         <Image
           src="/logo_bending_spoons_dark.svg"
-          alt="Bending Spoons"
+          alt="Mixing Spooners"
           width={410}
           height={190}
           priority
@@ -106,7 +106,7 @@ export function SidebarNav({
         />
         <Image
           src="/logo_bending_spoons_icon.svg"
-          alt="Bending Spoons"
+          alt="Mixing Spooners"
           width={107}
           height={57}
           priority
@@ -119,7 +119,7 @@ export function SidebarNav({
         />
         <Image
           src="/logo_bending_spoons_icon_dark.svg"
-          alt="Bending Spoons"
+          alt="Mixing Spooners"
           width={107}
           height={57}
           priority

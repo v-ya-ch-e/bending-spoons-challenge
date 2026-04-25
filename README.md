@@ -1,4 +1,4 @@
-# Bending Spoons Challenge
+# Mixing Spooners
 
 Internal Talent, Project, and Documentation OS concept for dynamic project staffing.
 
@@ -23,7 +23,7 @@ integration), see `backend/README.md`.
 
 The DB REST API deploys to two environments on the same EC2 host:
 
-- `main` -> production at `https://doubleu.team/db-api/...`
-- `dev` -> development at `https://dev.doubleu.team/db-api/...`
+- `main` -> production at `https://mixing-spooners.club/db-api/...`
+- `dev` -> development at `https://dev.mixing-spooners.club/db-api/...`
 
 See [docs/deployment.md](docs/deployment.md) for the CI/CD workflow, server layout, nginx routing, TLS setup, and verification commands.

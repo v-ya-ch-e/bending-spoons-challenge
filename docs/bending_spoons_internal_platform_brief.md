@@ -1,8 +1,8 @@
-# Atlas: Internal Platform Concept — Talent, Project & Documentation OS
+# Mixing Spooners: Internal Platform Concept — Talent, Project & Documentation OS
 
 ## What we are building
 
-We are building an internal platform for Bending Spoons that helps leadership and employees manage dynamic project staffing, especially across newly acquired companies and products. The platform combines an employee skill/capability registry, a project registry, a project-to-employee matching engine, and a documentation engine connected to GitHub, Notion, and Slack.
+We are building an internal platform for Mixing Spooners that helps leadership and employees manage dynamic project staffing, especially across newly acquired companies and products. The platform combines an employee skill/capability registry, a project registry, a project-to-employee matching engine, and a documentation engine connected to GitHub, Notion, and Slack.
 
 The core idea is simple: when a new project or acquired product needs a team, the platform helps the CTO understand available talent, recommend the right people, manage reassignment requests, and generate the onboarding/offboarding documentation needed to make transitions fast and low-friction.
 
@@ -69,12 +69,12 @@ Key capabilities:
 
 A dynamic profile for every employee, split into two related layers:
 
-- **Internal employee registry** — existing Bending Spoons employees who can be dynamically assigned across products and projects.
-- **External/acquired-company employee registry** — employees coming from newly acquired companies who need to be mapped and understood as part of the acquired product/company context. In the core scope, they remain attached to their originating company/product and are not dynamically reassigned across Bending Spoons projects like internal employees.
+- **Internal employee registry** — existing Mixing Spooners employees who can be dynamically assigned across products and projects.
+- **External/acquired-company employee registry** — employees coming from newly acquired companies who need to be mapped and understood as part of the acquired product/company context. In the core scope, they remain attached to their originating company/product and are not dynamically reassigned across Mixing Spooners projects like internal employees.
 
 This distinction matters because acquired companies may bring their own teams, knowledge, ownership structures, and undocumented project context. The platform should help leadership understand both the existing internal talent pool and the incoming employee/project knowledge from acquisitions. Internal employees are the primary pool for dynamic project staffing. External/acquired-company employees are primarily represented as context holders, system owners, and knowledge sources for the acquired product. Decisions about optimizing, moving, or letting go of acquired-company employees during acquisition integration are a separate topic and should stay outside the core demo scope.
 
-This should not be a static “skills matrix.” At Bending Spoons, engineers are flexible and can often work across many areas. Therefore, the registry should capture both explicit skills and practical signals.
+This should not be a static “skills matrix.” At Mixing Spooners, engineers are flexible and can often work across many areas. Therefore, the registry should capture both explicit skills and practical signals.
 
 Employee profile data:
 
@@ -429,7 +429,7 @@ The demo should follow one simple story:
 
 ## Short pitch
 
-We are building an internal Talent, Project & Documentation OS for Bending Spoons.
+We are building an internal Talent, Project & Documentation OS for Mixing Spooners.
 
 The platform helps leadership dynamically assign employees to projects, especially newly acquired products, while helping employees transition smoothly between teams. It combines an employee capability registry, a project registry, an explainable matching engine, and a documentation engine connected to GitHub, Notion, and Slack.
 

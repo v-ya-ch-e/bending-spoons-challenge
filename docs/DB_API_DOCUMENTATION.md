@@ -11,8 +11,8 @@ Source files:
 
 Public environments:
 
-- Production base URL: `https://doubleu.team/db-api`
-- Development base URL: `https://dev.doubleu.team/db-api`
+- Production base URL: `https://mixing-spooners.club/db-api`
+- Development base URL: `https://dev.mixing-spooners.club/db-api`
 - Local app root path defaults to `/db-api`, but local direct `uvicorn main:app --reload` requests usually use `http://127.0.0.1:8000`.
 
 ## Agent Rules
@@ -229,7 +229,7 @@ Create payload:
     "infrastructure": { "level_1": 0, "level_2": 1, "level_3": 0 },
     "ai": { "level_1": 0, "level_2": 0, "level_3": 0 }
   },
-  "github_repositories": ["https://github.com/bendingspoons/evernote-core"]
+  "github_repositories": ["https://github.com/mixing-spooners/evernote-core"]
 }
 ```
 
@@ -254,7 +254,7 @@ Response shape:
     "infrastructure": { "level_1": 0, "level_2": 1, "level_3": 0 },
     "ai": { "level_1": 0, "level_2": 0, "level_3": 0 }
   },
-  "github_repositories": ["https://github.com/bendingspoons/evernote-core"]
+  "github_repositories": ["https://github.com/mixing-spooners/evernote-core"]
 }
 ```
 

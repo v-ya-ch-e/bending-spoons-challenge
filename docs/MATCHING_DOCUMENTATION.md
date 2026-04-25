@@ -41,10 +41,10 @@ Use same-origin paths in deployed environments:
 
 Public deployed bases:
 
-- Production backend: `https://doubleu.team/api`
-- Production DB API: `https://doubleu.team/db-api`
-- Development backend: `https://dev.doubleu.team/api`
-- Development DB API: `https://dev.doubleu.team/db-api`
+- Production backend: `https://mixing-spooners.club/api`
+- Production DB API: `https://mixing-spooners.club/db-api`
+- Development backend: `https://dev.mixing-spooners.club/api`
+- Development DB API: `https://dev.mixing-spooners.club/db-api`
 
 Local frontend already rewrites `/db-api/*` via `frontend/next.config.ts`.
 When adding frontend calls to backend matching endpoints, either call the

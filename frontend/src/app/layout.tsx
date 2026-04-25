@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bending Spoons Talent OS",
+  title: "Mixing Spooners Talent OS",
   description:
     "Internal platform for staffing decisions, transitions, and project documentation.",
 };

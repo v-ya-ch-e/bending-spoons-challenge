@@ -650,7 +650,7 @@ function AssignmentStep({
           <Textarea
             value={formState.preferencesText}
             onChange={(event) => onChange({ preferencesText: event.target.value })}
-            placeholder="Atlas Staffing, Growth Platform"
+            placeholder="Mixing Spooners Staffing, Growth Platform"
             aria-label="Preferences"
             className="min-h-24"
           />

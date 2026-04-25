@@ -1,8 +1,8 @@
 # DB REST API
 
-Small FastAPI service exposed publicly behind nginx at `/db-api`, plus the MySQL schema and seed-data tooling for the Atlas hackathon platform. The product brief lives in [../docs/bending_spoons_internal_platform_brief.md](../docs/bending_spoons_internal_platform_brief.md).
+Small FastAPI service exposed publicly behind nginx at `/db-api`, plus the MySQL schema and seed-data tooling for the Mixing Spooners hackathon platform. The product brief lives in [../docs/bending_spoons_internal_platform_brief.md](../docs/bending_spoons_internal_platform_brief.md).
 
-Production is served at `https://doubleu.team/db-api/...`; development is served at `https://dev.doubleu.team/db-api/...`. Both environments keep `ROOT_PATH=/db-api`; the split is by hostname, not by path.
+Production is served at `https://mixing-spooners.club/db-api/...`; development is served at `https://dev.mixing-spooners.club/db-api/...`. Both environments keep `ROOT_PATH=/db-api`; the split is by hostname, not by path.
 
 For the canonical agent-facing API contract, payload shapes, schema notes, and safe update workflow, see [../docs/DB_API_DOCUMENTATION.md](../docs/DB_API_DOCUMENTATION.md).
 
@@ -150,7 +150,7 @@ For frontend work, use `current_team_member_ids` and `current_project_ids` as th
     "infrastructure": { "level_1": 0, "level_2": 1, "level_3": 0 },
     "ai": { "level_1": 0, "level_2": 1, "level_3": 0 }
   },
-  "github_repositories": ["https://github.com/bendingspoons/evernote-core"]
+  "github_repositories": ["https://github.com/mixing-spooners/evernote-core"]
 }
 ```
 
@@ -267,7 +267,7 @@ For agent-facing context (conventions, JSON column rules, when to add new tables
 
 CI/CD is branch-based:
 
-- `main` deploys production (`bsc-prod`, localhost port `8001`).
-- `dev` deploys development (`bsc-dev`, localhost port `8002`).
+- `main` deploys production (`mixing-spooners-prod`, localhost port `8001`).
+- `dev` deploys development (`mixing-spooners-dev`, localhost port `8002`).
 
 See [../docs/deployment.md](../docs/deployment.md) for GitHub Actions, EC2 paths, nginx routing, TLS setup, and verification commands.

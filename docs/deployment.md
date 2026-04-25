@@ -2,8 +2,8 @@
 
 This repository deploys the frontend, backend API, and DB REST API to one EC2 instance with two isolated Docker Compose environments:
 
-- Production deploys from `main` to `https://doubleu.team/`, `https://doubleu.team/api/...`, and `https://doubleu.team/db-api/...`.
-- Development deploys from `dev` to `https://dev.doubleu.team/`, `https://dev.doubleu.team/api/...`, and `https://dev.doubleu.team/db-api/...`.
+- Production deploys from `main` to `https://mixing-spooners.club/`, `https://mixing-spooners.club/api/...`, and `https://mixing-spooners.club/db-api/...`.
+- Development deploys from `dev` to `https://dev.mixing-spooners.club/`, `https://dev.mixing-spooners.club/api/...`, and `https://dev.mixing-spooners.club/db-api/...`.
 
 Both environments currently use the same MySQL credentials, but they run from separate server directories, Docker Compose project names, and localhost ports.
 
@@ -84,12 +84,12 @@ FRONTEND_PORT=3000 BACKEND_PORT=8012 DB_REST_API_PORT=8002 docker compose -p bsc
 Nginx terminates public traffic and proxies the site root, `/api/`, and `/db-api/` to the environment-specific localhost ports:
 
 ```text
-doubleu.team      /        -> http://127.0.0.1:3001
-doubleu.team      /api/    -> http://127.0.0.1:8011/
-doubleu.team      /db-api/ -> http://127.0.0.1:8001/
-dev.doubleu.team  /        -> http://127.0.0.1:3000
-dev.doubleu.team  /api/    -> http://127.0.0.1:8012/
-dev.doubleu.team  /db-api/ -> http://127.0.0.1:8002/
+mixing-spooners.club      /        -> http://127.0.0.1:3001
+mixing-spooners.club      /api/    -> http://127.0.0.1:8011/
+mixing-spooners.club      /db-api/ -> http://127.0.0.1:8001/
+dev.mixing-spooners.club  /        -> http://127.0.0.1:3000
+dev.mixing-spooners.club  /api/    -> http://127.0.0.1:8012/
+dev.mixing-spooners.club  /db-api/ -> http://127.0.0.1:8002/
 ```
 
 The FastAPI apps keep fixed root paths in both environments because the environment split happens by hostname, not by URL path:
@@ -99,7 +99,7 @@ The FastAPI apps keep fixed root paths in both environments because the environm
 
 ## TLS for Development
 
-Production already has HTTPS configured for `doubleu.team`.
+Production already has HTTPS configured for `mixing-spooners.club`.
 
 Before issuing a certificate for development, create this DNS record with the domain provider:
 
@@ -112,16 +112,16 @@ Value: 18.184.106.240
 Wait until it resolves:
 
 ```bash
-dig dev.doubleu.team
+dig dev.mixing-spooners.club
 ```
 
 Then issue the certificate on EC2:
 
 ```bash
-sudo certbot --nginx -d dev.doubleu.team
+sudo certbot --nginx -d dev.mixing-spooners.club
 ```
 
-Choose the HTTP-to-HTTPS redirect option if certbot prompts for it. Do not run certbot for `doubleu.team` unless you intentionally want to replace the existing production certificate.
+Choose the HTTP-to-HTTPS redirect option if certbot prompts for it. Do not run certbot for `mixing-spooners.club` unless you intentionally want to replace the existing production certificate.
 
 ## Verification
 
@@ -145,12 +145,12 @@ bsc-dev-db-rest-api-1   127.0.0.1:8002->8000/tcp
 Check public endpoints:
 
 ```bash
-curl -fsS https://doubleu.team/
-curl -fsS https://dev.doubleu.team/
-curl -fsS https://doubleu.team/api/health
-curl -fsS https://dev.doubleu.team/api/health
-curl -fsS https://doubleu.team/db-api/health
-curl -fsS https://dev.doubleu.team/db-api/health
+curl -fsS https://mixing-spooners.club/
+curl -fsS https://dev.mixing-spooners.club/
+curl -fsS https://mixing-spooners.club/api/health
+curl -fsS https://dev.mixing-spooners.club/api/health
+curl -fsS https://mixing-spooners.club/db-api/health
+curl -fsS https://dev.mixing-spooners.club/db-api/health
 ```
 
 The root URLs should return the frontend HTML. The health endpoints should return:

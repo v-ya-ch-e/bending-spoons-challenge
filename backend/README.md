@@ -1,6 +1,6 @@
 # Backend API
 
-FastAPI service for the main Bending Spoons Challenge backend. Database-facing endpoints live in
+FastAPI service for the main Mixing Spooners backend. Database-facing endpoints live in
 `../db-rest-api`; keep shared DB access there.
 
 This service is the orchestration layer for project skill-profile generation and
@@ -46,7 +46,7 @@ The backend implements a sophisticated staffing analysis engine in `services/ski
     - **NEW**: Suggests senior "Leads" and architects to establish technical foundations.
     - **GROWTH**: Suggests a balanced mix of Seniors and Mids to maximize delivery speed.
     - **MAINTENANCE**: Suggests a minimal crew of Mids/Juniors to ensure stability.
-- **Skill Levels (0-3)**: All recommendations follow the Bending Spoons standard proficiency scale:
+- **Skill Levels (0-3)**: All recommendations follow the Mixing Spooners standard proficiency scale:
     - `0`: No experience
     - `1`: Basic familiarity
     - `2`: Strong working capability
