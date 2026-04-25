@@ -17,3 +17,11 @@ thumbs.db
 
 # Logs and temproraries
 *.log
+
+# Certificates
+*.crt
+*.key
+*.pem
+*.p12
+*.p8
+*.ca-bundle
