@@ -41,14 +41,22 @@ docs/
 
 The `fixtures/` directory is created on first run by the generator.
 
-## Schema (four tables)
-
-The schema mirrors only what the brief explicitly names. Do not add tables for workflows the brief does not describe.
+## Schema
 
 - `projects`: `project_name`, `project_description`, `project_phase` (enum: `new acquisition`, `growth`, `maintenance`), `icon_url`, `poster_url`, `required_people_amount`, `required_skills` JSON, `github_repositories` JSON.
 - `employees`: `name`, `role`, `skills` JSON, `preferences` JSON, `interests` JSON.
 - `project_assignments`: `employee_id` FK, `project_id` FK, with composite primary key. This is the source of truth for current staffing.
 - `move_requests`: `employee_id` FK, `from_project_id` FK (nullable), `to_project_id` FK, `reason`, `expected_role`, `current_project_impact` enum, `status` enum (`pending`, `accepted`, `rejected`, `clarification_requested`), `created_at`, `responded_at` (nullable).
+- `policies`: named/versioned matching rule configurations, exactly one active policy. The seeded default is `Balanced strict matching`; backend matching can also select policies per run.
+- `matching_runs`: matching pipeline run lifecycle, target project, effective rule config, immutable input snapshot, counts, summary/error, and timestamps.
+- `matching_candidates`: deterministic strict-rule candidate plans for a matching run.
+- `matching_recommendations`: ranked advisory recommendations with suggested moves, risks, explanations, and model metadata.
+- `matching_hiring_recommendations`: first-class hiring gap recommendations for runs that cannot be safely solved by reassignment alone.
+- `matching_run_events`: append-only frontend-visible run events for progress and audit timelines.
+
+Matching persistence is storage-only. Do not implement matching orchestration,
+strict rules, or LLM evaluation in this service. Those belong in `backend/` and
+should use `DbApiClient`.
 
 ### Skill JSON keys (do not change)
 
@@ -109,7 +117,6 @@ Reads the fixture JSON and inserts in dependency order: `projects` -> `employees
 The following appear in the brief but are deliberately not modeled in the database yet. Mention them if a feature needs them; do not add tables speculatively.
 
 - Onboarding/offboarding todos
-- Matching recommendations / fit scores
 - Project resource pages (Notion, Slack links)
 - Generated documentation artifacts
 - Acquired-company registry, employee status lifecycle history

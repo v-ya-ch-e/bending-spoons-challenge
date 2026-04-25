@@ -1,53 +1,42 @@
-"""Pydantic API request/response schemas, mirroring the db-rest-api contract."""
+"""Pydantic API request/response schemas."""
 
-from schemas.common import (
-    CurrentProjectImpact,
-    MoveRequestStatus,
-    ProjectSkillRequirement,
-    ProjectSkillRequirements,
-    ProjectPhase,
-    SkillKey,
-    SkillLevel,
-    Skills,
+from schemas.common import Skills
+from schemas.matching import (
+    MatchingCandidateResponse,
+    MatchingHiringRecommendationResponse,
+    MatchingHiringSuggestionResponse,
+    MatchingLlmRequest,
+    MatchingLlmResponse,
+    MatchingMoveResponse,
+    MatchingRecommendationResponse,
+    MatchingRunEventResponse,
+    MatchingRunDiagnosticsResponse,
+    MatchingRunRequest,
+    MatchingRunResponse,
+    MatchingRunSummaryResponse,
+    MatchingSuggestionImpactResponse,
+    MatchingSuggestionMoveResponse,
+    MatchingSuggestionResponse,
 )
-from schemas.employees import Employee, EmployeeCreate, EmployeeUpdate
-from schemas.matching import EmployeeRecommendation, MatchingResult, MatchRequest
-from schemas.move_requests import (
-    MoveRequest,
-    MoveRequestCreate,
-    MoveRequestUpdate,
-)
-from schemas.projects import Project, ProjectCreate, ProjectUpdate
-from schemas.skill_profiles import (
-    RoleRequirement,
-    SkillProfile,
-    SkillProfileSuggestRequest,
-    StaffingSuggestion,
-)
+from schemas.skill_profiles import SkillProfileRequest, SkillProfileResponse
 
 __all__ = [
-    "CurrentProjectImpact",
-    "Employee",
-    "EmployeeCreate",
-    "EmployeeRecommendation",
-    "EmployeeUpdate",
-    "MatchRequest",
-    "MatchingResult",
-    "MoveRequest",
-    "MoveRequestCreate",
-    "MoveRequestStatus",
-    "MoveRequestUpdate",
-    "Project",
-    "ProjectCreate",
-    "ProjectPhase",
-    "ProjectSkillRequirement",
-    "ProjectSkillRequirements",
-    "ProjectUpdate",
-    "RoleRequirement",
-    "SkillKey",
-    "SkillLevel",
-    "SkillProfile",
-    "SkillProfileSuggestRequest",
+    "MatchingCandidateResponse",
+    "MatchingHiringRecommendationResponse",
+    "MatchingHiringSuggestionResponse",
+    "MatchingLlmRequest",
+    "MatchingLlmResponse",
+    "MatchingMoveResponse",
+    "MatchingRecommendationResponse",
+    "MatchingRunEventResponse",
+    "MatchingRunDiagnosticsResponse",
+    "MatchingRunRequest",
+    "MatchingRunResponse",
+    "MatchingRunSummaryResponse",
+    "MatchingSuggestionImpactResponse",
+    "MatchingSuggestionMoveResponse",
+    "MatchingSuggestionResponse",
+    "SkillProfileRequest",
+    "SkillProfileResponse",
     "Skills",
-    "StaffingSuggestion",
 ]

@@ -61,6 +61,30 @@ def _api_reachable() -> bool:
         return False
 
 
+def _matching_api_reachable() -> bool:
+    try:
+        base = get_db_api_base_url()
+    except KeyError:
+        return False
+    try:
+        r = httpx.get(f"{base}/openapi.json", timeout=5.0)
+        return r.status_code == 200 and "/matching-runs" in r.json().get("paths", {})
+    except (httpx.HTTPError, ValueError):
+        return False
+
+
+def _policies_api_reachable() -> bool:
+    try:
+        base = get_db_api_base_url()
+    except KeyError:
+        return False
+    try:
+        r = httpx.get(f"{base}/openapi.json", timeout=5.0)
+        return r.status_code == 200 and "/policies/active" in r.json().get("paths", {})
+    except (httpx.HTTPError, ValueError):
+        return False
+
+
 @unittest.skipUnless(_api_reachable(), "DB API not reachable at DB_API_BASE_URL")
 class TestDbApiClientMetadata(unittest.TestCase):
     @classmethod
@@ -361,6 +385,218 @@ class TestDbApiClientMoveRequests(unittest.TestCase):
         with self.assertRaises(DbApiError) as ctx:
             self.client.get_move_request(created["id"])
         self.assertEqual(ctx.exception.status_code, 404)
+
+
+@unittest.skipUnless(
+    _policies_api_reachable(),
+    "policy DB API endpoints not reachable at DB_API_BASE_URL",
+)
+class TestDbApiClientPolicies(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.client = DbApiClient()
+        cls.created_policy_ids: list[int] = []
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        for policy_id in cls.created_policy_ids:
+            try:
+                cls.client.delete_policy(policy_id)
+            except DbApiError:
+                pass
+        cls.client.close()
+
+    def _make_payload(self) -> dict:
+        return {
+            "name": _unique("policy"),
+            "description": "Created by db_client integration tests.",
+            "config": {
+                "max_candidate_plans": 10,
+                "max_moves": 2,
+                "max_projects_in_scope": 8,
+                "max_employees_in_scope": 60,
+                "max_employee_project_count": 2,
+                "minimum_remaining_project_coverage": 0.75,
+                "minimum_target_coverage_improvement": 0.1,
+                "allow_unassigned_employees": True,
+                "allow_multi_project_assignment": True,
+                "allow_understaff_current_project": False,
+                "exclude_pending_move_requests": True,
+                "prefer_employee_preferences": True,
+                "emit_hiring_gaps": True,
+            },
+            "is_active": False,
+        }
+
+    def test_policy_crud_and_activation(self):
+        original_active = self.client.get_active_policy()
+        created = self.client.create_policy(self._make_payload())
+        self.created_policy_ids.append(created["id"])
+        try:
+            self.assertFalse(created["is_active"])
+            self.assertEqual(created["config"]["max_moves"], 2)
+            self.assertIn(created["id"], [policy["id"] for policy in self.client.list_policies()])
+
+            updated = self.client.update_policy(
+                created["id"],
+                {"description": "Updated test policy.", "config": {**created["config"], "max_moves": 1}},
+            )
+            self.assertEqual(updated["description"], "Updated test policy.")
+            self.assertEqual(updated["config"]["max_moves"], 1)
+
+            activated = self.client.activate_policy(created["id"])
+            self.assertTrue(activated["is_active"])
+            self.assertEqual(self.client.get_active_policy()["id"], created["id"])
+        finally:
+            self.client.activate_policy(original_active["id"])
+
+        self.client.delete_policy(created["id"])
+        self.created_policy_ids.remove(created["id"])
+
+
+@unittest.skipUnless(
+    _matching_api_reachable(),
+    "matching DB API endpoints not reachable at DB_API_BASE_URL",
+)
+class TestDbApiClientMatchingPersistence(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.client = DbApiClient()
+        cls.project = cls.client.create_project(
+            {
+                "project_name": _unique("match-proj"),
+                "project_description": "Matching persistence fixture.",
+                "project_phase": "growth",
+                "icon_url": "https://example.com/icon.png",
+                "poster_url": "https://example.com/poster.png",
+                "current_team_member_ids": [],
+                "required_people_amount": 2,
+                "required_skills": {**SKILL_ZERO, "backend": 2},
+                "github_repositories": [],
+            }
+        )
+        cls.employee = cls.client.create_employee(
+            {
+                "name": _unique("match-emp"),
+                "role": "Backend engineer",
+                "current_project_ids": [],
+                "skills": {**SKILL_ZERO, "backend": 3},
+                "preferences": [cls.project["project_name"]],
+                "interests": ["matching tests"],
+            }
+        )
+        cls.created_run_ids: list[int] = []
+        cls.created_move_request_ids: list[int] = []
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        for request_id in cls.created_move_request_ids:
+            try:
+                cls.client.delete_move_request(request_id)
+            except DbApiError:
+                pass
+        for run_id in cls.created_run_ids:
+            try:
+                cls.client.delete_matching_run(run_id)
+            except DbApiError:
+                pass
+        try:
+            cls.client.delete_employee(cls.employee["id"])
+        except DbApiError:
+            pass
+        try:
+            cls.client.delete_project(cls.project["id"])
+        except DbApiError:
+            pass
+        cls.client.close()
+
+    def test_matching_run_child_resources_and_move_request_action(self):
+        run = self.client.create_matching_run(
+            {
+                "use_case": "project_rebalance",
+                "target_project_id": self.project["id"],
+                "status": "pending",
+                "requested_by": "test-suite",
+                "rule_config": {"max_moves": 1},
+                "input_snapshot": {"project_ids": [self.project["id"]]},
+            }
+        )
+        self.created_run_ids.append(run["id"])
+
+        candidate = self.client.create_matching_candidate(
+            run["id"],
+            {
+                "candidate_plan_id": "plan_01",
+                "strict_score": 0.8,
+                "hard_rule_summary": {"valid": True},
+                "plan_payload": {"moves": []},
+            },
+        )
+        self.assertEqual(candidate["candidate_plan_id"], "plan_01")
+
+        recommendation = self.client.create_matching_recommendation(
+            run["id"],
+            {
+                "candidate_plan_id": "plan_01",
+                "rank": 1,
+                "fit_score": 0.9,
+                "summary": "Recommended staffing move.",
+                "risks": [],
+                "suggested_moves": [
+                    {
+                        "employee_id": self.employee["id"],
+                        "from_project_id": None,
+                        "to_project_id": self.project["id"],
+                        "suggested_role": "Backend engineer",
+                        "current_project_impact": "low",
+                        "move_request_reason": "Backend skills match the project.",
+                    }
+                ],
+            },
+        )
+        self.assertEqual(recommendation["rank"], 1)
+
+        hiring = self.client.create_matching_hiring_recommendation(
+            run["id"],
+            {
+                "candidate_plan_id": "plan_01",
+                "project_id": self.project["id"],
+                "role_title": "Senior backend engineer",
+                "count": 1,
+                "required_skills": {**SKILL_ZERO, "backend": 3},
+                "reason": "Hiring gap remains after reassignment.",
+                "urgency": "high",
+            },
+        )
+        self.assertEqual(hiring["urgency"], "high")
+
+        event = self.client.create_matching_run_event(
+            run["id"],
+            {
+                "level": "info",
+                "stage": "strict_rules",
+                "event_type": "strict_rules.completed",
+                "message": "Generated one candidate.",
+                "metadata": {"candidate_count": 1},
+            },
+        )
+        self.assertEqual(event["metadata"]["candidate_count"], 1)
+
+        latest = self.client.get_latest_project_matching_run(self.project["id"])
+        self.assertEqual(latest["id"], run["id"])
+
+        action = self.client.create_move_requests_from_matching_recommendation(
+            run["id"],
+            "plan_01",
+        )
+        self.assertEqual(len(action["move_requests"]), 1)
+        self.created_move_request_ids.append(action["move_requests"][0]["id"])
+
+        updated = self.client.update_matching_run(
+            run["id"],
+            {"status": "completed", "selected_candidate_plan_id": "plan_01"},
+        )
+        self.assertEqual(updated["status"], "completed")
 
 
 if __name__ == "__main__":

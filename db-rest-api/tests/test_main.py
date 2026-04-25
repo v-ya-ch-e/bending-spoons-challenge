@@ -24,6 +24,36 @@ SKILLS = {
     "ai": 1,
 }
 
+DEFAULT_POLICY_CONFIG = {
+    "max_candidate_plans": 25,
+    "max_moves": 3,
+    "max_projects_in_scope": 8,
+    "max_employees_in_scope": 60,
+    "max_employee_project_count": 2,
+    "minimum_remaining_project_coverage": 0.75,
+    "minimum_target_coverage_improvement": 0.1,
+    "allow_unassigned_employees": True,
+    "allow_multi_project_assignment": True,
+    "allow_understaff_current_project": False,
+    "exclude_pending_move_requests": True,
+    "prefer_employee_preferences": True,
+    "emit_hiring_gaps": True,
+}
+CONSERVATIVE_POLICY_CONFIG = {
+    **DEFAULT_POLICY_CONFIG,
+    "max_moves": 1,
+    "minimum_remaining_project_coverage": 0.85,
+}
+BALANCED_POLICY_CONFIG = {
+    **DEFAULT_POLICY_CONFIG,
+    "max_moves": 2,
+}
+AGGRESSIVE_POLICY_CONFIG = {
+    **DEFAULT_POLICY_CONFIG,
+    "minimum_remaining_project_coverage": 0.6,
+    "allow_understaff_current_project": True,
+}
+
 
 def project_payload(name: str = "Atlas Staffing") -> dict[str, Any]:
     return {
@@ -56,6 +86,62 @@ def move_request_payload(employee_id: int, to_project_id: int) -> dict[str, Any]
         "reason": "Backend and infrastructure experience match the project needs.",
         "expected_role": "Backend/platform engineer",
         "current_project_impact": "low",
+    }
+
+
+def matching_run_payload(target_project_id: int | None = None) -> dict[str, Any]:
+    return {
+        "use_case": "project_rebalance",
+        "target_project_id": target_project_id,
+        "status": "pending",
+        "requested_by": "cto@example.com",
+        "rule_config": {"max_moves": 2},
+        "input_snapshot": {"projects": [target_project_id] if target_project_id else []},
+    }
+
+
+def policy_payload(name: str = "Experimental strict matching") -> dict[str, Any]:
+    return {
+        "name": name,
+        "description": "Experimental matching defaults for staffing recommendations.",
+        "config": {**DEFAULT_POLICY_CONFIG, "max_moves": 2},
+        "is_active": False,
+    }
+
+
+def matching_candidate_payload() -> dict[str, Any]:
+    return {
+        "candidate_plan_id": "plan_01",
+        "strict_score": 0.82,
+        "hard_rule_summary": {"valid": True},
+        "plan_payload": {"moves": []},
+    }
+
+
+def matching_recommendation_payload(
+    employee_id: int,
+    from_project_id: int | None,
+    to_project_id: int,
+) -> dict[str, Any]:
+    return {
+        "candidate_plan_id": "plan_01",
+        "rank": 1,
+        "fit_score": 0.91,
+        "summary": "Best low-disruption staffing option.",
+        "explanation": "Covers the target backend gap.",
+        "risks": ["Source project remains covered."],
+        "ramp_up_estimate": "3-5 days",
+        "suggested_moves": [
+            {
+                "employee_id": employee_id,
+                "from_project_id": from_project_id,
+                "to_project_id": to_project_id,
+                "suggested_role": "Backend/platform engineer",
+                "current_project_impact": "low",
+                "move_request_reason": "Backend skills match the target project.",
+            }
+        ],
+        "model_metadata": {"model": "gpt-4o", "prompt_version": "matching_llm_evaluator_v1"},
     }
 
 
@@ -110,7 +196,54 @@ class InMemoryDatabase:
         self.employees: list[dict[str, Any]] = []
         self.project_assignments: list[dict[str, int]] = []
         self.move_requests: list[dict[str, Any]] = []
-        self.next_ids = {"projects": 1, "employees": 1, "move_requests": 1}
+        self.matching_runs: list[dict[str, Any]] = []
+        self.matching_candidates: list[dict[str, Any]] = []
+        self.matching_recommendations: list[dict[str, Any]] = []
+        self.matching_hiring_recommendations: list[dict[str, Any]] = []
+        self.matching_run_events: list[dict[str, Any]] = []
+        self.policies: list[dict[str, Any]] = [
+            {
+                "id": 1,
+                "name": "Conservative strict matching",
+                "description": "Minimizes disruption by limiting moves and protecting current project coverage.",
+                "config": deepcopy(CONSERVATIVE_POLICY_CONFIG),
+                "is_active": False,
+                "created_at": datetime(2026, 4, 25, 12, 0, 0),
+                "updated_at": datetime(2026, 4, 25, 12, 0, 0),
+                "activated_at": None,
+            },
+            {
+                "id": 2,
+                "name": "Balanced strict matching",
+                "description": "Balanced matching defaults for demos and normal staffing planning.",
+                "config": deepcopy(BALANCED_POLICY_CONFIG),
+                "is_active": True,
+                "created_at": datetime(2026, 4, 25, 12, 0, 0),
+                "updated_at": datetime(2026, 4, 25, 12, 0, 0),
+                "activated_at": datetime(2026, 4, 25, 12, 0, 0),
+            },
+            {
+                "id": 3,
+                "name": "Aggressive strict matching",
+                "description": "Prioritizes urgent strategic staffing by allowing more source-project risk.",
+                "config": deepcopy(AGGRESSIVE_POLICY_CONFIG),
+                "is_active": False,
+                "created_at": datetime(2026, 4, 25, 12, 0, 0),
+                "updated_at": datetime(2026, 4, 25, 12, 0, 0),
+                "activated_at": None,
+            },
+        ]
+        self.next_ids = {
+            "projects": 1,
+            "employees": 1,
+            "move_requests": 1,
+            "policies": 4,
+            "matching_runs": 1,
+            "matching_candidates": 1,
+            "matching_recommendations": 1,
+            "matching_hiring_recommendations": 1,
+            "matching_run_events": 1,
+        }
 
     def execute(self, cursor: FakeCursor, sql: str, params: list[Any]) -> None:
         normalized = " ".join(sql.lower().split())
@@ -210,6 +343,133 @@ class InMemoryDatabase:
             self._delete(cursor, params[0], self.move_requests)
             return
 
+        if normalized.startswith("select * from policies where is_active"):
+            active_policies = [row for row in self.policies if row["is_active"]]
+            cursor._one = deepcopy(
+                sorted(active_policies, key=lambda row: row["id"])[-1]
+            ) if active_policies else None
+            return
+        if normalized.startswith("select * from policies where name"):
+            rows = [row for row in self.policies if row["name"] == params[0]]
+            cursor._many = self._limited(rows, params[1:])
+            return
+        if normalized.startswith("select * from policies order by id"):
+            cursor._many = self._limited(self.policies, params)
+            return
+        if normalized.startswith("select * from policies where id"):
+            cursor._one = self._find(self.policies, params[0])
+            return
+        if normalized.startswith("insert into policies"):
+            self._insert_policy(cursor, sql, params)
+            return
+        if normalized.startswith("update policies set is_active = false") and "where" not in normalized:
+            for policy in self.policies:
+                policy["is_active"] = False
+            cursor.rowcount = len(self.policies)
+            return
+        if normalized.startswith("update policies set"):
+            self._update(cursor, sql, params, self.policies)
+            return
+        if normalized.startswith("delete from policies where id"):
+            self._delete(cursor, params[0], self.policies)
+            return
+
+        if normalized.startswith("select * from matching_runs where id"):
+            cursor._one = self._find(self.matching_runs, params[0])
+            return
+        if normalized.startswith("select * from matching_runs where use_case"):
+            rows = [row for row in self.matching_runs if row["use_case"] == params[0]]
+            if "target_project_id" in normalized:
+                rows = [row for row in rows if row.get("target_project_id") == params[1]]
+            if "order by created_at desc" in normalized:
+                cursor._one = deepcopy(sorted(rows, key=lambda row: row["id"])[-1]) if rows else None
+            else:
+                cursor._many = self._limited(rows, params[-2:])
+            return
+        if normalized.startswith("select * from matching_runs where target_project_id"):
+            rows = [
+                row for row in self.matching_runs if row.get("target_project_id") == params[0]
+            ]
+            cursor._one = deepcopy(sorted(rows, key=lambda row: row["id"])[-1]) if rows else None
+            return
+        if normalized.startswith("select * from matching_runs order by id"):
+            cursor._many = self._limited(self.matching_runs, params)
+            return
+        if normalized.startswith("insert into matching_runs"):
+            self._insert_matching_row(cursor, sql, params, "matching_runs")
+            return
+        if normalized.startswith("update matching_runs set"):
+            self._update(cursor, sql, params, self.matching_runs)
+            return
+        if normalized.startswith("delete from matching_runs where id"):
+            self._delete_matching_run(cursor, params[0])
+            return
+
+        if normalized.startswith("select * from matching_candidates where id"):
+            cursor._one = self._find(self.matching_candidates, params[0])
+            return
+        if normalized.startswith("select * from matching_candidates where run_id"):
+            rows = [row for row in self.matching_candidates if row["run_id"] == params[0]]
+            cursor._many = self._limited(rows, params[1:])
+            return
+        if normalized.startswith("insert into matching_candidates"):
+            self._insert_matching_child(cursor, sql, params, "matching_candidates")
+            return
+
+        if normalized.startswith("select * from matching_recommendations where id"):
+            cursor._one = self._find(self.matching_recommendations, params[0])
+            return
+        if normalized.startswith(
+            "select * from matching_recommendations where run_id = %s and candidate_plan_id"
+        ):
+            cursor._one = next(
+                (
+                    deepcopy(row)
+                    for row in self.matching_recommendations
+                    if row["run_id"] == params[0] and row["candidate_plan_id"] == params[1]
+                ),
+                None,
+            )
+            return
+        if normalized.startswith("select * from matching_recommendations where run_id"):
+            rows = [row for row in self.matching_recommendations if row["run_id"] == params[0]]
+            rows = sorted(rows, key=lambda row: row["recommendation_rank"])
+            cursor._many = self._limited(rows, params[1:])
+            return
+        if normalized.startswith("insert into matching_recommendations"):
+            self._insert_matching_child(cursor, sql, params, "matching_recommendations")
+            return
+
+        if normalized.startswith("select * from matching_hiring_recommendations where id"):
+            cursor._one = self._find(self.matching_hiring_recommendations, params[0])
+            return
+        if normalized.startswith("select * from matching_hiring_recommendations where run_id"):
+            rows = [
+                row for row in self.matching_hiring_recommendations if row["run_id"] == params[0]
+            ]
+            cursor._many = self._limited(rows, params[1:])
+            return
+        if normalized.startswith("insert into matching_hiring_recommendations"):
+            self._insert_matching_child(
+                cursor,
+                sql,
+                params,
+                "matching_hiring_recommendations",
+                project_field="project_id",
+            )
+            return
+
+        if normalized.startswith("select * from matching_run_events where id"):
+            cursor._one = self._find(self.matching_run_events, params[0])
+            return
+        if normalized.startswith("select * from matching_run_events where run_id"):
+            rows = [row for row in self.matching_run_events if row["run_id"] == params[0]]
+            cursor._many = self._limited(rows, params[1:])
+            return
+        if normalized.startswith("insert into matching_run_events"):
+            self._insert_matching_child(cursor, sql, params, "matching_run_events")
+            return
+
         raise AssertionError(f"Unhandled SQL in test fake: {sql}")
 
     def _limited(self, rows: list[dict[str, Any]], params: list[Any]) -> list[dict[str, Any]]:
@@ -258,6 +518,70 @@ class InMemoryDatabase:
         cursor.lastrowid = row["id"]
         cursor.rowcount = 1
 
+    def _insert_policy(self, cursor: FakeCursor, sql: str, params: list[Any]) -> None:
+        columns = self._insert_columns(sql)
+        row = dict(zip(columns, params, strict=True))
+        if any(existing["name"] == row["name"] for existing in self.policies):
+            raise pymysql.err.IntegrityError(1062, "Duplicate entry")
+        row.setdefault("description", None)
+        row.setdefault("is_active", False)
+        row.setdefault("created_at", datetime(2026, 4, 25, 12, 0, 0))
+        row.setdefault("updated_at", datetime(2026, 4, 25, 12, 0, 0))
+        row.setdefault("activated_at", None)
+        row["id"] = self.next_ids["policies"]
+        self.next_ids["policies"] += 1
+        self.policies.append(row)
+        cursor.lastrowid = row["id"]
+        cursor.rowcount = 1
+
+    def _insert_matching_row(
+        self,
+        cursor: FakeCursor,
+        sql: str,
+        params: list[Any],
+        table: str,
+    ) -> None:
+        columns = self._insert_columns(sql)
+        row = dict(zip(columns, params, strict=True))
+        if row.get("target_project_id") is not None and self._find(self.projects, row["target_project_id"]) is None:
+            raise pymysql.err.IntegrityError(1452, "Missing target project")
+        row.setdefault("candidate_count", 0)
+        row.setdefault("recommendation_count", 0)
+        row.setdefault("hiring_recommendation_count", 0)
+        row.setdefault("created_at", datetime(2026, 4, 25, 12, 0, 0))
+        row.setdefault("started_at", None)
+        row.setdefault("completed_at", None)
+        row.setdefault("summary", None)
+        row.setdefault("error_message", None)
+        row.setdefault("selected_candidate_plan_id", None)
+        row["id"] = self.next_ids[table]
+        self.next_ids[table] += 1
+        getattr(self, table).append(row)
+        cursor.lastrowid = row["id"]
+        cursor.rowcount = 1
+
+    def _insert_matching_child(
+        self,
+        cursor: FakeCursor,
+        sql: str,
+        params: list[Any],
+        table: str,
+        *,
+        project_field: str | None = None,
+    ) -> None:
+        columns = self._insert_columns(sql)
+        row = dict(zip(columns, params, strict=True))
+        if self._find(self.matching_runs, row["run_id"]) is None:
+            raise pymysql.err.IntegrityError(1452, "Missing matching run")
+        if project_field and row.get(project_field) is not None and self._find(self.projects, row[project_field]) is None:
+            raise pymysql.err.IntegrityError(1452, "Missing project")
+        row.setdefault("created_at", datetime(2026, 4, 25, 12, 0, 0))
+        row["id"] = self.next_ids[table]
+        self.next_ids[table] += 1
+        getattr(self, table).append(row)
+        cursor.lastrowid = row["id"]
+        cursor.rowcount = 1
+
     def _update(
         self,
         cursor: FakeCursor,
@@ -279,6 +603,21 @@ class InMemoryDatabase:
         original_count = len(rows)
         rows[:] = [row for row in rows if row["id"] != row_id]
         cursor.rowcount = original_count - len(rows)
+
+    def _delete_matching_run(self, cursor: FakeCursor, run_id: int) -> None:
+        self.matching_candidates[:] = [
+            row for row in self.matching_candidates if row["run_id"] != run_id
+        ]
+        self.matching_recommendations[:] = [
+            row for row in self.matching_recommendations if row["run_id"] != run_id
+        ]
+        self.matching_hiring_recommendations[:] = [
+            row for row in self.matching_hiring_recommendations if row["run_id"] != run_id
+        ]
+        self.matching_run_events[:] = [
+            row for row in self.matching_run_events if row["run_id"] != run_id
+        ]
+        self._delete(cursor, run_id, self.matching_runs)
 
     def _project_assignment_employees(self, project_id: int) -> list[dict[str, Any]]:
         rows = []
@@ -388,8 +727,67 @@ def test_metadata_and_openapi_endpoints(client: TestClient) -> None:
 
     openapi = client.get("/openapi.json")
     assert openapi.status_code == 200
-    for path in ("/projects", "/employees", "/move-requests"):
+    for path in (
+        "/projects",
+        "/employees",
+        "/move-requests",
+        "/policies",
+        "/policies/active",
+        "/matching-runs",
+        "/matching-runs/{run_id}/recommendations",
+    ):
         assert path in openapi.json()["paths"]
+
+
+def test_policy_crud_activation_and_active_delete_rejection(client: TestClient) -> None:
+    active_policy = client.get("/policies/active")
+    assert active_policy.status_code == 200
+    assert active_policy.json()["name"] == "Balanced strict matching"
+    assert active_policy.json()["config"] == BALANCED_POLICY_CONFIG
+    assert client.get("/policies", params={"name": "Balanced strict matching"}).json() == [
+        active_policy.json()
+    ]
+
+    create_response = client.post("/policies", json=policy_payload())
+    assert create_response.status_code == 201
+    policy = create_response.json()
+    assert policy["id"] == 4
+    assert policy["config"]["max_moves"] == 2
+    assert policy["is_active"] is False
+
+    policies = client.get("/policies").json()
+    assert [policy["name"] for policy in policies] == [
+        "Conservative strict matching",
+        "Balanced strict matching",
+        "Aggressive strict matching",
+        "Experimental strict matching",
+    ]
+    assert client.get("/policies/4").json() == policy
+
+    update_response = client.put(
+        "/policies/4",
+        json={
+            "description": "More conservative moves.",
+            "config": {**DEFAULT_POLICY_CONFIG, "max_moves": 1},
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["description"] == "More conservative moves."
+    assert update_response.json()["config"]["max_moves"] == 1
+
+    activate_response = client.post("/policies/4:activate")
+    assert activate_response.status_code == 200
+    assert activate_response.json()["is_active"] is True
+    assert client.get("/policies/active").json()["id"] == 4
+    assert client.get("/policies/2").json()["is_active"] is False
+
+    active_delete = client.delete("/policies/4")
+    assert active_delete.status_code == 409
+    assert active_delete.json() == {"detail": "Active policy cannot be deleted."}
+
+    inactive_delete = client.delete("/policies/1")
+    assert inactive_delete.status_code == 204
+    assert client.get("/policies/1").status_code == 404
 
 
 def test_database_health_success_and_failure(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -497,6 +895,114 @@ def test_move_request_rejects_missing_foreign_keys(client: TestClient) -> None:
     )
     assert response.status_code == 400
     assert response.json() == {"detail": "Referenced record does not exist."}
+
+
+def test_matching_run_crud_latest_and_cascade(client: TestClient, fake_db: InMemoryDatabase) -> None:
+    project_id = client.post("/projects", json=project_payload()).json()["id"]
+
+    create_response = client.post("/matching-runs", json=matching_run_payload(project_id))
+    assert create_response.status_code == 201
+    run = create_response.json()
+    assert run["id"] == 1
+    assert run["rule_config"] == {"max_moves": 2}
+    assert run["input_snapshot"] == {"projects": [project_id]}
+
+    assert client.get("/matching-runs").json() == [run]
+    assert client.get("/matching-runs/1").json() == run
+    assert client.get(f"/projects/{project_id}/matching/latest").json() == run
+
+    update_response = client.put(
+        "/matching-runs/1",
+        json={
+            "status": "completed",
+            "candidate_count": 1,
+            "recommendation_count": 1,
+            "hiring_recommendation_count": 1,
+            "selected_candidate_plan_id": "plan_01",
+            "summary": "Completed matching run.",
+        },
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["status"] == "completed"
+    assert update_response.json()["candidate_count"] == 1
+
+    candidate = client.post(
+        "/matching-runs/1/candidates",
+        json=matching_candidate_payload(),
+    ).json()
+    assert candidate["plan_payload"] == {"moves": []}
+
+    hiring = client.post(
+        "/matching-runs/1/hiring-recommendations",
+        json={
+            "candidate_plan_id": "plan_01",
+            "project_id": project_id,
+            "role_title": "Senior backend/platform engineer",
+            "count": 1,
+            "required_skills": SKILLS,
+            "reason": "No safe reassignment can close the gap.",
+            "urgency": "high",
+            "suggested_assignment": "Hire into Atlas Staffing.",
+        },
+    ).json()
+    assert hiring["required_skills"] == SKILLS
+
+    event = client.post(
+        "/matching-runs/1/events",
+        json={
+            "level": "info",
+            "stage": "strict_rules",
+            "event_type": "strict_rules.completed",
+            "message": "Generated one valid candidate plan.",
+            "metadata": {"candidate_count": 1},
+        },
+    ).json()
+    assert event["metadata"] == {"candidate_count": 1}
+
+    assert client.get("/matching-runs/1/candidates").json() == [candidate]
+    assert client.get("/matching-runs/1/hiring-recommendations").json() == [hiring]
+    assert client.get("/matching-runs/1/events").json() == [event]
+
+    delete_response = client.delete("/matching-runs/1")
+    assert delete_response.status_code == 204
+    assert fake_db.matching_candidates == []
+    assert fake_db.matching_hiring_recommendations == []
+    assert fake_db.matching_run_events == []
+    assert client.get("/matching-runs/1").status_code == 404
+
+
+def test_matching_recommendation_creates_move_requests_without_assignments(
+    client: TestClient,
+    fake_db: InMemoryDatabase,
+) -> None:
+    source_project_id = client.post("/projects", json=project_payload("Source")).json()["id"]
+    target_project_id = client.post("/projects", json=project_payload("Target")).json()["id"]
+    employee_id = client.post(
+        "/employees",
+        json={**employee_payload(), "current_project_ids": [source_project_id]},
+    ).json()["id"]
+    run_id = client.post("/matching-runs", json=matching_run_payload(target_project_id)).json()["id"]
+    recommendation = client.post(
+        f"/matching-runs/{run_id}/recommendations",
+        json=matching_recommendation_payload(
+            employee_id,
+            source_project_id,
+            target_project_id,
+        ),
+    ).json()
+    assert recommendation["suggested_moves"][0]["employee_id"] == employee_id
+
+    before_assignments = deepcopy(fake_db.project_assignments)
+    action_response = client.post(
+        f"/matching-runs/{run_id}/recommendations/plan_01/move-requests"
+    )
+    assert action_response.status_code == 201
+    created_requests = action_response.json()["move_requests"]
+    assert len(created_requests) == 1
+    assert created_requests[0]["employee_id"] == employee_id
+    assert created_requests[0]["from_project_id"] == source_project_id
+    assert created_requests[0]["to_project_id"] == target_project_id
+    assert fake_db.project_assignments == before_assignments
 
 
 def test_json_column_helpers_round_trip_bytes_and_models() -> None:

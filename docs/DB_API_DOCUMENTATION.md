@@ -23,6 +23,7 @@ Public environments:
 - JSON columns must be serialized before writes and deserialized before API responses.
 - Project assignments are stored by ID in `project_assignments`; name-based assignment fields are response aliases only.
 - Updating a move request only updates the `move_requests` row. It does not automatically move employees between projects.
+- Matching policies are versioned rows in `policies`; exactly one policy should be active. The seeded default active policy is `Balanced strict matching`, and backend matching run endpoints use balanced unless a request selects a different policy.
 - If the DB schema or public API changes, update this document in the same change.
 
 ## Service Metadata Endpoints
@@ -99,6 +100,36 @@ Common DB error mapping:
 
 ```json
 ["pending", "accepted", "rejected", "clarification_requested"]
+```
+
+`matching_runs.use_case`:
+
+```json
+["portfolio_rebalance", "project_rebalance", "project_staffing"]
+```
+
+`matching_runs.status`:
+
+```json
+["pending", "running", "completed", "failed"]
+```
+
+`matching_run_events.level`:
+
+```json
+["debug", "info", "warning", "error"]
+```
+
+`matching_run_events.stage`:
+
+```json
+["request", "snapshot", "strict_rules", "hiring_gap", "llm_evaluation", "persistence", "action"]
+```
+
+`matching_hiring_recommendations.urgency`:
+
+```json
+["low", "medium", "high"]
 ```
 
 ## Skill JSON Contract
@@ -393,6 +424,374 @@ Foreign-key behavior:
 - `to_project_id` must reference an existing project.
 - `from_project_id` may be `null`, but a non-null value must reference an existing project.
 
+## Policies
+
+Database table: `policies`
+
+Policies store reusable matching rule configuration. The backend matching service
+loads a stored policy before every matching run. Backend run endpoints accept
+`policy_id` or `policy_name`; when neither is provided they use
+`Balanced strict matching`. The final effective config is still stored on
+`matching_runs.rule_config` for auditability.
+
+Stored fields:
+
+- `id`: integer primary key, auto-incremented.
+- `name`: required string, unique, maximum 255 characters.
+- `description`: optional text.
+- `config`: required JSON object containing matching rule values.
+- `is_active`: required boolean. API activation flows keep one active policy.
+- `created_at`: datetime set by MySQL.
+- `updated_at`: datetime set by MySQL and updated on row changes.
+- `activated_at`: datetime set when a policy is activated, otherwise nullable.
+
+Default seed:
+
+- `schema.sql` inserts `Conservative strict matching`, `Balanced strict matching`, and `Aggressive strict matching` when each named row is missing.
+- `Balanced strict matching` is activated by default.
+
+Endpoints:
+
+- `GET /policies`
+- `POST /policies`
+- `GET /policies/active`
+- `GET /policies/{policy_id}`
+- `PUT /policies/{policy_id}`
+- `POST /policies/{policy_id}:activate`
+- `DELETE /policies/{policy_id}`
+
+`GET /policies` accepts `limit`, `offset`, and optional exact `name` filter.
+`GET /policies/active` returns HTTP `404` when no active policy exists.
+
+Create payload:
+
+```json
+{
+  "name": "Balanced strict matching",
+  "description": "Balanced matching defaults for staffing recommendations.",
+  "config": {
+    "max_candidate_plans": 25,
+    "max_moves": 2,
+    "max_projects_in_scope": 8,
+    "max_employees_in_scope": 60,
+    "max_employee_project_count": 2,
+    "minimum_remaining_project_coverage": 0.75,
+    "minimum_target_coverage_improvement": 0.1,
+    "allow_unassigned_employees": true,
+    "allow_multi_project_assignment": true,
+    "allow_understaff_current_project": false,
+    "exclude_pending_move_requests": true,
+    "prefer_employee_preferences": true,
+    "emit_hiring_gaps": true
+  },
+  "is_active": false
+}
+```
+
+Response shape:
+
+```json
+{
+  "id": 2,
+  "name": "Balanced strict matching",
+  "description": "Balanced matching defaults for staffing recommendations.",
+  "config": {
+    "max_candidate_plans": 25,
+    "max_moves": 2,
+    "max_projects_in_scope": 8,
+    "max_employees_in_scope": 60,
+    "max_employee_project_count": 2,
+    "minimum_remaining_project_coverage": 0.75,
+    "minimum_target_coverage_improvement": 0.1,
+    "allow_unassigned_employees": true,
+    "allow_multi_project_assignment": true,
+    "allow_understaff_current_project": false,
+    "exclude_pending_move_requests": true,
+    "prefer_employee_preferences": true,
+    "emit_hiring_gaps": true
+  },
+  "is_active": false,
+  "created_at": "2026-04-25T12:00:00",
+  "updated_at": "2026-04-25T12:00:00",
+  "activated_at": null
+}
+```
+
+Activation behavior:
+
+- Creating a policy with `is_active: true`, updating a policy with `is_active: true`, or calling `POST /policies/{policy_id}:activate` deactivates all other policies in the same transaction.
+- Updating the active policy to `is_active: false` is rejected with HTTP `409`; activate another policy instead.
+- Deleting the active policy is rejected with HTTP `409`.
+
+## Matching Persistence
+
+Matching endpoints store advisory pipeline output for the backend matching
+service. They do not run the matching algorithm and do not mutate
+`project_assignments`.
+
+Database tables:
+
+- `matching_runs`: lifecycle, use case, target project, effective rule config,
+  input snapshot, counts, selected plan, summary, error, and timestamps.
+- `matching_candidates`: deterministic strict-rule candidate plans for a run.
+- `matching_recommendations`: ranked candidate plans with explanations,
+  risks, suggested moves, and model metadata.
+- `matching_hiring_recommendations`: first-class hiring gap recommendations for
+  runs that cannot be safely solved by reassignment alone.
+- `matching_run_events`: append-only frontend-visible progress/audit events.
+
+JSON columns:
+
+- `matching_runs.rule_config`
+- `matching_runs.input_snapshot`
+- `matching_candidates.hard_rule_summary`
+- `matching_candidates.plan_payload`
+- `matching_recommendations.risks`
+- `matching_recommendations.suggested_moves`
+- `matching_recommendations.model_metadata`
+- `matching_hiring_recommendations.required_skills`
+- `matching_run_events.metadata`
+
+Endpoints:
+
+- `GET /matching-runs`
+- `POST /matching-runs`
+- `GET /matching-runs/latest`
+- `GET /matching-runs/{run_id}`
+- `PUT /matching-runs/{run_id}`
+- `DELETE /matching-runs/{run_id}`
+- `GET /projects/{project_id}/matching/latest`
+- `GET /matching-runs/{run_id}/candidates`
+- `POST /matching-runs/{run_id}/candidates`
+- `GET /matching-candidates/{candidate_id}`
+- `GET /matching-runs/{run_id}/recommendations`
+- `POST /matching-runs/{run_id}/recommendations`
+- `GET /matching-recommendations/{recommendation_id}`
+- `GET /matching-runs/{run_id}/hiring-recommendations`
+- `POST /matching-runs/{run_id}/hiring-recommendations`
+- `GET /matching-runs/{run_id}/events`
+- `POST /matching-runs/{run_id}/events`
+- `POST /matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests`
+
+`GET /matching-runs` accepts `limit`, `offset`, and optional `use_case`,
+`target_project_id`, and `status` filters. `GET /matching-runs/latest` accepts
+optional `use_case` and `target_project_id` filters and returns HTTP `404` when
+no matching run exists.
+
+Create run payload:
+
+```json
+{
+  "use_case": "project_rebalance",
+  "target_project_id": 7,
+  "status": "pending",
+  "requested_by": "cto@example.com",
+  "rule_config": {
+    "max_moves": 3,
+    "max_candidate_plans": 25
+  },
+  "input_snapshot": {
+    "project_ids": [7],
+    "employee_ids": [1, 3, 9]
+  }
+}
+```
+
+Matching run response shape:
+
+```json
+{
+  "id": 42,
+  "use_case": "project_rebalance",
+  "target_project_id": 7,
+  "status": "completed",
+  "requested_by": "cto@example.com",
+  "rule_config": {
+    "max_moves": 3,
+    "max_candidate_plans": 25
+  },
+  "input_snapshot": {
+    "project_ids": [7],
+    "employee_ids": [1, 3, 9]
+  },
+  "candidate_count": 1,
+  "recommendation_count": 1,
+  "hiring_recommendation_count": 1,
+  "selected_candidate_plan_id": "plan_01",
+  "summary": "Plan 01 is the best low-disruption option.",
+  "error_message": null,
+  "created_at": "2026-04-25T12:00:00",
+  "started_at": "2026-04-25T12:00:01",
+  "completed_at": "2026-04-25T12:00:10"
+}
+```
+
+Create candidate payload:
+
+```json
+{
+  "candidate_plan_id": "plan_01",
+  "strict_score": 0.82,
+  "hard_rule_summary": {
+    "valid": true,
+    "target_project_id": 7,
+    "move_count": 1,
+    "target_gap_before": 2.0,
+    "target_gap_after": 0.0,
+    "rules_checked": [
+      "identity",
+      "skill_contract",
+      "headcount",
+      "source_project_protection",
+      "pending_requests",
+      "reasonable_disruption"
+    ]
+  },
+  "plan_payload": {
+    "summary": "Move 3 toward Project 7 to reduce headcount or skill gaps.",
+    "moves": [
+      {
+        "employee_id": 3,
+        "from_project_id": 2,
+        "to_project_id": 7,
+        "action": "move",
+        "suggested_role": "Backend/platform engineer",
+        "current_project_impact": "low",
+        "hard_rule_reasons": [
+          "Employee and target project exist in the DB snapshot.",
+          "Move improves or preserves target coverage.",
+          "Source project remains above strict minimums."
+        ],
+        "reason": "Employee covers target backend gaps."
+      }
+    ],
+    "risks": [],
+    "project_coverage_after": {
+      "7": {
+        "headcount_gap": 0,
+        "skill_gap": {
+          "android": 0,
+          "ios": 0,
+          "web": 0,
+          "backend": 0,
+          "infrastructure": 0,
+          "ai": 0
+        },
+        "available_skills": {
+          "android": 0,
+          "ios": 0,
+          "web": 2,
+          "backend": 3,
+          "infrastructure": 2,
+          "ai": 0
+        },
+        "coverage_ratio": 1.0
+      }
+    }
+  },
+  "rejected_reason": null
+}
+```
+
+The backend matching pipeline stores deterministic Step 1 output in
+`matching_candidates`. When candidates exist, the LLM ranking step evaluates
+those rows and creates final `matching_recommendations`; completed runs with
+candidate plans should have `recommendation_count` greater than `0`. Runs with
+no strict-rule candidates can still complete with `recommendation_count` set to
+`0` and hiring recommendations as the main outcome.
+
+The backend orchestration endpoints (`/api/projects/{project_id}/matching:run`
+and `/api/matching/portfolio:rebalance`) return a compact approval response with
+`suggestions`, `hiring_suggestions`, and summary diagnostics. Use these DB API
+child endpoints for persisted audit/debug data or to convert an approved
+recommendation into move requests.
+
+Create recommendation payload:
+
+```json
+{
+  "candidate_plan_id": "plan_01",
+  "rank": 1,
+  "fit_score": 0.91,
+  "summary": "Best balance of target coverage and low source disruption.",
+  "explanation": "The suggested employee covers the target backend gap.",
+  "risks": ["Source project remains above strict minimums."],
+  "ramp_up_estimate": "3-5 days",
+  "suggested_moves": [
+    {
+      "employee_id": 3,
+      "from_project_id": 2,
+      "to_project_id": 7,
+      "action": "move",
+      "suggested_role": "Backend/platform engineer",
+      "current_project_impact": "low",
+      "reason": "Covers the target backend gap with low source impact.",
+      "move_request_reason": "Backend skills match the target project's needs."
+    }
+  ],
+  "model_metadata": {
+    "model": "gpt-4o",
+    "prompt_version": "matching_llm_evaluator_v1"
+  }
+}
+```
+
+Create hiring recommendation payload:
+
+```json
+{
+  "candidate_plan_id": "plan_01",
+  "project_id": 7,
+  "role_title": "Senior backend/platform engineer",
+  "count": 1,
+  "required_skills": {
+    "android": 0,
+    "ios": 0,
+    "web": 1,
+    "backend": 3,
+    "infrastructure": 2,
+    "ai": 0
+  },
+  "reason": "No safe reassignment can close the backend and infrastructure gap.",
+  "urgency": "high",
+  "suggested_assignment": "Hire directly into the target project."
+}
+```
+
+Create event payload:
+
+```json
+{
+  "level": "info",
+  "stage": "strict_rules",
+  "event_type": "strict_rules.completed",
+  "message": "Generated 18 valid candidate plans.",
+  "metadata": {
+    "candidate_count": 18
+  }
+}
+```
+
+Action behavior:
+
+- `POST /matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests`
+  reads the selected recommendation's `suggested_moves` and creates one
+  `move_requests` row per suggested move.
+- The action returns `{"move_requests": [...]}` with the standard move-request
+  response shape.
+- The action does not update `project_assignments`.
+- Suggested moves must include `employee_id`, `to_project_id`,
+  `current_project_impact`, and either `suggested_role` or `expected_role`.
+  `from_project_id` can be `null`. The action uses `move_request_reason`, then
+  `reason`, then the recommendation summary as the move-request reason.
+
+Foreign-key behavior:
+
+- `matching_runs.target_project_id` uses `ON DELETE SET NULL`.
+- Deleting a matching run cascades its candidates, recommendations, hiring
+  recommendations, and events.
+- `matching_hiring_recommendations.project_id` uses `ON DELETE SET NULL`.
+
 ## Schema Summary
 
 ```sql
@@ -433,6 +832,76 @@ move_requests(
   status,
   created_at,
   responded_at
+)
+
+matching_runs(
+  id,
+  use_case,
+  target_project_id,
+  status,
+  requested_by,
+  rule_config,
+  input_snapshot,
+  candidate_count,
+  recommendation_count,
+  hiring_recommendation_count,
+  selected_candidate_plan_id,
+  summary,
+  error_message,
+  created_at,
+  started_at,
+  completed_at
+)
+
+matching_candidates(
+  id,
+  run_id,
+  candidate_plan_id,
+  strict_score,
+  hard_rule_summary,
+  plan_payload,
+  rejected_reason,
+  created_at
+)
+
+matching_recommendations(
+  id,
+  run_id,
+  candidate_plan_id,
+  recommendation_rank,
+  fit_score,
+  summary,
+  explanation,
+  risks,
+  ramp_up_estimate,
+  suggested_moves,
+  model_metadata,
+  created_at
+)
+
+matching_hiring_recommendations(
+  id,
+  run_id,
+  candidate_plan_id,
+  project_id,
+  role_title,
+  count,
+  required_skills,
+  reason,
+  urgency,
+  suggested_assignment,
+  created_at
+)
+
+matching_run_events(
+  id,
+  run_id,
+  level,
+  stage,
+  event_type,
+  message,
+  metadata,
+  created_at
 )
 ```
 

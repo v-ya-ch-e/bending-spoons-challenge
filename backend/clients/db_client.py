@@ -124,3 +124,173 @@ class DbApiClient:
 
     def delete_move_request(self, request_id: int) -> None:
         self._request("DELETE", f"/move-requests/{request_id}")
+
+    # ---- policies --------------------------------------------------------
+
+    def list_policies(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        *,
+        name: str | None = None,
+    ) -> list[dict]:
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if name is not None:
+            params["name"] = name
+        return self._request("GET", "/policies", params=params)
+
+    def get_active_policy(self) -> dict:
+        return self._request("GET", "/policies/active")
+
+    def get_policy(self, policy_id: int) -> dict:
+        return self._request("GET", f"/policies/{policy_id}")
+
+    def get_policy_by_name(self, name: str) -> dict:
+        policies = self.list_policies(limit=1, name=name)
+        if not policies:
+            raise DbApiError(404, f"Policy not found: {name}")
+        return policies[0]
+
+    def create_policy(self, payload: dict) -> dict:
+        return self._request("POST", "/policies", json=payload)
+
+    def update_policy(self, policy_id: int, payload: dict) -> dict:
+        return self._request("PUT", f"/policies/{policy_id}", json=payload)
+
+    def activate_policy(self, policy_id: int) -> dict:
+        return self._request("POST", f"/policies/{policy_id}:activate")
+
+    def delete_policy(self, policy_id: int) -> None:
+        self._request("DELETE", f"/policies/{policy_id}")
+
+    # ---- matching persistence --------------------------------------------
+
+    def list_matching_runs(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        *,
+        use_case: str | None = None,
+        target_project_id: int | None = None,
+        status: str | None = None,
+    ) -> list[dict]:
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        if use_case is not None:
+            params["use_case"] = use_case
+        if target_project_id is not None:
+            params["target_project_id"] = target_project_id
+        if status is not None:
+            params["status"] = status
+        return self._request("GET", "/matching-runs", params=params)
+
+    def create_matching_run(self, payload: dict) -> dict:
+        return self._request("POST", "/matching-runs", json=payload)
+
+    def get_matching_run(self, run_id: int) -> dict:
+        return self._request("GET", f"/matching-runs/{run_id}")
+
+    def update_matching_run(self, run_id: int, payload: dict) -> dict:
+        return self._request("PUT", f"/matching-runs/{run_id}", json=payload)
+
+    def delete_matching_run(self, run_id: int) -> None:
+        self._request("DELETE", f"/matching-runs/{run_id}")
+
+    def get_latest_matching_run(
+        self,
+        *,
+        use_case: str | None = None,
+        target_project_id: int | None = None,
+    ) -> dict:
+        params: dict[str, Any] = {}
+        if use_case is not None:
+            params["use_case"] = use_case
+        if target_project_id is not None:
+            params["target_project_id"] = target_project_id
+        return self._request("GET", "/matching-runs/latest", params=params)
+
+    def get_latest_project_matching_run(self, project_id: int) -> dict:
+        return self._request("GET", f"/projects/{project_id}/matching/latest")
+
+    def list_matching_candidates(
+        self,
+        run_id: int,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict]:
+        return self._request(
+            "GET",
+            f"/matching-runs/{run_id}/candidates",
+            params={"limit": limit, "offset": offset},
+        )
+
+    def create_matching_candidate(self, run_id: int, payload: dict) -> dict:
+        return self._request("POST", f"/matching-runs/{run_id}/candidates", json=payload)
+
+    def get_matching_candidate(self, candidate_id: int) -> dict:
+        return self._request("GET", f"/matching-candidates/{candidate_id}")
+
+    def list_matching_recommendations(
+        self,
+        run_id: int,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict]:
+        return self._request(
+            "GET",
+            f"/matching-runs/{run_id}/recommendations",
+            params={"limit": limit, "offset": offset},
+        )
+
+    def create_matching_recommendation(self, run_id: int, payload: dict) -> dict:
+        return self._request(
+            "POST",
+            f"/matching-runs/{run_id}/recommendations",
+            json=payload,
+        )
+
+    def get_matching_recommendation(self, recommendation_id: int) -> dict:
+        return self._request("GET", f"/matching-recommendations/{recommendation_id}")
+
+    def list_matching_hiring_recommendations(
+        self,
+        run_id: int,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict]:
+        return self._request(
+            "GET",
+            f"/matching-runs/{run_id}/hiring-recommendations",
+            params={"limit": limit, "offset": offset},
+        )
+
+    def create_matching_hiring_recommendation(self, run_id: int, payload: dict) -> dict:
+        return self._request(
+            "POST",
+            f"/matching-runs/{run_id}/hiring-recommendations",
+            json=payload,
+        )
+
+    def list_matching_run_events(
+        self,
+        run_id: int,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict]:
+        return self._request(
+            "GET",
+            f"/matching-runs/{run_id}/events",
+            params={"limit": limit, "offset": offset},
+        )
+
+    def create_matching_run_event(self, run_id: int, payload: dict) -> dict:
+        return self._request("POST", f"/matching-runs/{run_id}/events", json=payload)
+
+    def create_move_requests_from_matching_recommendation(
+        self,
+        run_id: int,
+        candidate_plan_id: str,
+    ) -> dict:
+        return self._request(
+            "POST",
+            f"/matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests",
+        )
