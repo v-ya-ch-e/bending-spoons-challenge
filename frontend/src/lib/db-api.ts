@@ -65,6 +65,16 @@ export type ProjectCreateInput = Omit<
 export type ProjectUpdateInput = Partial<ProjectCreateInput>
 
 const dbApiBasePath = process.env.NEXT_PUBLIC_DB_API_BASE_URL ?? "/db-api"
+const listCacheTtlMs = 5 * 60 * 1000
+
+type ListCacheEntry<T> = {
+  data: T
+  fetchedAt: number
+  promise?: Promise<T>
+}
+
+let employeesCache: ListCacheEntry<Employee[]> | null = null
+let projectsCache: ListCacheEntry<Project[]> | null = null
 
 export class DbApiError extends Error {
   constructor(
@@ -218,13 +228,88 @@ function normalizeProject(project: Project): Project {
   }
 }
 
-export function listEmployees() {
-  return fetchDbApi<Employee[]>("/employees?limit=500")
+function isCacheFresh<T>(cache: ListCacheEntry<T> | null) {
+  return Boolean(cache && Date.now() - cache.fetchedAt < listCacheTtlMs)
+}
+
+function upsertById<T extends { id: number }>(items: T[] | undefined, nextItem: T) {
+  if (!items) {
+    return [nextItem]
+  }
+
+  const exists = items.some((item) => item.id === nextItem.id)
+
+  return exists
+    ? items.map((item) => (item.id === nextItem.id ? nextItem : item))
+    : [...items, nextItem]
+}
+
+export function getCachedEmployees() {
+  return isCacheFresh(employeesCache) ? employeesCache?.data : undefined
+}
+
+export function getCachedProjects() {
+  return isCacheFresh(projectsCache) ? projectsCache?.data : undefined
+}
+
+export async function listEmployees() {
+  if (isCacheFresh(employeesCache)) {
+    return employeesCache!.data
+  }
+
+  if (employeesCache?.promise) {
+    return employeesCache.promise
+  }
+
+  const promise = fetchDbApi<Employee[]>("/employees?limit=500")
+  employeesCache = {
+    data: employeesCache?.data ?? [],
+    fetchedAt: employeesCache?.fetchedAt ?? 0,
+    promise,
+  }
+
+  try {
+    const employees = await promise
+    employeesCache = {
+      data: employees,
+      fetchedAt: Date.now(),
+    }
+    return employees
+  } catch (error) {
+    employeesCache = employeesCache.data.length > 0 ? employeesCache : null
+    throw error
+  }
 }
 
 export async function listProjects() {
-  const projects = await fetchDbApi<Project[]>("/projects?limit=500")
-  return projects.map(normalizeProject)
+  if (isCacheFresh(projectsCache)) {
+    return projectsCache!.data
+  }
+
+  if (projectsCache?.promise) {
+    return projectsCache.promise
+  }
+
+  const promise = fetchDbApi<Project[]>("/projects?limit=500").then((projects) =>
+    projects.map(normalizeProject)
+  )
+  projectsCache = {
+    data: projectsCache?.data ?? [],
+    fetchedAt: projectsCache?.fetchedAt ?? 0,
+    promise,
+  }
+
+  try {
+    const normalizedProjects = await promise
+    projectsCache = {
+      data: normalizedProjects,
+      fetchedAt: Date.now(),
+    }
+    return normalizedProjects
+  } catch (error) {
+    projectsCache = projectsCache.data.length > 0 ? projectsCache : null
+    throw error
+  }
 }
 
 export async function createProject(project: ProjectCreateInput) {
@@ -235,7 +320,12 @@ export async function createProject(project: ProjectCreateInput) {
     },
     body: JSON.stringify(project),
   })
-  return normalizeProject(savedProject)
+  const normalizedProject = normalizeProject(savedProject)
+  projectsCache = {
+    data: upsertById(projectsCache?.data, normalizedProject),
+    fetchedAt: Date.now(),
+  }
+  return normalizedProject
 }
 
 export async function updateProject(projectId: number, project: ProjectUpdateInput) {
@@ -246,7 +336,12 @@ export async function updateProject(projectId: number, project: ProjectUpdateInp
     },
     body: JSON.stringify(project),
   })
-  return normalizeProject(savedProject)
+  const normalizedProject = normalizeProject(savedProject)
+  projectsCache = {
+    data: upsertById(projectsCache?.data, normalizedProject),
+    fetchedAt: Date.now(),
+  }
+  return normalizedProject
 }
 
 export function createEmployee(employee: EmployeeCreateInput) {
@@ -256,6 +351,13 @@ export function createEmployee(employee: EmployeeCreateInput) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(employee),
+  }).then((savedEmployee) => {
+    employeesCache = {
+      data: upsertById(employeesCache?.data, savedEmployee),
+      fetchedAt: Date.now(),
+    }
+    projectsCache = null
+    return savedEmployee
   })
 }
 
@@ -266,5 +368,12 @@ export function updateEmployee(employeeId: number, employee: EmployeeUpdateInput
       "Content-Type": "application/json",
     },
     body: JSON.stringify(employee),
+  }).then((savedEmployee) => {
+    employeesCache = {
+      data: upsertById(employeesCache?.data, savedEmployee),
+      fetchedAt: Date.now(),
+    }
+    projectsCache = null
+    return savedEmployee
   })
 }

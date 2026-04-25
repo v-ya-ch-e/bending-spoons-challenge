@@ -1544,7 +1544,7 @@ function getProjectMedia(websiteUrl: string) {
   return {
     domain,
     iconUrl: `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
-    posterUrl: `https://image.thum.io/get/width/1200/crop/630/https://${domain}`,
+    posterUrl: `https://www.google.com/s2/favicons?domain=${domain}&sz=256`,
   }
 }
 

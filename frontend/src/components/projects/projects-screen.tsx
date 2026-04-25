@@ -1,12 +1,18 @@
 "use client"
 
 import { useEffect, useMemo, useState, type ReactNode } from "react"
-import Image from "next/image"
+import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
-import { Cancel01Icon, GridViewIcon, ListViewIcon } from "@hugeicons/core-free-icons"
+import {
+  ArrowRight01Icon,
+  Cancel01Icon,
+  GridViewIcon,
+  ListViewIcon,
+} from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import {
+  getCachedProjects,
   listProjects,
   type Project,
   type ProjectSkillRequirement,
@@ -52,7 +58,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -101,14 +106,15 @@ export function ProjectsScreen() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const [projects, setProjects] = useState<Project[]>([])
+  const cachedProjects = getCachedProjects()
+  const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
   const [searchQuery, setSearchQuery] = useState("")
   const [filter, setFilter] = useState<FilterKey>("all")
   const [sort, setSort] = useState<SortKey>("name")
   const [viewMode, setViewMode] = useState<ViewMode>("list")
   const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>()
   const [editingProject, setEditingProject] = useState<Project | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(() => !cachedProjects)
   const [error, setError] = useState<string | null>(null)
   const createDialogOpen = searchParams.get("create") === "1"
 
@@ -117,7 +123,9 @@ export function ProjectsScreen() {
 
     async function loadProjectsWorkspace() {
       try {
-        setIsLoading(true)
+        if (!getCachedProjects()) {
+          setIsLoading(true)
+        }
         setError(null)
         const nextProjects = await listProjects()
 
@@ -694,36 +702,7 @@ function ProjectDetailPanel({
       ) : project ? (
         <ScrollArea className="min-h-0 flex-1">
           <div className="flex flex-col gap-5 px-6 pt-5 pb-8">
-            <div className="overflow-hidden rounded-3xl bg-muted">
-              <Image
-                src={project.poster_url}
-                alt=""
-                width={1200}
-                height={630}
-                unoptimized
-                className="h-40 w-full object-cover"
-              />
-            </div>
-
-            <div className="flex items-start gap-3">
-              <Avatar size="lg">
-                <AvatarImage src={project.icon_url} alt="" />
-                <AvatarFallback>{getInitials(project.project_name)}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="truncate text-lg font-semibold">
-                    {project.project_name}
-                  </h3>
-                  <PhaseBadge phase={project.project_phase} />
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {project.project_description}
-                </p>
-              </div>
-            </div>
-
-            <Separator />
+            <ProjectCover project={project} />
 
             <DetailSection title="Staffing">
               <div className="grid grid-cols-2 gap-3">
@@ -753,19 +732,36 @@ function ProjectDetailPanel({
             <DetailSection title="Current team">
               {project.current_team_members.length > 0 ? (
                 <div className="flex flex-col gap-2">
-                  {project.current_team_members.map((member) => (
-                    <div
-                      key={member}
-                      className="flex items-center gap-3 rounded-2xl bg-muted px-3 py-2"
-                    >
-                      <Avatar size="sm">
-                        <AvatarFallback>{getInitials(member)}</AvatarFallback>
-                      </Avatar>
-                      <span className="min-w-0 truncate text-sm font-medium">
-                        {member}
-                      </span>
-                    </div>
-                  ))}
+                  {project.current_team_members.map((member, index) => {
+                    const employeeId = project.current_team_member_ids[index]
+
+                    return (
+                      <Link
+                        key={`${member}-${employeeId ?? index}`}
+                        href={
+                          employeeId ? `/cto/employees/${employeeId}` : "/cto/employees"
+                        }
+                        className="group flex items-center gap-3 rounded-2xl bg-muted px-3 py-2 transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <Avatar size="sm">
+                          <AvatarFallback>{getInitials(member)}</AvatarFallback>
+                        </Avatar>
+                        <span className="min-w-0 truncate text-sm font-medium">
+                          {member}
+                        </span>
+                        <span
+                          className="ml-auto grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors group-hover:bg-background group-hover:text-foreground"
+                          aria-hidden="true"
+                        >
+                          <HugeiconsIcon
+                            icon={ArrowRight01Icon}
+                            strokeWidth={2}
+                            className="size-4"
+                          />
+                        </span>
+                      </Link>
+                    )
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
@@ -783,9 +779,19 @@ function ProjectDetailPanel({
                       href={repository}
                       target="_blank"
                       rel="noreferrer"
-                      className="truncate rounded-2xl bg-muted px-3 py-2 text-sm hover:text-foreground"
+                      className="group flex items-center gap-3 rounded-2xl bg-muted px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-foreground"
                     >
-                      {repository}
+                      <span className="min-w-0 flex-1 truncate">{repository}</span>
+                      <span
+                        className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors group-hover:bg-background group-hover:text-foreground"
+                        aria-hidden="true"
+                      >
+                        <HugeiconsIcon
+                          icon={ArrowRight01Icon}
+                          strokeWidth={2}
+                          className="size-4"
+                        />
+                      </span>
                     </a>
                   ))}
                 </div>
@@ -806,6 +812,49 @@ function ProjectDetailPanel({
         </div>
       )}
     </aside>
+  )
+}
+
+function ProjectCover({ project }: { project: Project }) {
+  return (
+    <div className="relative overflow-hidden rounded-3xl border border-border bg-background p-5">
+      <DotPattern className="absolute right-0 bottom-0 size-44 text-muted-foreground/25 [mask-image:radial-gradient(circle_at_bottom_right,black,transparent_72%)]" />
+      <div className="relative flex h-32 flex-col justify-between">
+        <div className="flex items-start justify-between gap-3">
+          <Avatar size="lg" className="bg-background shadow-sm ring-1 ring-border">
+            <AvatarImage src={project.icon_url} alt="" />
+            <AvatarFallback>{getInitials(project.project_name)}</AvatarFallback>
+          </Avatar>
+          <PhaseBadge phase={project.project_phase} />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-lg font-semibold">{project.project_name}</p>
+          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+            {project.project_description}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DotPattern({ className }: { className?: string }) {
+  const dots = Array.from({ length: 64 }, (_, index) => {
+    const columns = 8
+    const x = (index % columns) * 16 + 4
+    const y = Math.floor(index / columns) * 16 + 4
+
+    return <circle key={index} cx={x} cy={y} r="1.4" fill="currentColor" />
+  })
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 128 128"
+      className={cn("pointer-events-none", className)}
+    >
+      {dots}
+    </svg>
   )
 }
 

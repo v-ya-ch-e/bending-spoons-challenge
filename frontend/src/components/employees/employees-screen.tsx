@@ -6,6 +6,8 @@ import { Cancel01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import {
+  getCachedEmployees,
+  getCachedProjects,
   listEmployees,
   listProjects,
   type Employee,
@@ -78,12 +80,16 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const [employees, setEmployees] = useState<Employee[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
+  const cachedEmployees = getCachedEmployees()
+  const cachedProjects = getCachedProjects()
+  const [employees, setEmployees] = useState<Employee[]>(() => cachedEmployees ?? [])
+  const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
   const [searchQuery, setSearchQuery] = useState("")
   const [filter, setFilter] = useState<FilterKey>("all")
   const [sort, setSort] = useState<SortKey>("name")
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(
+    () => !cachedEmployees || !cachedProjects
+  )
   const [error, setError] = useState<string | null>(null)
   const [activeEmployeeId, setActiveEmployeeId] = useState(selectedEmployeeId)
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
@@ -94,7 +100,9 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
 
     async function loadEmployeesWorkspace() {
       try {
-        setIsLoading(true)
+        if (!getCachedEmployees() || !getCachedProjects()) {
+          setIsLoading(true)
+        }
         setError(null)
         const [nextEmployees, nextProjects] = await Promise.all([
           listEmployees(),
