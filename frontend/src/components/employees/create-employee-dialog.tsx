@@ -149,19 +149,26 @@ export function CreateEmployeeDialog({
     [formState.preferencesText]
   )
 
-  function updateFormState(partialState: Partial<FormState>) {
-    setFormState((current) => ({ ...current, ...partialState }))
+  function updateFormState(
+    nextState:
+      | Partial<FormState>
+      | ((current: FormState) => Partial<FormState>)
+  ) {
+    setFormState((current) => ({
+      ...current,
+      ...(typeof nextState === "function" ? nextState(current) : nextState),
+    }))
     setValidationError(null)
   }
 
   function updateSkill(skill: SkillKey, nextLevel: number) {
     const clampedLevel = Math.min(3, Math.max(0, nextLevel))
-    updateFormState({
+    updateFormState((current) => ({
       skills: {
-        ...formState.skills,
+        ...current.skills,
         [skill]: clampedLevel,
       },
-    })
+    }))
   }
 
   function validateStep(step: StepId) {
@@ -267,7 +274,7 @@ export function CreateEmployeeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex! h-[min(44rem,calc(100svh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
+      <DialogContent className="flex h-[min(44rem,calc(100svh-2rem))] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
         <DialogHeader className="border-b border-border px-6 py-5">
           <DialogTitle className="text-lg">Add new employee</DialogTitle>
           <DialogDescription className="sr-only">

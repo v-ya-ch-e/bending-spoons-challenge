@@ -4,15 +4,15 @@ import { roleWorkspaces } from "@/data/mock-navigation"
 import { WorkspacePlaceholder } from "@/components/workspace-placeholder"
 
 type SpoonerSectionPageProps = {
-  params: Promise<{
+  params: {
     section: string
-  }>
+  }
 }
 
 export default async function SpoonerSectionPage({
   params,
 }: SpoonerSectionPageProps) {
-  const { section } = await params
+  const { section } = params
   const item = roleWorkspaces.spooner.navItems.find(
     (navItem) => navItem.value === section
   )

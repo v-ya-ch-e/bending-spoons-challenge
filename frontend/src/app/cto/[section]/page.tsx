@@ -4,13 +4,13 @@ import { roleWorkspaces } from "@/data/mock-navigation"
 import { WorkspacePlaceholder } from "@/components/workspace-placeholder"
 
 type CtoSectionPageProps = {
-  params: Promise<{
+  params: {
     section: string
-  }>
+  }
 }
 
 export default async function CtoSectionPage({ params }: CtoSectionPageProps) {
-  const { section } = await params
+  const { section } = params
   const item = roleWorkspaces.cto.navItems.find((navItem) => navItem.value === section)
 
   if (!item) {

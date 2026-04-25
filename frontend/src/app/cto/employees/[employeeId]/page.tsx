@@ -1,15 +1,15 @@
 import { EmployeesScreen } from "@/components/employees/employees-screen"
 
 type EmployeeDetailPageProps = {
-  params: Promise<{
+  params: {
     employeeId: string
-  }>
+  }
 }
 
 export default async function EmployeeDetailPage({
   params,
 }: EmployeeDetailPageProps) {
-  const { employeeId } = await params
+  const { employeeId } = params
 
   return <EmployeesScreen selectedEmployeeId={employeeId} />
 }
