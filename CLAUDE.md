@@ -63,3 +63,11 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+## Project Notes
+
+- `db-rest-api/` is the FastAPI service exposed publicly under `https://doubleu.team/db-api/...` for production and `https://dev.doubleu.team/db-api/...` for development.
+- Deployments are branch-based: pushes to `main` deploy production, and pushes to `dev` deploy development. See `docs/deployment.md` before changing CI/CD, nginx, TLS, compose project names, server paths, or exposed ports.
+- The EC2 host runs production and development as separate Docker Compose projects: `bsc-prod` on localhost port `8001`, and `bsc-dev` on localhost port `8002`.
+- MySQL RDS credentials live in the repository root `.env` file as `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD`. Never commit or print their values.
+- New DB-backed API endpoints should reuse `get_db_connection` or `open_db_connection()` from `db-rest-api/main.py` instead of creating ad hoc connection code.

@@ -1,4 +1,5 @@
 # Virtual enviroments
+.venv/
 venv/
 ENV/
 env/
@@ -17,3 +18,15 @@ thumbs.db
 
 # Logs and temproraries
 *.log
+
+# Secrets
+.env
+.env.local
+
+# Certificates
+*.crt
+*.key
+*.pem
+*.p12
+*.p8
+*.ca-bundle
