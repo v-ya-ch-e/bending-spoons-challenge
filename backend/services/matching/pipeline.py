@@ -292,6 +292,7 @@ def _persist_strict_result(
                 str(project_id): {
                     "headcount_gap": coverage.headcount_gap,
                     "skill_gap": coverage.skill_gap,
+                    "skill_gap_requirements": coverage.skill_gap_requirements,
                     "coverage_ratio": coverage.coverage_ratio,
                 }
                 for project_id, coverage in result.coverage_before.items()

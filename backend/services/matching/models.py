@@ -12,8 +12,10 @@ CANONICAL_SKILLS = (
     "infrastructure",
     "ai",
 )
+PROJECT_SKILL_LEVELS = ("level_1", "level_2", "level_3")
 
 SkillMap = dict[str, int]
+SkillRequirementMap = dict[str, dict[str, int]]
 MatchingUseCase = Literal[
     "portfolio_rebalance",
     "project_rebalance",
@@ -31,6 +33,7 @@ class ProjectSnapshot:
     project_phase: str
     required_people_amount: int
     required_skills: SkillMap
+    required_skill_counts: SkillRequirementMap
     current_team_member_ids: tuple[int, ...]
 
 
@@ -66,13 +69,19 @@ class ProjectCoverage:
     project_id: int
     team_member_ids: tuple[int, ...]
     available_skills: SkillMap
+    available_skill_counts: SkillRequirementMap
     skill_gap: SkillMap
+    skill_gap_requirements: SkillRequirementMap
     headcount_gap: int
     coverage_ratio: float
 
     @property
     def skill_gap_total(self) -> int:
-        return sum(self.skill_gap.values())
+        return sum(
+            int(level_key.removeprefix("level_")) * count
+            for levels in self.skill_gap_requirements.values()
+            for level_key, count in levels.items()
+        )
 
     @property
     def total_gap(self) -> float:
@@ -132,7 +141,9 @@ class CandidatePlan:
                 str(project_id): {
                     "headcount_gap": coverage.headcount_gap,
                     "skill_gap": coverage.skill_gap,
+                    "skill_gap_requirements": coverage.skill_gap_requirements,
                     "available_skills": coverage.available_skills,
+                    "available_skill_counts": coverage.available_skill_counts,
                     "coverage_ratio": coverage.coverage_ratio,
                 }
                 for project_id, coverage in self.project_coverage_after.items()

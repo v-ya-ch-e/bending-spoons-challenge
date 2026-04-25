@@ -20,6 +20,10 @@ SKILL_ZERO = {
     "infrastructure": 0,
     "ai": 0,
 }
+PROJECT_SKILL_ZERO = {
+    skill: {"level_1": 0, "level_2": 0, "level_3": 0}
+    for skill in SKILL_ZERO
+}
 
 DEFAULT_POLICY_CONFIG = {
     "max_candidate_plans": 9,
@@ -52,7 +56,10 @@ class FakeDbApiClient:
                 "project_name": "Target",
                 "project_phase": "growth",
                 "required_people_amount": 1,
-                "required_skills": {**SKILL_ZERO, "backend": 3},
+                "required_skills": {
+                    **PROJECT_SKILL_ZERO,
+                    "backend": {"level_1": 0, "level_2": 0, "level_3": 1},
+                },
                 "current_team_member_ids": [],
             }
         ]

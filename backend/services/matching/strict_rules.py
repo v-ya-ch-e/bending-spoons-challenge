@@ -6,6 +6,7 @@ from typing import Iterable
 from services.matching.config import StrictRuleConfig
 from services.matching.models import (
     CANONICAL_SKILLS,
+    PROJECT_SKILL_LEVELS,
     CandidateMove,
     CandidatePlan,
     EmployeeSnapshot,
@@ -16,6 +17,7 @@ from services.matching.models import (
     ProjectCoverage,
     ProjectSnapshot,
     ScopedSnapshot,
+    SkillRequirementMap,
     SkillMap,
     StrictRulesResult,
 )
@@ -55,16 +57,7 @@ def normalize_snapshot(
             employee_project_ids.setdefault(employee_id, set()).add(project_id)
 
     projects = {
-        int(project["id"]): ProjectSnapshot(
-            id=int(project["id"]),
-            name=str(project.get("project_name") or project.get("name") or project["id"]),
-            project_phase=str(project.get("project_phase") or "maintenance"),
-            required_people_amount=max(0, int(project.get("required_people_amount") or 0)),
-            required_skills=_normalize_skills(project.get("required_skills") or {}),
-            current_team_member_ids=tuple(
-                sorted(project_member_ids.get(int(project["id"]), set()))
-            ),
-        )
+        int(project["id"]): _project_snapshot(project, project_member_ids)
         for project in raw_projects
     }
 
@@ -212,20 +205,28 @@ def compute_project_coverage(
         team_member_ids = set(assignments.get(project_id, set()))
 
     available_skills = _empty_skills()
+    available_skill_counts = _empty_skill_requirements()
     for employee_id in team_member_ids:
         employee = snapshot.employees.get(employee_id)
         if employee is None:
             continue
         for skill in CANONICAL_SKILLS:
-            available_skills[skill] = max(available_skills[skill], employee.skills[skill])
+            level = employee.skills[skill]
+            available_skills[skill] = max(available_skills[skill], level)
+            if level > 0:
+                available_skill_counts[skill][f"level_{level}"] += 1
 
-    skill_gap = {
-        skill: max(project.required_skills[skill] - available_skills[skill], 0)
-        for skill in CANONICAL_SKILLS
-    }
+    skill_gap_requirements = _skill_gap_requirements(
+        project.required_skill_counts,
+        available_skill_counts,
+    )
+    skill_gap = _flatten_skill_requirement_levels(skill_gap_requirements)
     headcount_gap = max(project.required_people_amount - len(team_member_ids), 0)
     coverage_ratio = round(
-        (_headcount_ratio(project, len(team_member_ids)) + _skill_ratio(project, available_skills))
+        (
+            _headcount_ratio(project, len(team_member_ids))
+            + _skill_ratio(project, skill_gap_requirements)
+        )
         / 2,
         4,
     )
@@ -234,7 +235,9 @@ def compute_project_coverage(
         project_id=project_id,
         team_member_ids=tuple(sorted(team_member_ids)),
         available_skills=available_skills,
+        available_skill_counts=available_skill_counts,
         skill_gap=skill_gap,
+        skill_gap_requirements=skill_gap_requirements,
         headcount_gap=headcount_gap,
         coverage_ratio=coverage_ratio,
     )
@@ -529,6 +532,8 @@ def _build_candidate_plan(
             "move_count": len(moves),
             "target_gap_before": before_target.total_gap,
             "target_gap_after": after_target.total_gap,
+            "target_skill_gap_requirements_before": before_target.skill_gap_requirements,
+            "target_skill_gap_requirements_after": after_target.skill_gap_requirements,
             "target_coverage_before": before_target.coverage_ratio,
             "target_coverage_after": after_target.coverage_ratio,
             "rules_checked": [
@@ -586,6 +591,90 @@ def _detect_hiring_gaps(
     return gaps
 
 
+def _project_snapshot(
+    project: dict,
+    project_member_ids: dict[int, set[int]],
+) -> ProjectSnapshot:
+    required_skill_counts = _normalize_project_skill_requirements(
+        project.get("required_skills") or {}
+    )
+    project_id = int(project["id"])
+    return ProjectSnapshot(
+        id=project_id,
+        name=str(project.get("project_name") or project.get("name") or project_id),
+        project_phase=str(project.get("project_phase") or "maintenance"),
+        required_people_amount=max(0, int(project.get("required_people_amount") or 0)),
+        required_skills=_flatten_skill_requirement_levels(required_skill_counts),
+        required_skill_counts=required_skill_counts,
+        current_team_member_ids=tuple(sorted(project_member_ids.get(project_id, set()))),
+    )
+
+
+def _normalize_project_skill_requirements(raw: dict) -> SkillRequirementMap:
+    if not isinstance(raw, dict):
+        raise ValueError("Project required_skills must be an object")
+
+    unknown = set(raw) - set(CANONICAL_SKILLS)
+    if unknown:
+        raise ValueError(f"Unknown skill keys: {', '.join(sorted(unknown))}")
+
+    normalized = _empty_skill_requirements()
+    for skill in CANONICAL_SKILLS:
+        requirement = raw.get(skill, 0)
+        if isinstance(requirement, dict):
+            normalized[skill] = _normalize_project_skill_requirement(skill, requirement)
+            continue
+
+        level = int(requirement or 0)
+        if level < 0 or level > 3:
+            raise ValueError(f"Skill level for {skill} must be between 0 and 3")
+        if level > 0:
+            normalized[skill][f"level_{level}"] = 1
+
+    return normalized
+
+
+def _normalize_project_skill_requirement(
+    skill: str,
+    requirement: dict,
+) -> dict[str, int]:
+    if set(requirement) & set(PROJECT_SKILL_LEVELS):
+        unknown = set(requirement) - set(PROJECT_SKILL_LEVELS)
+        if unknown:
+            raise ValueError(
+                f"Unknown project skill requirement keys for {skill}: "
+                f"{', '.join(sorted(unknown))}"
+            )
+        return {
+            level_key: _non_negative_int(requirement.get(level_key, 0))
+            for level_key in PROJECT_SKILL_LEVELS
+        }
+
+    unknown = set(requirement) - {"count", "minimum_level"}
+    if unknown:
+        raise ValueError(
+            f"Unknown project skill requirement keys for {skill}: "
+            f"{', '.join(sorted(unknown))}"
+        )
+
+    count = _non_negative_int(requirement.get("count", 0))
+    minimum_level = int(requirement.get("minimum_level") or 0)
+    if minimum_level < 0 or minimum_level > 3:
+        raise ValueError(f"Minimum skill level for {skill} must be between 0 and 3")
+
+    normalized = {level_key: 0 for level_key in PROJECT_SKILL_LEVELS}
+    if count > 0 and minimum_level > 0:
+        normalized[f"level_{minimum_level}"] = count
+    return normalized
+
+
+def _non_negative_int(value: object) -> int:
+    count = int(value or 0)
+    if count < 0:
+        raise ValueError("Project skill requirement counts must be non-negative")
+    return count
+
+
 def _normalize_skills(raw: dict) -> SkillMap:
     unknown = set(raw) - set(CANONICAL_SKILLS)
     if unknown:
@@ -602,6 +691,46 @@ def _normalize_skills(raw: dict) -> SkillMap:
 
 def _empty_skills() -> SkillMap:
     return {skill: 0 for skill in CANONICAL_SKILLS}
+
+
+def _empty_skill_requirements() -> SkillRequirementMap:
+    return {
+        skill: {level_key: 0 for level_key in PROJECT_SKILL_LEVELS}
+        for skill in CANONICAL_SKILLS
+    }
+
+
+def _flatten_skill_requirement_levels(requirements: SkillRequirementMap) -> SkillMap:
+    flat = _empty_skills()
+    for skill, levels in requirements.items():
+        for level in (3, 2, 1):
+            if levels[f"level_{level}"] > 0:
+                flat[skill] = level
+                break
+    return flat
+
+
+def _skill_gap_requirements(
+    required: SkillRequirementMap,
+    available_counts: SkillRequirementMap,
+) -> SkillRequirementMap:
+    gaps = _empty_skill_requirements()
+    for skill in CANONICAL_SKILLS:
+        remaining = {
+            level: available_counts[skill][f"level_{level}"]
+            for level in (1, 2, 3)
+        }
+        for required_level in (3, 2, 1):
+            need = required[skill][f"level_{required_level}"]
+            covered = 0
+            for employee_level in range(required_level, 4):
+                if covered == need:
+                    break
+                used = min(need - covered, remaining[employee_level])
+                remaining[employee_level] -= used
+                covered += used
+            gaps[skill][f"level_{required_level}"] = need - covered
+    return gaps
 
 
 def _assignments(snapshot: MatchingSnapshot) -> dict[int, set[int]]:
@@ -633,11 +762,7 @@ def _employee_target_fit(
     target_coverage: ProjectCoverage,
     config: StrictRuleConfig,
 ) -> float:
-    skill_help = sum(
-        min(employee.skills[skill], project.required_skills[skill])
-        for skill, gap in target_coverage.skill_gap.items()
-        if gap > 0
-    )
+    skill_help = _employee_skill_gap_help(employee, target_coverage)
     headcount_help = 1.0 if target_coverage.headcount_gap > 0 else 0.0
     preference_help = 0.0
     if config.prefer_employee_preferences:
@@ -645,6 +770,33 @@ def _employee_target_fit(
         if project.name.lower() in preferences:
             preference_help = 0.5
     return float(skill_help) + headcount_help + preference_help
+
+
+def _employee_skill_gap_help(
+    employee: EmployeeSnapshot,
+    coverage: ProjectCoverage,
+) -> int:
+    help_score = 0
+    for skill in CANONICAL_SKILLS:
+        employee_level = employee.skills[skill]
+        for required_level in (3, 2, 1):
+            if (
+                employee_level >= required_level
+                and coverage.skill_gap_requirements[skill][f"level_{required_level}"] > 0
+            ):
+                help_score += required_level
+                break
+    return help_score
+
+
+def _employee_can_cover_skill_gap(
+    employee_level: int,
+    gap_requirements: dict[str, int],
+) -> bool:
+    return any(
+        employee_level >= required_level and gap_requirements[f"level_{required_level}"] > 0
+        for required_level in (3, 2, 1)
+    )
 
 
 def _has_donor_source(
@@ -691,8 +843,11 @@ def _make_move(
 ) -> CandidateMove:
     covered_skills = [
         skill
-        for skill, gap in target_coverage.skill_gap.items()
-        if gap > 0 and employee.skills[skill] > 0
+        for skill in CANONICAL_SKILLS
+        if _employee_can_cover_skill_gap(
+            employee.skills[skill],
+            target_coverage.skill_gap_requirements[skill],
+        )
     ]
     if covered_skills:
         skill_text = ", ".join(covered_skills)
@@ -727,12 +882,7 @@ def _move_priority(
     target_coverage: ProjectCoverage,
 ) -> float:
     employee = snapshot.employees[move.employee_id]
-    project = snapshot.projects[move.to_project_id]
-    skill_help = sum(
-        min(employee.skills[skill], project.required_skills[skill])
-        for skill, gap in target_coverage.skill_gap.items()
-        if gap > 0
-    )
+    skill_help = _employee_skill_gap_help(employee, target_coverage)
     impact_penalty = {"low": 0.0, "medium": 0.4, "high": 1.0}[move.current_project_impact]
     return skill_help + (1.0 if target_coverage.headcount_gap > 0 else 0.0) - impact_penalty
 
@@ -885,17 +1035,23 @@ def _headcount_ratio(project: ProjectSnapshot, team_size: int) -> float:
     return min(team_size / project.required_people_amount, 1.0)
 
 
-def _skill_ratio(project: ProjectSnapshot, available_skills: SkillMap) -> float:
-    required_skills = [
-        skill for skill in CANONICAL_SKILLS if project.required_skills[skill] > 0
-    ]
-    if not required_skills:
+def _skill_ratio(
+    project: ProjectSnapshot,
+    skill_gap_requirements: SkillRequirementMap,
+) -> float:
+    required_slots = sum(
+        count
+        for levels in project.required_skill_counts.values()
+        for count in levels.values()
+    )
+    if required_slots == 0:
         return 1.0
-    ratios = [
-        min(available_skills[skill] / project.required_skills[skill], 1.0)
-        for skill in required_skills
-    ]
-    return sum(ratios) / len(ratios)
+    missing_slots = sum(
+        count
+        for levels in skill_gap_requirements.values()
+        for count in levels.values()
+    )
+    return max(0.0, min((required_slots - missing_slots) / required_slots, 1.0))
 
 
 def _hiring_required_skills(
@@ -903,9 +1059,9 @@ def _hiring_required_skills(
     coverage: ProjectCoverage,
 ) -> SkillMap:
     required = _empty_skills()
-    for skill, gap in coverage.skill_gap.items():
-        if gap > 0:
-            required[skill] = project.required_skills[skill]
+    for skill, gap_level in coverage.skill_gap.items():
+        if gap_level > 0:
+            required[skill] = gap_level
 
     if any(required.values()):
         return required
@@ -920,7 +1076,13 @@ def _hiring_required_skills(
 
 
 def _critical_skill_gap_count(coverage: ProjectCoverage) -> int:
-    return 1 if any(level > 0 for level in coverage.skill_gap.values()) else 0
+    return max(
+        (
+            sum(levels.values())
+            for levels in coverage.skill_gap_requirements.values()
+        ),
+        default=0,
+    )
 
 
 def _role_title(required_skills: SkillMap) -> str:

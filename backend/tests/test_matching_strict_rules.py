@@ -474,7 +474,51 @@ class TestMatchingStrictRules(unittest.TestCase):
 
         self.assertEqual(coverage.headcount_gap, 0)
         self.assertEqual(coverage.available_skills["backend"], 3)
-        self.assertEqual(coverage.skill_gap["web"], 1)
+        self.assertEqual(coverage.skill_gap["web"], 2)
+
+    def test_per_level_project_requirements_track_skill_slot_counts(self):
+        snapshot = normalize_snapshot(
+            [
+                project(
+                    1,
+                    name="Target",
+                    required_people_amount=3,
+                    required_skills={
+                        "backend": {"level_1": 0, "level_2": 2, "level_3": 1},
+                    },
+                    members=[10, 11],
+                ),
+            ],
+            [
+                employee(10, skills={"backend": 3}, projects=[1]),
+                employee(11, skills={"backend": 2}, projects=[1]),
+                employee(12, skills={"backend": 2}),
+            ],
+        )
+
+        coverage = compute_project_coverage(snapshot, 1)
+
+        self.assertEqual(coverage.headcount_gap, 1)
+        self.assertEqual(
+            coverage.skill_gap_requirements["backend"],
+            {"level_1": 0, "level_2": 1, "level_3": 0},
+        )
+        self.assertEqual(coverage.skill_gap["backend"], 2)
+
+        result = run_strict_rules(
+            use_case="project_rebalance",
+            target_project_id=1,
+            snapshot=snapshot,
+            config=StrictRuleConfig(max_candidate_plans=1),
+        )
+
+        self.assertEqual(len(result.candidate_plans), 1)
+        self.assertEqual(result.candidate_plans[0].moves[0].employee_id, 12)
+        coverage_after = result.candidate_plans[0].project_coverage_after[1]
+        self.assertEqual(
+            coverage_after.skill_gap_requirements["backend"],
+            {"level_1": 0, "level_2": 0, "level_3": 0},
+        )
 
     def test_policy_config_builds_rule_config(self):
         config = build_rule_config(
