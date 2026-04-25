@@ -11,7 +11,17 @@ import mysql.connector
 from dotenv import load_dotenv
 
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "db" / "schema.sql"
-TABLES_IN_DROP_ORDER = ["move_requests", "project_assignments", "employees", "projects"]
+TABLES_IN_DROP_ORDER = [
+    "matching_run_events",
+    "matching_hiring_recommendations",
+    "matching_recommendations",
+    "matching_candidates",
+    "matching_runs",
+    "move_requests",
+    "project_assignments",
+    "employees",
+    "projects",
+]
 
 
 def get_connection():

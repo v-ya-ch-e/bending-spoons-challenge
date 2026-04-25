@@ -3,6 +3,7 @@ import os
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
@@ -43,6 +44,42 @@ class MoveRequestStatus(str, Enum):
     accepted = "accepted"
     rejected = "rejected"
     clarification_requested = "clarification_requested"
+
+
+class MatchingUseCase(str, Enum):
+    portfolio_rebalance = "portfolio_rebalance"
+    project_rebalance = "project_rebalance"
+    project_staffing = "project_staffing"
+
+
+class MatchingRunStatus(str, Enum):
+    pending = "pending"
+    running = "running"
+    completed = "completed"
+    failed = "failed"
+
+
+class MatchingEventLevel(str, Enum):
+    debug = "debug"
+    info = "info"
+    warning = "warning"
+    error = "error"
+
+
+class MatchingEventStage(str, Enum):
+    request = "request"
+    snapshot = "snapshot"
+    strict_rules = "strict_rules"
+    hiring_gap = "hiring_gap"
+    llm_evaluation = "llm_evaluation"
+    persistence = "persistence"
+    action = "action"
+
+
+class HiringUrgency(str, Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
 
 
 class ApiModel(BaseModel):
@@ -165,6 +202,116 @@ class MoveRequest(ApiModel):
     status: MoveRequestStatus
     created_at: datetime
     responded_at: datetime | None
+
+
+class MatchingRunBase(ApiModel):
+    use_case: MatchingUseCase
+    target_project_id: int | None = Field(default=None, gt=0)
+    status: MatchingRunStatus = MatchingRunStatus.pending
+    requested_by: str | None = Field(default=None, max_length=255)
+    rule_config: dict[str, Any] = Field(default_factory=dict)
+    input_snapshot: dict[str, Any] | None = None
+    candidate_count: int = Field(default=0, ge=0)
+    recommendation_count: int = Field(default=0, ge=0)
+    hiring_recommendation_count: int = Field(default=0, ge=0)
+    selected_candidate_plan_id: str | None = Field(default=None, max_length=64)
+    summary: str | None = None
+    error_message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class MatchingRunCreate(MatchingRunBase):
+    pass
+
+
+class MatchingRunUpdate(UpdateModel):
+    use_case: MatchingUseCase = None
+    target_project_id: int | None = Field(default=None, gt=0)
+    status: MatchingRunStatus = None
+    requested_by: str | None = Field(default=None, max_length=255)
+    rule_config: dict[str, Any] = None
+    input_snapshot: dict[str, Any] | None = None
+    candidate_count: int = Field(default=None, ge=0)
+    recommendation_count: int = Field(default=None, ge=0)
+    hiring_recommendation_count: int = Field(default=None, ge=0)
+    selected_candidate_plan_id: str | None = Field(default=None, max_length=64)
+    summary: str | None = None
+    error_message: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class MatchingRun(MatchingRunBase):
+    id: int
+    created_at: datetime
+
+
+class MatchingCandidateCreate(ApiModel):
+    candidate_plan_id: str = Field(min_length=1, max_length=64)
+    strict_score: float | None = Field(default=None, ge=0)
+    hard_rule_summary: dict[str, Any] | None = None
+    plan_payload: dict[str, Any]
+    rejected_reason: str | None = None
+
+
+class MatchingCandidate(MatchingCandidateCreate):
+    id: int
+    run_id: int
+    created_at: datetime
+
+
+class MatchingRecommendationCreate(ApiModel):
+    candidate_plan_id: str = Field(min_length=1, max_length=64)
+    rank: int = Field(gt=0)
+    fit_score: float | None = Field(default=None, ge=0, le=1)
+    summary: str = Field(min_length=1)
+    explanation: str | None = None
+    risks: list[str] = Field(default_factory=list)
+    ramp_up_estimate: str | None = Field(default=None, max_length=255)
+    suggested_moves: list[dict[str, Any]] = Field(default_factory=list)
+    model_metadata: dict[str, Any] | None = None
+
+
+class MatchingRecommendation(MatchingRecommendationCreate):
+    id: int
+    run_id: int
+    created_at: datetime
+
+
+class MatchingHiringRecommendationCreate(ApiModel):
+    candidate_plan_id: str | None = Field(default=None, max_length=64)
+    project_id: int | None = Field(default=None, gt=0)
+    role_title: str = Field(min_length=1, max_length=255)
+    count: int = Field(gt=0)
+    required_skills: Skills
+    reason: str = Field(min_length=1)
+    urgency: HiringUrgency
+    suggested_assignment: str | None = Field(default=None, max_length=255)
+
+
+class MatchingHiringRecommendation(MatchingHiringRecommendationCreate):
+    id: int
+    run_id: int
+    created_at: datetime
+
+
+class MatchingRunEventCreate(ApiModel):
+    level: MatchingEventLevel
+    stage: MatchingEventStage
+    event_type: str = Field(min_length=1, max_length=100)
+    message: str = Field(min_length=1)
+    metadata: dict[str, Any] | None = None
+
+
+class MatchingRunEvent(MatchingRunEventCreate):
+    id: int
+    run_id: int
+    created_at: datetime
+
+
+class MatchingRecommendationMoveRequests(ApiModel):
+    move_requests: list[MoveRequest]
 
 
 @dataclass(frozen=True)
@@ -307,6 +454,48 @@ def serialize_move_request(row: dict[str, Any]) -> dict[str, Any]:
     return dict(row)
 
 
+def numeric_value(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        return float(value)
+    return value
+
+
+def serialize_matching_run(row: dict[str, Any]) -> dict[str, Any]:
+    run = dict(row)
+    for column in ("rule_config", "input_snapshot"):
+        run[column] = parse_json_column(run[column])
+    return run
+
+
+def serialize_matching_candidate(row: dict[str, Any]) -> dict[str, Any]:
+    candidate = dict(row)
+    candidate["strict_score"] = numeric_value(candidate["strict_score"])
+    for column in ("hard_rule_summary", "plan_payload"):
+        candidate[column] = parse_json_column(candidate[column])
+    return candidate
+
+
+def serialize_matching_recommendation(row: dict[str, Any]) -> dict[str, Any]:
+    recommendation = dict(row)
+    recommendation["rank"] = recommendation.pop("recommendation_rank")
+    recommendation["fit_score"] = numeric_value(recommendation["fit_score"])
+    for column in ("risks", "suggested_moves", "model_metadata"):
+        recommendation[column] = parse_json_column(recommendation[column])
+    return recommendation
+
+
+def serialize_matching_hiring_recommendation(row: dict[str, Any]) -> dict[str, Any]:
+    recommendation = dict(row)
+    recommendation["required_skills"] = parse_json_column(recommendation["required_skills"])
+    return recommendation
+
+
+def serialize_matching_run_event(row: dict[str, Any]) -> dict[str, Any]:
+    event = dict(row)
+    event["metadata"] = parse_json_column(event["metadata"])
+    return event
+
+
 def fetch_project_assignments(cursor: DictCursor, project_id: int) -> tuple[list[int], list[str]]:
     execute_or_raise(
         cursor,
@@ -417,6 +606,57 @@ def fetch_move_request(cursor: DictCursor, request_id: int) -> dict[str, Any]:
     return serialize_move_request(row)
 
 
+def fetch_matching_run(cursor: DictCursor, run_id: int) -> dict[str, Any]:
+    execute_or_raise(cursor, "SELECT * FROM matching_runs WHERE id = %s", (run_id,))
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Matching run not found.")
+    return serialize_matching_run(row)
+
+
+def fetch_matching_candidate(cursor: DictCursor, candidate_id: int) -> dict[str, Any]:
+    execute_or_raise(cursor, "SELECT * FROM matching_candidates WHERE id = %s", (candidate_id,))
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Matching candidate not found.")
+    return serialize_matching_candidate(row)
+
+
+def fetch_matching_recommendation(
+    cursor: DictCursor,
+    recommendation_id: int,
+) -> dict[str, Any]:
+    execute_or_raise(
+        cursor,
+        "SELECT * FROM matching_recommendations WHERE id = %s",
+        (recommendation_id,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Matching recommendation not found.")
+    return serialize_matching_recommendation(row)
+
+
+def fetch_matching_recommendation_by_plan(
+    cursor: DictCursor,
+    run_id: int,
+    candidate_plan_id: str,
+) -> dict[str, Any]:
+    execute_or_raise(
+        cursor,
+        """
+        SELECT *
+        FROM matching_recommendations
+        WHERE run_id = %s AND candidate_plan_id = %s
+        """,
+        (run_id, candidate_plan_id),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Matching recommendation not found.")
+    return serialize_matching_recommendation(row)
+
+
 def model_payload(model: BaseModel, *, exclude_unset: bool = False) -> dict[str, Any]:
     return model.model_dump(mode="json", exclude_unset=exclude_unset)
 
@@ -481,6 +721,37 @@ def move_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return prepared
 
 
+def serialize_json_fields(payload: dict[str, Any], columns: Sequence[str]) -> dict[str, Any]:
+    prepared = dict(payload)
+    for column in columns:
+        if column in prepared and prepared[column] is not None:
+            prepared[column] = json_column(prepared[column])
+    return prepared
+
+
+def matching_run_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return serialize_json_fields(payload, ("rule_config", "input_snapshot"))
+
+
+def matching_candidate_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return serialize_json_fields(payload, ("hard_rule_summary", "plan_payload"))
+
+
+def matching_recommendation_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    prepared = dict(payload)
+    if "rank" in prepared:
+        prepared["recommendation_rank"] = prepared.pop("rank")
+    return serialize_json_fields(prepared, ("risks", "suggested_moves", "model_metadata"))
+
+
+def matching_hiring_recommendation_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return serialize_json_fields(payload, ("required_skills",))
+
+
+def matching_run_event_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return serialize_json_fields(payload, ("metadata",))
+
+
 def sync_project_members(cursor: DictCursor, project_id: int, employee_ids: list[int]) -> None:
     execute_or_raise(
         cursor,
@@ -527,6 +798,7 @@ def read_root() -> dict[str, Any]:
             "/projects",
             "/employees",
             "/move-requests",
+            "/matching-runs",
             "/docs",
         ],
     }
@@ -797,3 +1069,383 @@ def delete_move_request(request_id: int) -> Response:
             if cursor.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Move request not found.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/matching-runs", response_model=list[MatchingRun])
+def list_matching_runs(
+    use_case: MatchingUseCase | None = None,
+    target_project_id: int | None = Query(default=None, gt=0),
+    status_filter: MatchingRunStatus | None = Query(default=None, alias="status"),
+    limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> list[dict[str, Any]]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if use_case is not None:
+        clauses.append("use_case = %s")
+        params.append(use_case.value)
+    if target_project_id is not None:
+        clauses.append("target_project_id = %s")
+        params.append(target_project_id)
+    if status_filter is not None:
+        clauses.append("status = %s")
+        params.append(status_filter.value)
+    where_clause = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                f"SELECT * FROM matching_runs{where_clause} ORDER BY id LIMIT %s OFFSET %s",
+                [*params, limit, offset],
+            )
+            return [serialize_matching_run(row) for row in cursor.fetchall()]
+
+
+@app.post("/matching-runs", response_model=MatchingRun, status_code=status.HTTP_201_CREATED)
+def create_matching_run(run: MatchingRunCreate) -> dict[str, Any]:
+    payload = matching_run_payload(model_payload(run))
+    columns = ", ".join(payload)
+    placeholders = ", ".join(["%s"] * len(payload))
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                f"INSERT INTO matching_runs ({columns}) VALUES ({placeholders})",
+                list(payload.values()),
+            )
+            return fetch_matching_run(cursor, cursor.lastrowid)
+
+
+@app.get("/matching-runs/latest", response_model=MatchingRun)
+def get_latest_matching_run(
+    use_case: MatchingUseCase | None = None,
+    target_project_id: int | None = Query(default=None, gt=0),
+) -> dict[str, Any]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if use_case is not None:
+        clauses.append("use_case = %s")
+        params.append(use_case.value)
+    if target_project_id is not None:
+        clauses.append("target_project_id = %s")
+        params.append(target_project_id)
+    where_clause = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                f"SELECT * FROM matching_runs{where_clause} ORDER BY created_at DESC, id DESC LIMIT 1",
+                params,
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Matching run not found.")
+            return serialize_matching_run(row)
+
+
+@app.get("/projects/{project_id}/matching/latest", response_model=MatchingRun)
+def get_latest_project_matching_run(project_id: int) -> dict[str, Any]:
+    return get_latest_matching_run(target_project_id=project_id)
+
+
+@app.get("/matching-runs/{run_id}", response_model=MatchingRun)
+def get_matching_run(run_id: int) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            return fetch_matching_run(cursor, run_id)
+
+
+@app.put("/matching-runs/{run_id}", response_model=MatchingRun)
+def update_matching_run(run_id: int, run: MatchingRunUpdate) -> dict[str, Any]:
+    payload = matching_run_payload(model_payload(run, exclude_unset=True))
+    assignments, values = update_fields_sql(payload)
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                f"UPDATE matching_runs SET {assignments} WHERE id = %s",
+                [*values, run_id],
+            )
+            return fetch_matching_run(cursor, run_id)
+
+
+@app.delete("/matching-runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_matching_run(run_id: int) -> Response:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(cursor, "DELETE FROM matching_runs WHERE id = %s", (run_id,))
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Matching run not found.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/matching-runs/{run_id}/candidates", response_model=list[MatchingCandidate])
+def list_matching_candidates(
+    run_id: int,
+    limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> list[dict[str, Any]]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            fetch_matching_run(cursor, run_id)
+            execute_or_raise(
+                cursor,
+                "SELECT * FROM matching_candidates WHERE run_id = %s ORDER BY id LIMIT %s OFFSET %s",
+                (run_id, limit, offset),
+            )
+            return [serialize_matching_candidate(row) for row in cursor.fetchall()]
+
+
+@app.post(
+    "/matching-runs/{run_id}/candidates",
+    response_model=MatchingCandidate,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_matching_candidate(
+    run_id: int,
+    candidate: MatchingCandidateCreate,
+) -> dict[str, Any]:
+    payload = matching_candidate_payload(model_payload(candidate))
+    payload["run_id"] = run_id
+    columns = ", ".join(payload)
+    placeholders = ", ".join(["%s"] * len(payload))
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            fetch_matching_run(cursor, run_id)
+            execute_or_raise(
+                cursor,
+                f"INSERT INTO matching_candidates ({columns}) VALUES ({placeholders})",
+                list(payload.values()),
+            )
+            return fetch_matching_candidate(cursor, cursor.lastrowid)
+
+
+@app.get("/matching-candidates/{candidate_id}", response_model=MatchingCandidate)
+def get_matching_candidate(candidate_id: int) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            return fetch_matching_candidate(cursor, candidate_id)
+
+
+@app.get("/matching-runs/{run_id}/recommendations", response_model=list[MatchingRecommendation])
+def list_matching_recommendations(
+    run_id: int,
+    limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> list[dict[str, Any]]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            fetch_matching_run(cursor, run_id)
+            execute_or_raise(
+                cursor,
+                """
+                SELECT *
+                FROM matching_recommendations
+                WHERE run_id = %s
+                ORDER BY recommendation_rank
+                LIMIT %s OFFSET %s
+                """,
+                (run_id, limit, offset),
+            )
+            return [serialize_matching_recommendation(row) for row in cursor.fetchall()]
+
+
+@app.post(
+    "/matching-runs/{run_id}/recommendations",
+    response_model=MatchingRecommendation,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_matching_recommendation(
+    run_id: int,
+    recommendation: MatchingRecommendationCreate,
+) -> dict[str, Any]:
+    payload = matching_recommendation_payload(model_payload(recommendation))
+    payload["run_id"] = run_id
+    columns = ", ".join(payload)
+    placeholders = ", ".join(["%s"] * len(payload))
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            fetch_matching_run(cursor, run_id)
+            execute_or_raise(
+                cursor,
+                f"INSERT INTO matching_recommendations ({columns}) VALUES ({placeholders})",
+                list(payload.values()),
+            )
+            return fetch_matching_recommendation(cursor, cursor.lastrowid)
+
+
+@app.get("/matching-recommendations/{recommendation_id}", response_model=MatchingRecommendation)
+def get_matching_recommendation(recommendation_id: int) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            return fetch_matching_recommendation(cursor, recommendation_id)
+
+
+@app.get(
+    "/matching-runs/{run_id}/hiring-recommendations",
+    response_model=list[MatchingHiringRecommendation],
+)
+def list_matching_hiring_recommendations(
+    run_id: int,
+    limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> list[dict[str, Any]]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            fetch_matching_run(cursor, run_id)
+            execute_or_raise(
+                cursor,
+                """
+                SELECT *
+                FROM matching_hiring_recommendations
+                WHERE run_id = %s
+                ORDER BY id
+                LIMIT %s OFFSET %s
+                """,
+                (run_id, limit, offset),
+            )
+            return [
+                serialize_matching_hiring_recommendation(row) for row in cursor.fetchall()
+            ]
+
+
+@app.post(
+    "/matching-runs/{run_id}/hiring-recommendations",
+    response_model=MatchingHiringRecommendation,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_matching_hiring_recommendation(
+    run_id: int,
+    recommendation: MatchingHiringRecommendationCreate,
+) -> dict[str, Any]:
+    payload = matching_hiring_recommendation_payload(model_payload(recommendation))
+    payload["run_id"] = run_id
+    columns = ", ".join(payload)
+    placeholders = ", ".join(["%s"] * len(payload))
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            fetch_matching_run(cursor, run_id)
+            execute_or_raise(
+                cursor,
+                f"INSERT INTO matching_hiring_recommendations ({columns}) VALUES ({placeholders})",
+                list(payload.values()),
+            )
+            execute_or_raise(
+                cursor,
+                "SELECT * FROM matching_hiring_recommendations WHERE id = %s",
+                (cursor.lastrowid,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Matching hiring recommendation not found.")
+            return serialize_matching_hiring_recommendation(row)
+
+
+@app.get("/matching-runs/{run_id}/events", response_model=list[MatchingRunEvent])
+def list_matching_run_events(
+    run_id: int,
+    limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> list[dict[str, Any]]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            fetch_matching_run(cursor, run_id)
+            execute_or_raise(
+                cursor,
+                """
+                SELECT *
+                FROM matching_run_events
+                WHERE run_id = %s
+                ORDER BY id
+                LIMIT %s OFFSET %s
+                """,
+                (run_id, limit, offset),
+            )
+            return [serialize_matching_run_event(row) for row in cursor.fetchall()]
+
+
+@app.post(
+    "/matching-runs/{run_id}/events",
+    response_model=MatchingRunEvent,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_matching_run_event(run_id: int, event: MatchingRunEventCreate) -> dict[str, Any]:
+    payload = matching_run_event_payload(model_payload(event))
+    payload["run_id"] = run_id
+    columns = ", ".join(payload)
+    placeholders = ", ".join(["%s"] * len(payload))
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            fetch_matching_run(cursor, run_id)
+            execute_or_raise(
+                cursor,
+                f"INSERT INTO matching_run_events ({columns}) VALUES ({placeholders})",
+                list(payload.values()),
+            )
+            execute_or_raise(
+                cursor,
+                "SELECT * FROM matching_run_events WHERE id = %s",
+                (cursor.lastrowid,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise HTTPException(status_code=404, detail="Matching run event not found.")
+            return serialize_matching_run_event(row)
+
+
+@app.post(
+    "/matching-runs/{run_id}/recommendations/{candidate_plan_id}/move-requests",
+    response_model=MatchingRecommendationMoveRequests,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_move_requests_from_matching_recommendation(
+    run_id: int,
+    candidate_plan_id: str,
+) -> dict[str, list[dict[str, Any]]]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            try:
+                connection.begin()
+                recommendation = fetch_matching_recommendation_by_plan(
+                    cursor,
+                    run_id,
+                    candidate_plan_id,
+                )
+                suggested_moves = recommendation["suggested_moves"]
+                if not suggested_moves:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Recommendation does not contain suggested moves.",
+                    )
+                created: list[dict[str, Any]] = []
+                for move in suggested_moves:
+                    try:
+                        payload = MoveRequestCreate(
+                            employee_id=move["employee_id"],
+                            from_project_id=move.get("from_project_id"),
+                            to_project_id=move["to_project_id"],
+                            reason=move.get("move_request_reason")
+                            or move.get("reason")
+                            or recommendation["summary"],
+                            expected_role=move.get("suggested_role") or move["expected_role"],
+                            current_project_impact=move["current_project_impact"],
+                        )
+                    except Exception as exc:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="Recommendation suggested_moves cannot be converted to move requests.",
+                        ) from exc
+                    storage_payload = move_request_payload(model_payload(payload))
+                    columns = ", ".join(storage_payload)
+                    placeholders = ", ".join(["%s"] * len(storage_payload))
+                    execute_or_raise(
+                        cursor,
+                        f"INSERT INTO move_requests ({columns}) VALUES ({placeholders})",
+                        list(storage_payload.values()),
+                    )
+                    created.append(fetch_move_request(cursor, cursor.lastrowid))
+                connection.commit()
+                return {"move_requests": created}
+            except Exception:
+                connection.rollback()
+                raise
