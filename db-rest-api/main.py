@@ -3,7 +3,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterator
+from typing import Any, Iterator
 
 import pymysql
 from pymysql.connections import Connection
