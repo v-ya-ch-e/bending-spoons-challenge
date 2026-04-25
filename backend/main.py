@@ -1,11 +1,18 @@
+import asyncio
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
-from schemas import SkillProfileRequest, SkillProfileResponse
-from services import skill_profile_service
+from clients import DbApiError
+from schemas import (
+    MatchingRunRequest,
+    MatchingRunResponse,
+    SkillProfileRequest,
+    SkillProfileResponse,
+)
+from services import matching_service, skill_profile_service
 
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -26,3 +33,38 @@ def health_check() -> dict[str, str]:
 @app.post("/skill-profile", response_model=SkillProfileResponse)
 async def suggest_skill_profile(payload: SkillProfileRequest) -> SkillProfileResponse:
     return await skill_profile_service.suggest_skill_profile(payload)
+
+
+@app.post("/projects/{project_id}/matching:run", response_model=MatchingRunResponse)
+async def run_project_matching(
+    project_id: int,
+    payload: MatchingRunRequest,
+) -> MatchingRunResponse:
+    try:
+        return await asyncio.to_thread(
+            matching_service.run_matching,
+            use_case="project_rebalance",
+            target_project_id=project_id,
+            request=payload,
+        )
+    except DbApiError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/matching/portfolio:rebalance", response_model=MatchingRunResponse)
+async def run_portfolio_rebalance(
+    payload: MatchingRunRequest,
+) -> MatchingRunResponse:
+    try:
+        return await asyncio.to_thread(
+            matching_service.run_matching,
+            use_case="portfolio_rebalance",
+            target_project_id=None,
+            request=payload,
+        )
+    except DbApiError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

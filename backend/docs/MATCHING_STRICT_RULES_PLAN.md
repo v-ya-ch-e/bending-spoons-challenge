@@ -475,6 +475,34 @@ Example event:
 
 - Helper for recording matching run events through `DbApiClient`.
 
+## Implemented Step 1 Notes
+
+The first implementation lives in:
+
+- `backend/services/matching/config.py`
+- `backend/services/matching/models.py`
+- `backend/services/matching/strict_rules.py`
+- `backend/services/matching/pipeline.py`
+- `backend/services/matching/logging.py`
+- `backend/services/matching_service.py`
+
+Operational behavior:
+
+- `POST /projects/{project_id}/matching:run` runs `project_rebalance`.
+- `POST /matching/portfolio:rebalance` runs `portfolio_rebalance`.
+- Runs are synchronous and persist through the existing db-rest-api matching
+  endpoints.
+- Strict candidates are persisted to `matching_candidates`, not
+  `matching_recommendations`.
+- `plan_payload` contains the candidate summary, proposed moves, risks, and
+  `project_coverage_after`.
+- `hard_rule_summary` contains validation and coverage deltas used by the next
+  LLM ranking step.
+- `recommendation_count` remains `0` until the LLM step creates final ranked
+  recommendations.
+- No `project_assignments` mutation and no move-request creation happens during
+  Step 1.
+
 ## Testing
 
 Unit tests should cover:

@@ -43,6 +43,41 @@ CREATE TABLE IF NOT EXISTS move_requests (
     FOREIGN KEY (to_project_id) REFERENCES projects(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS policies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    description TEXT,
+    config JSON NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    activated_at DATETIME,
+    INDEX idx_policies_active (is_active, activated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO policies (name, description, config, is_active, activated_at)
+SELECT
+    'Default strict matching',
+    'Baseline policy matching the original strict-rule defaults.',
+    JSON_OBJECT(
+        'max_candidate_plans', 25,
+        'max_moves', 3,
+        'max_projects_in_scope', 8,
+        'max_employees_in_scope', 60,
+        'max_employee_project_count', 2,
+        'minimum_remaining_project_coverage', 0.75,
+        'minimum_target_coverage_improvement', 0.1,
+        'allow_unassigned_employees', TRUE,
+        'allow_multi_project_assignment', TRUE,
+        'allow_understaff_current_project', FALSE,
+        'exclude_pending_move_requests', TRUE,
+        'prefer_employee_preferences', TRUE,
+        'emit_hiring_gaps', TRUE
+    ),
+    TRUE,
+    CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM policies);
+
 CREATE TABLE IF NOT EXISTS matching_runs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     use_case ENUM('portfolio_rebalance', 'project_rebalance', 'project_staffing') NOT NULL,

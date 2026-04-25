@@ -19,6 +19,7 @@ Ensure `OPENAI_API_KEY` is set to enable LLM-powered features. `GITHUB_TOKEN` is
 optional: `clients/github_client.py` passes it to the GitHub REST API for better
 rate limits; private repositories require a token with repo access. Public repos
 work without a token, subject to unauthenticated rate limits.
+`DB_API_BASE_URL` must point at the db-rest-api service for matching runs.
 
 ## Testing
 
@@ -80,13 +81,10 @@ Health check:
 
 Current orchestration endpoints:
 
-- `POST /projects`
-- `GET /projects/{project_id}`
-- `PUT /projects/{project_id}`
-- `POST /projects/{project_id}/skill-profile:suggest`
-- `PUT /projects/{project_id}/skill-profile`
+- `POST /skill-profile`
 - `POST /projects/{project_id}/matching:run`
-- `GET /projects/{project_id}/matching/latest`
+- `POST /matching/portfolio:rebalance`
 
-Non-health endpoints are currently API shape placeholders until the DB API and
-LLM-backed service logic are wired.
+Matching runs execute the deterministic strict-rule step, persist candidates,
+hiring gaps, and run events through db-rest-api, and leave final
+`matching_recommendations` for the LLM ranking step.
