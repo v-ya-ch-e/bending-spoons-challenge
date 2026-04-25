@@ -12,6 +12,7 @@ from schemas import (
     ProjectUpdate,
     SkillProfile,
     SkillProfileSuggestRequest,
+    StaffingSuggestion,
 )
 from services import matching_service, skill_profile_service
 
@@ -46,12 +47,12 @@ def update_project(project_id: int, payload: ProjectUpdate) -> Project:
     raise HTTPException(status_code=501, detail="Project update is not implemented yet")
 
 
-@app.post("/projects/{project_id}/skill-profile:suggest", response_model=SkillProfile)
-def suggest_skill_profile(
+@app.post("/projects/{project_id}/skill-profile:suggest", response_model=StaffingSuggestion)
+async def suggest_skill_profile(
     project_id: int, payload: SkillProfileSuggestRequest
-) -> SkillProfile:
+) -> StaffingSuggestion:
     try:
-        return skill_profile_service.suggest_skill_profile(project_id, payload)
+        return await skill_profile_service.suggest_skill_profile(project_id, payload)
     except NotImplementedError as exc:
         raise HTTPException(status_code=501, detail=str(exc)) from exc
 

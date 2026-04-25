@@ -15,10 +15,54 @@ uv run uvicorn main:app --reload
 ```
 
 Environment variables are loaded from the repository-level `.env` file.
-Set `BACKEND_ROOT_PATH=/api` for reverse-proxy deployments.
+Ensure `OPENAI_API_KEY` is set to enable LLM-powered features. `GITHUB_TOKEN` is
+optional: `clients/github_client.py` passes it to the GitHub REST API for better
+rate limits; private repositories require a token with repo access. Public repos
+work without a token, subject to unauthenticated rate limits.
 
-`schemas/` contains Pydantic API request/response schemas. The MySQL schema
-lives separately in `db/schema.sql` when the DB setup scripts are present.
+## Testing
+
+Automated tests are located in the `tests/` directory. Run them using `uv`:
+
+```bash
+# Run all tests
+uv run python -m unittest discover -s tests
+
+# Run specific staffing service tests
+uv run python -m unittest discover -s tests -p "test_staffing_service.py"
+```
+
+Run tests from the `backend/` directory with `python -m unittest` so the backend
+root stays on Python's import path.
+
+## Staffing Heuristics Logic
+
+The backend implements a sophisticated staffing analysis engine in `services/skill_profile_service.py`. It uses an LLM (GPT-4o) combined with embedded heuristics to recommend team compositions.
+
+### Core Heuristics
+- **Minimize Headcount**: The engine is biased towards lean teams, preferring full-stack capabilities over specialized roles when a project is small or in maintenance.
+- **Project Status Mapping**:
+    - **NEW**: Suggests senior "Leads" and architects to establish technical foundations.
+    - **GROWTH**: Suggests a balanced mix of Seniors and Mids to maximize delivery speed.
+    - **MAINTENANCE**: Suggests a minimal crew of Mids/Juniors to ensure stability.
+- **Skill Levels (0-3)**: All recommendations follow the Bending Spoons standard proficiency scale:
+    - `0`: No experience
+    - `1`: Basic familiarity
+    - `2`: Strong working capability
+    - `3`: Expert / Lead
+
+### GitHub Integration
+The `GitHubClient` (see `clients/github_client.py`) calls the GitHub REST API with
+`Accept: application/vnd.github.v3+json` and, when `GITHUB_TOKEN` is set, a
+`token` Authorization header. It parses a repo URL into `owner` and `name`,
+then fetches: repository metadata (`/repos/{owner}/{repo}`), the README
+(`/repos/.../readme`, base64-decoded), and a branch tree (tries `main`, then
+`master`, recursive listing capped to the first 100 paths). The result is fed
+into the skill-profile LLM prompt.
+
+### Constraints & Validation
+- **Allowed Categories**: The engine strictly enforces six skill categories: `Android`, `iOS`, `Backend`, `Web`, `Infrastructure`, and `AI/ML`.
+- **Hallucination Filtering**: A post-processing layer strips out any non-standard skill categories (e.g., "Design", "Product", "Security") that the LLM might suggest, ensuring compatibility with the matching engine.
 
 ## Structure
 

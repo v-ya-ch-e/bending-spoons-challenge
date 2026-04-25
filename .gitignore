@@ -11,6 +11,7 @@ env/
 
 # JetBrains stuff
 .idea/
+.junie
 
 # OS Files
 .DS_Store
