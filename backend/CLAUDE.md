@@ -23,6 +23,7 @@ Keep FastAPI endpoints in `main.py` while the backend is small. If `main.py` sta
 - Wraps the public GitHub REST API: `Accept: application/vnd.github.v3+json`, optional `Authorization: token <GITHUB_TOKEN>`.
 - `parse_github_url()` → `(owner, repo)` from a standard `github.com/.../...` URL.
 - `get_repository_info()` fetches repo metadata, README (base64-decoded from API), and a recursive file tree, trying `main` then `master`, keeping the first 100 paths.
-- Used by `services/skill_profile_service.py` to build context for the staffing LLM prompt.
+- `get_user_commit_context()` fetches a capped public commit summary for a GitHub username in a repository.
+- Used by `services/skill_profile_service.py`, `services/project_documentation_service.py`, and transition-instruction generation to build bounded LLM context.
 
 Full setup, testing, and heuristics: `README.md` in this directory.
