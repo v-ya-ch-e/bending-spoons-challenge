@@ -29,6 +29,11 @@ import {
   isProjectDocumentation,
 } from "@/components/documentation/project-documentation-panel"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -325,11 +330,19 @@ export function DocumentationScreen() {
                       onClick={() => selectProject(project.id)}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{project.project_name}</p>
-                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                            {project.project_description}
-                          </p>
+                        <div className="flex min-w-0 gap-3">
+                          <Avatar className="size-9 bg-background ring-1 ring-border">
+                            <AvatarImage src={project.icon_url} alt="" />
+                            <AvatarFallback className="text-xs">
+                              {getInitials(project.project_name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{project.project_name}</p>
+                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                              {project.project_description}
+                            </p>
+                          </div>
                         </div>
                         {documentation ? (
                           <DocumentationStatusBadge status={documentation.status} />
@@ -356,18 +369,26 @@ export function DocumentationScreen() {
           <Card className={cn(documentationCardClass, "flex min-h-0 flex-col overflow-hidden")}>
             <CardHeader className="gap-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <CardTitle>{selectedProject?.project_name ?? "No project selected"}</CardTitle>
-                    {selectedDocumentation ? (
-                      <DocumentationStatusBadge status={selectedDocumentation.status} />
-                    ) : null}
+                <div className="flex min-w-0 gap-3">
+                  {selectedProject ? (
+                    <Avatar size="lg" className="bg-background ring-1 ring-border">
+                      <AvatarImage src={selectedProject.icon_url} alt="" />
+                      <AvatarFallback>{getInitials(selectedProject.project_name)}</AvatarFallback>
+                    </Avatar>
+                  ) : null}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CardTitle>{selectedProject?.project_name ?? "No project selected"}</CardTitle>
+                      {selectedDocumentation ? (
+                        <DocumentationStatusBadge status={selectedDocumentation.status} />
+                      ) : null}
+                    </div>
+                    <CardDescription>
+                      {selectedDocumentation
+                        ? formatGeneratedAt(selectedDocumentation)
+                        : "No generated documentation has been stored yet."}
+                    </CardDescription>
                   </div>
-                  <CardDescription>
-                    {selectedDocumentation
-                      ? formatGeneratedAt(selectedDocumentation)
-                      : "No generated documentation has been stored yet."}
-                  </CardDescription>
                 </div>
                 <div className="flex gap-2">
                   {isEditing ? (
@@ -465,4 +486,13 @@ function DocumentationLoadingState() {
       </Card>
     </div>
   )
+}
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part.charAt(0))
+    .join("")
+    .slice(0, 2)
+    .toUpperCase()
 }
