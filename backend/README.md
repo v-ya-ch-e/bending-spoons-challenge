@@ -3,9 +3,10 @@
 FastAPI service for the main Mixing Spooners backend. Database-facing endpoints live in
 `../db-rest-api`; keep shared DB access there.
 
-This service is the orchestration layer for project skill-profile generation and
-matching. It should call clients/services for DB API and LLM work rather than
-owning direct database connection code.
+This service is the orchestration layer for project skill-profile generation,
+project documentation generation/chat, transition instruction generation, and matching. It should call
+clients/services for DB API and LLM work rather than owning direct database
+connection code.
 
 ## Local Development
 
@@ -19,7 +20,8 @@ Ensure `OPENAI_API_KEY` is set to enable LLM-powered features. `GITHUB_TOKEN` is
 optional: `clients/github_client.py` passes it to the GitHub REST API for better
 rate limits; private repositories require a token with repo access. Public repos
 work without a token, subject to unauthenticated rate limits.
-`DB_API_BASE_URL` must point at the db-rest-api service for matching runs.
+`DB_API_BASE_URL` must point at the db-rest-api service for matching runs,
+generated project documentation persistence, and transition instruction storage.
 
 ## Testing
 
@@ -82,6 +84,9 @@ Health check:
 Current orchestration endpoints:
 
 - `POST /skill-profile`
+- `POST /projects/{project_id}/documentation:refresh`
+- `POST /projects/{project_id}/documentation:chat`
+- `POST /move-requests/{request_id}/instructions/{instruction_type}:generate`
 - `POST /projects/{project_id}/matching:run`
 - `POST /matching/portfolio:rebalance`
 

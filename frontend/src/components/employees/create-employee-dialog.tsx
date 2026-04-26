@@ -50,6 +50,7 @@ type StepId = "details" | "skills" | "assignment" | "summary"
 type FormState = {
   name: string
   role: string
+  githubUsername: string
   interestsText: string
   skills: Skills
   currentProject: string
@@ -124,6 +125,7 @@ function getInitialFormState(employee?: Employee): FormState {
     return {
       name: "",
       role: "",
+      githubUsername: "",
       interestsText: "",
       skills: { ...emptySkills },
       currentProject: "",
@@ -134,6 +136,7 @@ function getInitialFormState(employee?: Employee): FormState {
   return {
     name: employee.name,
     role: employee.role,
+    githubUsername: employee.github_username,
     interestsText: employee.interests.join(", "),
     skills: { ...employee.skills },
     currentProject: employee.current_project ?? "",
@@ -202,6 +205,14 @@ export function CreateEmployeeDialog({
       if (!formState.role.trim()) {
         return "Enter the employee's role."
       }
+
+      if (!formState.githubUsername.trim()) {
+        return "Enter the employee's GitHub username."
+      }
+
+      if (!isValidGithubUsername(formState.githubUsername.trim())) {
+        return "Use a valid GitHub username with letters, numbers, and hyphens."
+      }
     }
 
     return null
@@ -268,6 +279,7 @@ export function CreateEmployeeDialog({
     const payload: EmployeeCreateInput | EmployeeUpdateInput = {
       name: formState.name.trim(),
       role: formState.role.trim(),
+      github_username: formState.githubUsername.trim(),
       current_project: formState.currentProject || null,
       skills: formState.skills,
       preferences,
@@ -284,7 +296,7 @@ export function CreateEmployeeDialog({
       onCreated(savedEmployee)
     } catch (error) {
       if (error instanceof DbApiError && error.status === 409) {
-        setSubmitError("An employee with this name already exists.")
+        setSubmitError("An employee with this name or GitHub username already exists.")
       } else {
         setSubmitError(
           error instanceof Error
@@ -495,6 +507,18 @@ function PersonalDetailsStep({
           />
         </Field>
         <Field
+          label="GitHub username"
+          description="Used to gather commit history for transition instructions."
+          required
+        >
+          <Input
+            value={formState.githubUsername}
+            onChange={(event) => onChange({ githubUsername: event.target.value })}
+            placeholder="marco-bianchi"
+            aria-label="GitHub username"
+          />
+        </Field>
+        <Field
           label="Interests"
           description="Optional. Separate interests with commas or new lines."
         >
@@ -701,6 +725,10 @@ function SummaryStep({
       <SummaryCard title="Personal details" onEdit={() => onEditStep(0)}>
         <SummaryRow label="Full name" value={formState.name || "Not set"} />
         <SummaryRow label="Role" value={formState.role || "Not set"} />
+        <SummaryRow
+          label="GitHub"
+          value={formState.githubUsername || "Not set"}
+        />
         <SummaryTokenRow label="Interests" items={interests} emptyLabel="No interests" />
       </SummaryCard>
       <SummaryCard title="Skills" onEdit={() => onEditStep(1)}>
@@ -846,6 +874,10 @@ function parseTokens(value: string) {
     .split(/[\n,]/)
     .map((item) => item.trim())
     .filter(Boolean)
+}
+
+function isValidGithubUsername(value: string) {
+  return /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/.test(value)
 }
 
 function getSegmentColor(level: number, index: number) {

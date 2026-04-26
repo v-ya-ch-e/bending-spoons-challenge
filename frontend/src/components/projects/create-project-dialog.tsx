@@ -20,6 +20,7 @@ import {
 
 import {
   BackendApiError,
+  refreshProjectDocumentation,
   skillKeys,
   suggestProjectRequirements,
   type RoleRequirement,
@@ -500,6 +501,11 @@ export function CreateProjectDialog({
         isEditMode && project
           ? await updateProject(project.id, payload)
           : await createProject(payload as ProjectCreateInput)
+      if (!isEditMode) {
+        void refreshProjectDocumentation(savedProject.id).catch((error) => {
+          console.warn("Documentation generation did not start automatically", error)
+        })
+      }
       onCreated(savedProject)
     } catch (error) {
       if (error instanceof DbApiError && error.status === 409) {
