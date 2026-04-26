@@ -126,9 +126,15 @@ type SkillRequirementLevel = (typeof skillRequirementLevels)[number]
 type SkillRequirementLevelField = `level_${SkillRequirementLevel}`
 
 const skillLevelLabels: Record<SkillRequirementLevel, string> = {
-  1: "Basic",
-  2: "Working",
+  1: "Basic familiarity",
+  2: "Independent",
   3: "Expert",
+}
+
+const skillLevelDescriptions: Record<SkillRequirementLevel, string> = {
+  1: "Can contribute with guidance from others.",
+  2: "Works independently on most tasks.",
+  3: "Leads, reviews, and onboards others.",
 }
 
 const steps: Array<{
@@ -302,13 +308,26 @@ export function CreateProjectDialog({
     nextRequirement: Partial<ProjectSkillRequirement>
   ) {
     setIsManualRequirementsEnabled(true)
-    setRequirements((current) => ({
-      ...current,
-      [skill]: normalizeProjectSkillRequirement({
+    setRequirements((current) => {
+      const nextSkillRequirement = normalizeProjectSkillRequirement({
         ...current[skill],
         ...nextRequirement,
-      }),
-    }))
+      })
+
+      if (getRequirementTotal(nextSkillRequirement) > requiredPeopleAmount) {
+        return current
+      }
+
+      return {
+        ...current,
+        [skill]: nextSkillRequirement,
+      }
+    })
+  }
+
+  function handlePeopleAmountChange(nextAmount: number) {
+    const minHeadcount = getMinHeadcount(requirements)
+    setRequiredPeopleAmount(Math.max(minHeadcount, nextAmount))
   }
 
   function validateStep(step: StepId): string | null {
@@ -428,7 +447,9 @@ export function CreateProjectDialog({
 
       setSuggestion(nextSuggestion)
       setRequirements(nextSuggestion.required_skills)
-      setRequiredPeopleAmount(nextSuggestion.total_headcount)
+      setRequiredPeopleAmount(
+        Math.max(getMinHeadcount(nextSuggestion.required_skills), nextSuggestion.total_headcount)
+      )
     } catch (error) {
       setExtractionFinalize(false)
       if (error instanceof BackendApiError && error.status === 501) {
@@ -561,7 +582,7 @@ export function CreateProjectDialog({
                     requiredPeopleAmount={requiredPeopleAmount}
                     onExtract={handleExtractRequirements}
                     onManualEntry={handleManualRequirements}
-                    onPeopleAmountChange={setRequiredPeopleAmount}
+                    onPeopleAmountChange={handlePeopleAmountChange}
                     onRequirementChange={updateRequirement}
                   />
                 )}
@@ -1022,12 +1043,12 @@ function RequirementsStep({
         title={isExtracting ? "Extracting requirements" : "Requirements"}
         description={
           isExtracting
-            ? "Analyzing the connected repository to estimate the minimum staffing requirements."
+            ? "Analyzing the repository to estimate staffing."
             : hasRequirements
               ? suggestion
-                ? "Review the minimum staffing requirements extracted from the backend."
-                : "Add the minimum staffing requirements manually."
-              : "Extract requirements from GitHub or enter them manually."
+                ? "Review the suggested staffing."
+                : "Set staffing manually."
+              : "Extract from GitHub or enter manually."
         }
       />
 
@@ -1048,11 +1069,11 @@ function RequirementsStep({
           </div>
 
           <section className="rounded-3xl border border-border p-4">
-            <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="font-medium">Minimum staffing requirement</h3>
+                <h3 className="font-medium">Overall headcount</h3>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Higher-level employees can satisfy lower-level requirements during matching.
+                  Total people required. Stays at or above the skill breakdown total.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -1060,7 +1081,8 @@ function RequirementsStep({
                   type="button"
                   variant="outline"
                   size="icon-sm"
-                  onClick={() => onPeopleAmountChange(Math.max(0, requiredPeopleAmount - 1))}
+                  onClick={() => onPeopleAmountChange(requiredPeopleAmount - 1)}
+                  disabled={requiredPeopleAmount <= getMinHeadcount(requirements)}
                   aria-label="Decrease required people"
                 >
                   -
@@ -1079,9 +1101,19 @@ function RequirementsStep({
                 </Button>
               </div>
             </div>
+          </section>
+
+          <section className="rounded-3xl border border-border p-4">
+            <div className="mb-4">
+              <h3 className="font-medium">Skill breakdown</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Higher levels also cover lower level demands.
+              </p>
+            </div>
             <RequirementsStaffingAccordion
               key={`${extractionRunId}-${suggestion ? "s" : "m"}`}
               requirements={requirements}
+              requiredPeopleAmount={requiredPeopleAmount}
               onRequirementChange={onRequirementChange}
             />
           </section>
@@ -1123,9 +1155,11 @@ function RequirementsStep({
 
 function RequirementsStaffingAccordion({
   requirements,
+  requiredPeopleAmount,
   onRequirementChange,
 }: {
   requirements: ProjectSkillRequirements
+  requiredPeopleAmount: number
   onRequirementChange: (
     skill: SkillKey,
     nextRequirement: Partial<ProjectSkillRequirement>
@@ -1167,7 +1201,7 @@ function RequirementsStaffingAccordion({
                   variant={totalCount > 0 ? "secondary" : "outline"}
                   className="shrink-0"
                 >
-                  {totalCount} total
+                  {totalCount} / {requiredPeopleAmount}
                 </Badge>
               </span>
             </AccordionTrigger>
@@ -1176,6 +1210,7 @@ function RequirementsStaffingAccordion({
                 <SkillRequirementFields
                   skill={skill}
                   requirement={requirement}
+                  requiredPeopleAmount={requiredPeopleAmount}
                   onChange={(nextRequirement) =>
                     onRequirementChange(skill, nextRequirement)
                   }
@@ -1465,12 +1500,17 @@ function ExtractionLoadingPanel({ finalize }: { finalize: boolean }) {
 function SkillRequirementFields({
   skill,
   requirement,
+  requiredPeopleAmount,
   onChange,
 }: {
   skill: SkillKey
   requirement: ProjectSkillRequirement
+  requiredPeopleAmount: number
   onChange: (nextRequirement: Partial<ProjectSkillRequirement>) => void
 }) {
+  const totalCount = getRequirementTotal(requirement)
+  const isMaxedOut = totalCount >= requiredPeopleAmount
+
   return (
     <div className="flex flex-col gap-2.5">
       <SkillLevelBar requirement={requirement} />
@@ -1486,6 +1526,7 @@ function SkillRequirementFields({
             value={value}
             onDecrease={() => onChange({ [field]: value - 1 })}
             onIncrease={() => onChange({ [field]: value + 1 })}
+            canIncrease={!isMaxedOut}
           />
         )
       })}
@@ -1499,12 +1540,14 @@ function SkillRequirementLevelRow({
   value,
   onDecrease,
   onIncrease,
+  canIncrease,
 }: {
   skill: SkillKey
   level: SkillRequirementLevel
   value: number
   onDecrease: () => void
   onIncrease: () => void
+  canIncrease: boolean
 }) {
   return (
     <div className="grid gap-3 rounded-2xl border border-border/70 bg-muted/20 p-3 sm:grid-cols-[7rem_1fr_auto] sm:items-center">
@@ -1513,7 +1556,7 @@ function SkillRequirementLevelRow({
         <p className="text-xs text-muted-foreground">{skillLevelLabels[level]}</p>
       </div>
       <p className="text-xs text-muted-foreground">
-        Engineers with at least L{level} {skillLabels[skill]} capability.
+        {skillLevelDescriptions[level]}
       </p>
       <div className="flex items-center gap-2 sm:justify-end">
         <Button
@@ -1534,6 +1577,7 @@ function SkillRequirementLevelRow({
           variant="outline"
           size="icon-sm"
           onClick={onIncrease}
+          disabled={!canIncrease}
           aria-label={`Increase ${skillLabels[skill]} level ${level} engineer count`}
         >
           +
@@ -1740,6 +1784,18 @@ function getRequirementLevelField(
   level: SkillRequirementLevel
 ): SkillRequirementLevelField {
   return `level_${level}`
+}
+
+function getMinHeadcount(requirements: ProjectSkillRequirements) {
+  const maxSkillRequirement = Math.max(
+    ...skillKeys.map((skill) => getRequirementTotal(requirements[skill]))
+  )
+
+  if (maxSkillRequirement === 0) {
+    return 0
+  }
+
+  return Math.max(2, maxSkillRequirement)
 }
 
 function getRequirementTotal(requirement: ProjectSkillRequirement) {
