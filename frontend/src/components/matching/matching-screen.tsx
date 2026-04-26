@@ -10,7 +10,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { currentUser } from "@/data/mock-navigation"
-import { runProjectMatching } from "@/lib/backend-api"
+import { approveMoveRequest, runProjectMatching } from "@/lib/backend-api"
 import {
   createMoveRequestsFromMatchingRecommendation,
   deleteMatchingRun,
@@ -27,7 +27,6 @@ import {
   listProjects,
   updateMatchingRun,
   updateMoveRequest,
-  updateProject,
   type ImpactLevel,
   type MatchingPolicy,
   type MoveRequest,
@@ -114,7 +113,7 @@ const lifecycleTabs: Array<{
 }> = [
   { value: "draft", label: "Drafts" },
   { value: "active", label: "Active requests" },
-  { value: "ready", label: "Ready to execute" },
+  { value: "ready", label: "Transitioning" },
   { value: "completed", label: "Completed" },
 ]
 
@@ -464,77 +463,19 @@ export function MatchingScreen({
     setActionPlanId(plan.id)
     setError(null)
     try {
-      await updateMoveRequest(requestId, { status })
+      if (status === "accepted") {
+        await approveMoveRequest(requestId, "cto", "approved")
+      } else if (status === "rejected") {
+        await approveMoveRequest(requestId, "cto", "rejected")
+      } else {
+        await updateMoveRequest(requestId, { status })
+      }
       await loadWorkspace()
     } catch (statusError) {
       setError(
         statusError instanceof Error
           ? statusError.message
           : "Unable to update request status."
-      )
-    } finally {
-      setActionPlanId(null)
-    }
-  }
-
-  async function executePlanAssignments(plan: MovePlan) {
-    const projectUpdates = new Map(
-      projects.map((project) => [
-        project.id,
-        new Set(project.current_team_member_ids),
-      ])
-    )
-
-    for (const movement of plan.movements) {
-      if (!movement.employee) {
-        continue
-      }
-
-      projectUpdates
-        .get(movement.targetProject.id)
-        ?.add(movement.employee.id)
-
-      if (movement.action === "move" && movement.sourceProject) {
-        projectUpdates
-          .get(movement.sourceProject.id)
-          ?.delete(movement.employee.id)
-      }
-    }
-
-    const changedProjects = projects.filter((project) => {
-      const nextIds = [...(projectUpdates.get(project.id) ?? new Set<number>())].sort(
-        (left, right) => left - right
-      )
-      const currentIds = [...project.current_team_member_ids].sort(
-        (left, right) => left - right
-      )
-      return nextIds.join(",") !== currentIds.join(",")
-    })
-
-    await Promise.all(
-      changedProjects.map((project) =>
-        updateProject(project.id, {
-          current_team_member_ids: [
-            ...(projectUpdates.get(project.id) ?? new Set<number>()),
-          ],
-        })
-      )
-    )
-  }
-
-  async function handleExecutePlan(plan: MovePlan) {
-    setActionPlanId(plan.id)
-    setError(null)
-    try {
-      await executePlanAssignments(plan)
-      await loadWorkspace()
-      setActiveTab("completed")
-      setSelectedPlanId(plan.id)
-    } catch (executeError) {
-      setError(
-        executeError instanceof Error
-          ? executeError.message
-          : "Unable to execute this plan."
       )
     } finally {
       setActionPlanId(null)
@@ -560,15 +501,18 @@ export function MatchingScreen({
     setOverrideError(null)
     try {
       const requestsToForce = overridePlan.requests.filter(
-        (request) => request.status !== "accepted"
+        (request) =>
+          request.status !== "transition_started" && request.status !== "completed"
       )
       await Promise.all(
-        requestsToForce.map((request) =>
-          updateMoveRequest(request.id, {
+        requestsToForce.map(async (request) => {
+          await updateMoveRequest(request.id, {
             status: "accepted",
             reason: `${request.reason}\n\nCTO override: ${reason}`,
           })
-        )
+          await approveMoveRequest(request.id, "cto", "approved")
+          await approveMoveRequest(request.id, "employee", "approved")
+        })
       )
 
       if (overridePlan.run) {
@@ -585,9 +529,8 @@ export function MatchingScreen({
         })
       }
 
-      await executePlanAssignments(overridePlan)
       await loadWorkspace()
-      setActiveTab("completed")
+      setActiveTab("ready")
       setSelectedPlanId(overridePlan.id)
       setOverridePlan(null)
       setOverrideReason("")
@@ -595,7 +538,7 @@ export function MatchingScreen({
       setError(
         overrideFailure instanceof Error
           ? overrideFailure.message
-          : "Unable to force approve and execute this plan."
+          : "Unable to force approve and start this transition."
       )
     } finally {
       setActionPlanId(null)
@@ -608,7 +551,7 @@ export function MatchingScreen({
         <div className="max-w-2xl">
           <h1 className="text-2xl font-semibold tracking-tight">Matching</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Create move plans, review staffing coverage, and execute accepted
+            Create move plans, review staffing coverage, and coordinate approved
             employee transitions.
           </p>
         </div>
@@ -659,7 +602,6 @@ export function MatchingScreen({
             }}
             onStartRequest={handleStartRequest}
             onCancelRequest={handleCancelRequest}
-            onExecutePlan={handleExecutePlan}
             onForceExecute={openOverrideDialog}
             onRequestStatus={handleRequestStatus}
             onOpenProject={() => router.push("/cto/projects")}
@@ -717,7 +659,6 @@ export function MatchingScreen({
         onRegenerate={handleRegenerate}
         onStartRequest={handleStartRequest}
         onRequestStatus={handleRequestStatus}
-        onExecutePlan={handleExecutePlan}
         onForceExecute={openOverrideDialog}
         onEditMoveRequest={(plan, movement) => {
           setEditMoveContext({ plan, movement })
@@ -947,7 +888,6 @@ function SelectedPlanWorkspace({
   onDeleteMoveRequest,
   onStartRequest,
   onCancelRequest,
-  onExecutePlan,
   onForceExecute,
   onRequestStatus,
   onOpenProject,
@@ -963,7 +903,6 @@ function SelectedPlanWorkspace({
   onDeleteMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
   onStartRequest: (plan: MovePlan) => void
   onCancelRequest: (plan: MovePlan) => void
-  onExecutePlan: (plan: MovePlan) => void
   onForceExecute: (plan: MovePlan) => void
   onRequestStatus: (
     requestId: number,
@@ -997,7 +936,6 @@ function SelectedPlanWorkspace({
           onDeletePlan={onDeletePlan}
           onStartRequest={onStartRequest}
           onCancelRequest={onCancelRequest}
-          onExecutePlan={onExecutePlan}
           onForceExecute={onForceExecute}
           onOpenProject={onOpenProject}
         />
@@ -1035,7 +973,6 @@ function PlanActions({
   onDeletePlan,
   onStartRequest,
   onCancelRequest,
-  onExecutePlan,
   onForceExecute,
   onOpenProject,
 }: {
@@ -1047,7 +984,6 @@ function PlanActions({
   onDeletePlan: (plan: MovePlan) => void
   onStartRequest: (plan: MovePlan) => void
   onCancelRequest: (plan: MovePlan) => void
-  onExecutePlan: (plan: MovePlan) => void
   onForceExecute: (plan: MovePlan) => void
   onOpenProject: () => void
 }) {
@@ -1146,7 +1082,7 @@ function PlanActions({
           disabled={isBusy || plan.requests.length === 0}
           onClick={() => onForceExecute(plan)}
         >
-          Force approve and execute
+          Force approve and start transition
         </Button>
       </div>
     )
@@ -1158,15 +1094,7 @@ function PlanActions({
         {editPlanButton}
         {deletePlanButton}
         <Button type="button" variant="outline" size="sm" disabled>
-          All employees accepted
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          disabled={isBusy}
-          onClick={() => onExecutePlan(plan)}
-        >
-          Execute transition
+          Transition instructions generated
         </Button>
       </div>
     )
@@ -1200,14 +1128,14 @@ function SafetyNotice({ state }: { state: MatchingLifecycleState }) {
         "Nothing has been sent to employees yet. Review coverage and impact before sending requests.",
     },
     active: {
-      title: "Waiting for employee acceptance",
+      title: "Waiting for approvals",
       description:
-        "Requests have been sent. The plan stays active until every requested employee accepts.",
+        "Requests have been sent. The plan stays active until CTO and employee approvals are both recorded.",
     },
     ready: {
-      title: "All employees accepted",
+      title: "Transition in progress",
       description:
-        "Every required move has been accepted. You can now execute the transition.",
+        "Both approvals are recorded. Employees can now complete onboarding and offboarding instructions.",
     },
     completed: {
       title: "Transition completed",
@@ -1252,7 +1180,7 @@ function ResponseStatusSummary({ plan }: { plan: MovePlan }) {
 
   const counts = getRequestStatusCounts(plan.requests)
   const items = [
-    { label: "Accepted", value: counts.accepted, status: "accepted" as const },
+    { label: "Partially approved", value: counts.accepted, status: "accepted" as const },
     { label: "Pending", value: counts.pending, status: "pending" as const },
     {
       label: "Needs clarification",
@@ -1274,9 +1202,9 @@ function ResponseStatusSummary({ plan }: { plan: MovePlan }) {
         <p className="font-medium">Employee response status</p>
         <p className="mt-1 text-sm text-muted-foreground">
           {plan.lifecycle === "active"
-            ? "Waiting for every requested employee to accept before this plan becomes ready."
+            ? "Waiting for CTO and employee approvals before transition instructions are generated."
             : plan.lifecycle === "ready"
-              ? "All requested employees accepted. The transition is ready to execute."
+              ? "Transition instructions are active for the requested employees."
               : "Responses are retained for the transition audit trail."}
         </p>
       </div>
@@ -1427,7 +1355,7 @@ function ProposedMovementsSection({
                           onRequestStatus(movement.request!.id, "accepted", plan)
                         }}
                       >
-                        Accept
+                        CTO approve
                       </Button>
                       <Button
                         type="button"
@@ -1608,7 +1536,6 @@ function DetailSheet({
   onRegenerate,
   onStartRequest,
   onRequestStatus,
-  onExecutePlan,
   onForceExecute,
   onEditMoveRequest,
   onDeleteMoveRequest,
@@ -1623,7 +1550,6 @@ function DetailSheet({
     status: MoveRequestStatus,
     plan: MovePlan
   ) => void
-  onExecutePlan: (plan: MovePlan) => void
   onForceExecute: (plan: MovePlan) => void
   onEditMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
   onDeleteMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
@@ -1646,7 +1572,6 @@ function DetailSheet({
               onRegenerate={onRegenerate}
               onStartRequest={onStartRequest}
               onRequestStatus={onRequestStatus}
-              onExecutePlan={onExecutePlan}
               onForceExecute={onForceExecute}
               onEditMoveRequest={onEditMoveRequest}
               onDeleteMoveRequest={onDeleteMoveRequest}
@@ -1664,7 +1589,6 @@ function DetailContent({
   onRegenerate,
   onStartRequest,
   onRequestStatus,
-  onExecutePlan,
   onForceExecute,
   onEditMoveRequest,
   onDeleteMoveRequest,
@@ -1678,7 +1602,6 @@ function DetailContent({
     status: MoveRequestStatus,
     plan: MovePlan
   ) => void
-  onExecutePlan: (plan: MovePlan) => void
   onForceExecute: (plan: MovePlan) => void
   onEditMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
   onDeleteMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
@@ -1806,7 +1729,7 @@ function DetailContent({
                   onRequestStatus(detail.movement.request!.id, "accepted", detail.plan)
                 }
               >
-                Mark accepted
+                CTO approve
               </Button>
               <Button
                 type="button"
@@ -1830,18 +1753,13 @@ function DetailContent({
                 disabled={isBusy}
                 onClick={() => onForceExecute(detail.plan)}
               >
-                Force approve and execute
+                Force approve and start transition
               </Button>
             </>
           )}
           {detail.plan.lifecycle === "ready" && (
-            <Button
-              type="button"
-              size="sm"
-              disabled={isBusy}
-              onClick={() => onExecutePlan(detail.plan)}
-            >
-              Execute transition
+            <Button type="button" size="sm" disabled>
+              Transition instructions active
             </Button>
           )}
           <Button
@@ -1923,7 +1841,7 @@ function DetailContent({
             ? "Start the move request when the plan has been reviewed."
             : detail.plan.lifecycle === "active"
               ? "Track the employee response, replace this move, or use CTO override if necessary."
-              : "Execute the transition when operationally ready."}
+              : "Transition instructions are active for this employee."}
         </DetailBlock>
         <TokenList label="Requirements covered" items={detail.movement.requirementsCovered} />
       </>
@@ -2042,7 +1960,7 @@ function DetailContent({
                 )
               }
             >
-              Mark accepted
+              CTO approve
             </Button>
             <Button
               type="button"
@@ -2051,18 +1969,13 @@ function DetailContent({
               disabled={isBusy}
               onClick={() => onForceExecute(detail.plan)}
             >
-              Force approve and execute
+              Force approve and start transition
             </Button>
           </>
         )}
         {detail.plan.lifecycle === "ready" && (
-          <Button
-            type="button"
-            size="sm"
-            disabled={isBusy}
-            onClick={() => onExecutePlan(detail.plan)}
-          >
-            Execute transition
+          <Button type="button" size="sm" disabled>
+            Transition instructions active
           </Button>
         )}
         {detail.impact.movement.request && (
@@ -2655,7 +2568,10 @@ function ForceOverrideDialog({
 }) {
   const counts = plan ? getRequestStatusCounts(plan.requests) : null
   const forcedRequests =
-    plan?.requests.filter((request) => request.status !== "accepted") ?? []
+    plan?.requests.filter(
+      (request) =>
+        request.status !== "transition_started" && request.status !== "completed"
+    ) ?? []
   const riskyCompanies =
     plan?.affectedCompanies.filter((company) => company.risk !== "low") ?? []
 
@@ -2663,10 +2579,10 @@ function ForceOverrideDialog({
     <Dialog open={Boolean(plan)} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Force approve and execute</DialogTitle>
+          <DialogTitle>Force approve and start transition</DialogTitle>
           <DialogDescription>
-            This bypasses employee confirmation, marks unresolved requests accepted,
-            and immediately applies company assignments.
+            This bypasses employee confirmation, records both approvals, starts
+            transition instruction generation, and applies company assignments.
           </DialogDescription>
         </DialogHeader>
 
@@ -2683,7 +2599,7 @@ function ForceOverrideDialog({
 
             <div className="grid gap-2 sm:grid-cols-6">
               {([
-                ["Accepted", counts.accepted],
+                ["Partial", counts.accepted],
                 ["Pending", counts.pending],
                 ["Clarification", counts.clarification_requested],
                 ["Transition started", counts.transition_started],
@@ -2723,7 +2639,7 @@ function ForceOverrideDialog({
                 id="cto-override-reason"
                 value={reason}
                 onChange={(event) => onReasonChange(event.target.value)}
-                placeholder="Explain why this move must be executed before employee confirmation."
+                placeholder="Explain why this move must start before employee confirmation."
                 className="min-h-28"
               />
               {error && <p className="text-sm text-destructive">{error}</p>}
@@ -2746,7 +2662,7 @@ function ForceOverrideDialog({
             disabled={isBusy}
             onClick={onConfirm}
           >
-            {isBusy ? "Executing..." : "Force approve and execute"}
+            {isBusy ? "Starting..." : "Force approve and start transition"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -2920,7 +2836,7 @@ function getLifecycleStatusLabel(state: MatchingLifecycleState) {
   const labels: Record<MatchingLifecycleState, string> = {
     draft: "Draft",
     active: "Waiting",
-    ready: "Accepted",
+    ready: "Transitioning",
     completed: "Completed",
   }
 

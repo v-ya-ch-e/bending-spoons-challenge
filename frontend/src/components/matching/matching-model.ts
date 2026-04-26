@@ -272,7 +272,7 @@ export function formatRequestStatus(status: MoveRequestStatus | "not_sent") {
   const labels: Record<MoveRequestStatus | "not_sent", string> = {
     not_sent: "Not sent",
     pending: "Pending",
-    accepted: "Accepted",
+    accepted: "Partially approved",
     rejected: "Rejected",
     clarification_requested: "Clarification requested",
     transition_started: "Transition started",
@@ -490,7 +490,7 @@ function completePlan({
   movements: ProposedMovement[]
   employeeById: Map<number, Employee>
 }): MovePlan {
-  const lifecycle = getLifecycle({ requests, movements })
+  const lifecycle = getLifecycle({ requests })
   const requirementCoverage = buildRequirementCoverage({
     targetProject,
     movements,
@@ -531,38 +531,27 @@ function completePlan({
 
 function getLifecycle({
   requests,
-  movements,
 }: {
   requests: MoveRequest[]
-  movements: ProposedMovement[]
 }): MatchingLifecycleState {
   if (requests.length === 0) {
     return "draft"
   }
 
-  const accepted = requests.every((request) => request.status === "accepted")
-  if (!accepted) {
-    return "active"
+  if (requests.every((request) => request.status === "completed")) {
+    return "completed"
   }
 
-  return movements.every(isMovementApplied) ? "completed" : "ready"
-}
-
-function isMovementApplied(movement: ProposedMovement) {
-  if (!movement.employee) {
-    return false
+  if (
+    requests.every(
+      (request) =>
+        request.status === "transition_started" || request.status === "completed"
+    )
+  ) {
+    return "ready"
   }
 
-  const currentProjectIds = movement.employee.current_project_ids
-  const hasTarget = currentProjectIds.includes(movement.targetProject.id)
-  const stillInSource =
-    movement.sourceProject && currentProjectIds.includes(movement.sourceProject.id)
-
-  if (movement.action === "add_assignment") {
-    return hasTarget
-  }
-
-  return hasTarget && !stillInSource
+  return "active"
 }
 
 function buildRequirementCoverage({

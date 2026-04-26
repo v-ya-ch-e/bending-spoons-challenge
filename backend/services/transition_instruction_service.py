@@ -10,7 +10,7 @@ from clients import DbApiClient, GitHubClient, get_openai_client, get_openai_mod
 
 PROMPT_VERSION = "transition_instruction_v1"
 INSTRUCTION_TYPES = {"onboarding", "offboarding"}
-ACTIVE_MOVE_STATUSES = {"transition_started", "completed"}
+ACTIVE_MOVE_STATUSES = {"transition_started"}
 
 
 def start_transition_instruction_generation(
@@ -110,6 +110,8 @@ def _load_transition_context(
     _validate_move_request_active(move_request)
     employee = client.get_employee(move_request["employee_id"])
     target_project = client.get_project(move_request["to_project_id"])
+    if instruction_type == "offboarding" and move_request.get("from_project_id") is None:
+        raise ValueError("Bench-to-project moves do not require offboarding instructions.")
     source_project = (
         client.get_project(move_request["from_project_id"])
         if move_request.get("from_project_id") is not None
@@ -138,14 +140,16 @@ def _load_transition_context(
 
 
 def _validate_move_request_active(move_request: dict[str, Any]) -> None:
-    if move_request.get("status") in ACTIVE_MOVE_STATUSES:
-        return
     if (
+        move_request.get("status") in ACTIVE_MOVE_STATUSES
+        and
         move_request.get("cto_approval_status") == "approved"
         and move_request.get("employee_approval_status") == "approved"
     ):
         return
-    raise ValueError("Move request must be approved by both CTO and employee first.")
+    raise ValueError(
+        "Move request must be approved by both CTO and employee and have transition started first."
+    )
 
 
 def _is_mock_documentation(documentation: dict[str, Any]) -> bool:

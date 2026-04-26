@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 type TopbarProps = {
   workspace: RoleWorkspace
   activeLabel: string
-  primaryAction: string
+  primaryAction?: string
   primaryActionHref?: string
   showPrimaryAction?: boolean
   sidebarCollapsed: boolean
@@ -63,7 +63,7 @@ export function Topbar({
           </nav>
         </div>
 
-        {showPrimaryAction ? (
+        {showPrimaryAction && primaryAction ? (
           <div className="flex shrink-0 items-center gap-3">
             {primaryActionHref ? (
               <Button asChild size="sm" className="rounded-full">

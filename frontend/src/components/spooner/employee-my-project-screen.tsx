@@ -8,14 +8,15 @@ import {
   BookOpen01Icon,
   Briefcase01Icon,
   CheckListIcon,
-  Task01Icon,
 } from "@hugeicons/core-free-icons"
 
 import {
   getCachedProjects,
   listProjectDocumentation,
+  listMoveRequests,
   listProjects,
   type Employee,
+  type MoveRequest,
   type Project,
   type ProjectDocumentation,
   type ProjectSkillRequirement,
@@ -23,10 +24,10 @@ import {
 } from "@/lib/db-api"
 import {
   DocumentationStatusBadge,
-  ProjectDocumentationChat,
-  ProjectDocumentationViewer,
   formatGeneratedAt,
   indexDocumentation,
+  ProjectDocumentationChat,
+  ProjectDocumentationViewer,
 } from "@/components/documentation/project-documentation-panel"
 import {
   Avatar,
@@ -72,16 +73,10 @@ const skillLabels: Record<SkillKey, string> = {
   ai: "AI",
 }
 
-const chatPrompts = [
-  "What should I read first?",
-  "Summarize the architecture for my role.",
-  "Which repositories should I pay attention to?",
-  "What are the likely onboarding risks?",
-]
-
 export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenProps) {
   const cachedProjects = getCachedProjects()
   const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
+  const [transitionRequests, setTransitionRequests] = useState<MoveRequest[]>([])
   const [documentationByProject, setDocumentationByProject] = useState<
     Record<number, ProjectDocumentation | undefined>
   >({})
@@ -98,9 +93,10 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
           setIsLoading(true)
         }
         setError(null)
-        const [nextProjects, documentation] = await Promise.all([
+        const [nextProjects, documentation, moveRequests] = await Promise.all([
           listProjects(),
           listProjectDocumentation().catch(() => []),
+          listMoveRequests().catch(() => []),
         ])
 
         if (!isMounted) {
@@ -108,9 +104,19 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
         }
 
         setProjects(nextProjects)
+        const nextTransitionRequests = moveRequests.filter(
+          (request) =>
+            request.employee_id === employee.id &&
+            request.status === "transition_started"
+        )
+        setTransitionRequests(nextTransitionRequests)
         setDocumentationByProject(indexDocumentation(documentation))
         setSelectedProjectId((currentProjectId) => {
-          const nextAssignedProjects = getAssignedProjects(employee, nextProjects)
+          const nextAssignedProjects = getAssignedProjects(
+            employee,
+            nextProjects,
+            nextTransitionRequests
+          )
           if (
             currentProjectId &&
             nextAssignedProjects.some((project) => project.id === currentProjectId)
@@ -143,8 +149,8 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
   }, [employee])
 
   const assignedProjects = useMemo(
-    () => getAssignedProjects(employee, projects),
-    [employee, projects]
+    () => getAssignedProjects(employee, projects, transitionRequests),
+    [employee, projects, transitionRequests]
   )
   const activeSelectedProjectId =
     selectedProjectId &&
@@ -229,6 +235,14 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
                 />
               ) : null}
 
+              {selectedProject ? (
+                <ProjectResourcesCallout
+                  employee={employee}
+                  project={selectedProject}
+                  documentation={selectedDocumentation}
+                />
+              ) : null}
+
               <Tabs defaultValue="documentation" className="gap-4">
                 <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="px-1">
@@ -294,7 +308,6 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
                   <ProjectDocumentationChat
                     project={selectedProject}
                     documentation={selectedDocumentation}
-                    starterPrompts={chatPrompts}
                     description="Ask about this company's docs from your employee perspective."
                     className="min-h-[32rem]"
                   />
@@ -382,20 +395,6 @@ function ProjectInformationCard({
               </CardDescription>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" size="sm" asChild>
-              <Link href={`/spooner/${employee.id}/offboarding`}>
-                <HugeiconsIcon icon={Task01Icon} className="size-4" />
-                Offboarding
-              </Link>
-            </Button>
-            <Button type="button" variant="outline" size="sm" asChild>
-              <Link href={`/spooner/${employee.id}/resources`}>
-                <HugeiconsIcon icon={BookOpen01Icon} className="size-4" />
-                Resources
-              </Link>
-            </Button>
-          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -431,6 +430,57 @@ function ProjectInformationCard({
             <TeamCard project={project} />
           </div>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProjectResourcesCallout({
+  employee,
+  project,
+  documentation,
+}: {
+  employee: Employee
+  project: Project
+  documentation?: ProjectDocumentation
+}) {
+  return (
+    <Card className="overflow-hidden border-primary/20 bg-primary/5">
+      <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 gap-4">
+          <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground">
+            <HugeiconsIcon icon={BookOpen01Icon} className="size-6" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold tracking-tight">
+                Go to Resources
+              </h2>
+              {documentation ? (
+                <DocumentationStatusBadge status={documentation.status} />
+              ) : (
+                <Badge variant="outline">No docs</Badge>
+              )}
+            </div>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              Open {project.project_name} resources to read the documentation and chat
+              with it side by side.
+            </p>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {documentation
+                ? formatGeneratedAt(documentation)
+                : `${project.github_repositories.length} connected repo${
+                    project.github_repositories.length === 1 ? "" : "s"
+                  }`}
+            </p>
+          </div>
+        </div>
+        <Button asChild className="shrink-0 rounded-full">
+          <Link href={`/spooner/${employee.id}/resources/${project.id}`}>
+            Open resources
+            <HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
+          </Link>
+        </Button>
       </CardContent>
     </Card>
   )
@@ -644,9 +694,19 @@ function PhaseBadge({ phase }: { phase: Project["project_phase"] }) {
   return <Badge variant="secondary">{formatPhase(phase)}</Badge>
 }
 
-function getAssignedProjects(employee: Employee, projects: Project[]) {
+function getAssignedProjects(
+  employee: Employee,
+  projects: Project[],
+  transitionRequests: MoveRequest[] = []
+) {
   const assignedIds = new Set(employee.current_project_ids ?? [])
   const assignedNames = new Set(employee.current_project_names ?? [])
+  for (const request of transitionRequests) {
+    if (request.from_project_id !== null) {
+      assignedIds.add(request.from_project_id)
+    }
+    assignedIds.add(request.to_project_id)
+  }
 
   return projects
     .filter(

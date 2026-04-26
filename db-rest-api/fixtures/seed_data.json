@@ -85,7 +85,7 @@
       "name": "Giovanni Riva",
       "role": "Backend Platform Engineer",
       "github_username": "giovanni-riva",
-      "current_projects": ["Eventbrite"],
+      "current_projects": ["Meetup"],
       "skills": {"android": 0, "ios": 0, "web": 2, "backend": 3, "infrastructure": 2, "ai": 0},
       "preferences": ["Meetup", "WeTransfer"],
       "interests": ["payments", "event search", "data consistency"]
@@ -271,7 +271,9 @@
       "reason": "Luca's iOS experience with creator tools would help Komoot polish its Apple Watch and offline route flows.",
       "expected_role": "Senior iOS Engineer",
       "current_project_impact": "medium",
-      "status": "pending"
+      "status": "pending",
+      "cto_approval_status": "pending",
+      "employee_approval_status": "pending"
     },
     {
       "employee_name": "Giulia Rossi",
@@ -280,7 +282,9 @@
       "reason": "Giulia has storage and reliability experience that maps well to Evernote sync improvements.",
       "expected_role": "Backend Engineer",
       "current_project_impact": "high",
-      "status": "accepted"
+      "status": "accepted",
+      "cto_approval_status": "approved",
+      "employee_approval_status": "pending"
     },
     {
       "employee_name": "Marco Bianchi",
@@ -289,7 +293,9 @@
       "reason": "Marco can transfer model-serving patterns from Remini to Brightcove's AI video roadmap.",
       "expected_role": "AI/ML Engineer",
       "current_project_impact": "medium",
-      "status": "clarification_requested"
+      "status": "clarification_requested",
+      "cto_approval_status": "pending",
+      "employee_approval_status": "pending"
     },
     {
       "employee_name": "Alessia Conti",
@@ -298,7 +304,9 @@
       "reason": "Alessia's location-heavy Android work on Komoot fits Meetup's event discovery and notification needs.",
       "expected_role": "Android Engineer",
       "current_project_impact": "low",
-      "status": "rejected"
+      "status": "rejected",
+      "cto_approval_status": "rejected",
+      "employee_approval_status": "pending"
     },
     {
       "employee_name": "Francesco Romano",
@@ -307,7 +315,9 @@
       "reason": "Francesco wants to apply marketplace web architecture experience to WeTransfer's creator-facing surfaces.",
       "expected_role": "Web Engineer",
       "current_project_impact": "medium",
-      "status": "pending"
+      "status": "pending",
+      "cto_approval_status": "pending",
+      "employee_approval_status": "pending"
     },
     {
       "employee_name": "Elena Greco",
@@ -316,7 +326,9 @@
       "reason": "Elena's activation background could support Evernote onboarding and collaborative workflows.",
       "expected_role": "Product Engineer",
       "current_project_impact": "low",
-      "status": "accepted"
+      "status": "transition_started",
+      "cto_approval_status": "approved",
+      "employee_approval_status": "approved"
     },
     {
       "employee_name": "Sofia Ferrari",
@@ -325,7 +337,9 @@
       "reason": "Sofia's media infrastructure experience is relevant to improving large upload reliability.",
       "expected_role": "Infrastructure Engineer",
       "current_project_impact": "high",
-      "status": "clarification_requested"
+      "status": "clarification_requested",
+      "cto_approval_status": "pending",
+      "employee_approval_status": "pending"
     },
     {
       "employee_name": "Riccardo Mariani",
@@ -334,7 +348,9 @@
       "reason": "Riccardo can bring AI-first mobile UX experience from Remini to StreamYard's creator recording flows.",
       "expected_role": "iOS Engineer",
       "current_project_impact": "medium",
-      "status": "pending"
+      "status": "pending",
+      "cto_approval_status": "pending",
+      "employee_approval_status": "pending"
     },
     {
       "employee_name": "Giovanni Riva",
@@ -343,7 +359,9 @@
       "reason": "Giovanni's event marketplace backend work can help unify organizer tooling across Eventbrite and Meetup.",
       "expected_role": "Backend Platform Engineer",
       "current_project_impact": "medium",
-      "status": "accepted"
+      "status": "completed",
+      "cto_approval_status": "approved",
+      "employee_approval_status": "approved"
     },
     {
       "employee_name": "Emanuele Riva",
@@ -352,7 +370,9 @@
       "reason": "Emanuele's transcoding and live video background directly matches StreamYard recording improvements.",
       "expected_role": "Video Platform Engineer",
       "current_project_impact": "high",
-      "status": "pending"
+      "status": "pending",
+      "cto_approval_status": "pending",
+      "employee_approval_status": "pending"
     },
     {
       "employee_name": "Laura Esposito",
@@ -361,7 +381,9 @@
       "reason": "Laura is currently unassigned and can help Eventbrite size organizer retention and pricing opportunities.",
       "expected_role": "Product Analyst",
       "current_project_impact": "low",
-      "status": "accepted"
+      "status": "accepted",
+      "cto_approval_status": "pending",
+      "employee_approval_status": "approved"
     },
     {
       "employee_name": "Marta Leone",
@@ -370,7 +392,9 @@
       "reason": "Marta's security work on file sharing is useful for Brightcove DRM and enterprise access controls.",
       "expected_role": "Security Engineer",
       "current_project_impact": "medium",
-      "status": "rejected"
+      "status": "rejected",
+      "cto_approval_status": "pending",
+      "employee_approval_status": "rejected"
     }
   ]
 }
