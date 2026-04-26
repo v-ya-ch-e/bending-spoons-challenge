@@ -929,15 +929,31 @@ def _score_candidate(
     else:
         low_disruption = 1 - ((len(moves) - 1) / (config.max_moves - 1))
     preference_score = _candidate_preference_score(moves, snapshot, config)
+    availability_score = _candidate_availability_score(moves)
 
     score = (
-        0.45 * max(skill_reduction, 0)
-        + 0.25 * max(headcount_reduction, 0)
-        + 0.15 * source_preservation
-        + 0.10 * low_disruption
+        0.42 * max(skill_reduction, 0)
+        + 0.24 * max(headcount_reduction, 0)
+        + 0.12 * source_preservation
+        + 0.07 * low_disruption
+        + 0.10 * availability_score
         + 0.05 * preference_score
     )
     return round(min(score, 1.0), 4)
+
+
+def _candidate_availability_score(moves: tuple[CandidateMove, ...]) -> float:
+    if not moves:
+        return 0.0
+    return sum(_move_availability_score(move) for move in moves) / len(moves)
+
+
+def _move_availability_score(move: CandidateMove) -> float:
+    if move.action == "assign" and move.from_project_id is None:
+        return 1.0
+    if move.action == "add_assignment":
+        return 0.25
+    return 0.0
 
 
 def _candidate_preference_score(
@@ -1017,9 +1033,16 @@ def _candidate_sort_key(candidate: CandidatePlan) -> tuple:
     return (
         -candidate.strict_score,
         len(candidate.moves),
+        _candidate_disruption_sort_value(candidate.moves),
         tuple(move.employee_id for move in candidate.moves),
         tuple((move.from_project_id or 0, move.to_project_id) for move in candidate.moves),
     )
+
+
+def _candidate_disruption_sort_value(moves: tuple[CandidateMove, ...]) -> tuple[int, tuple[int, ...]]:
+    action_rank = {"assign": 0, "add_assignment": 1, "move": 2}
+    move_ranks = tuple(action_rank[move.action] for move in moves)
+    return (sum(move_ranks), move_ranks)
 
 
 def _with_candidate_id(candidate: CandidatePlan, index: int) -> CandidatePlan:

@@ -236,6 +236,46 @@ class TestMatchingStrictRules(unittest.TestCase):
         self.assertEqual(top_move.action, "assign")
         self.assertIsNone(top_move.from_project_id)
 
+    def test_unassigned_match_beats_second_assignment_and_move_tie(self):
+        snapshot = normalize_snapshot(
+            [
+                project(
+                    1,
+                    name="Target",
+                    required_people_amount=1,
+                    required_skills={"backend": 3},
+                ),
+                project(
+                    2,
+                    name="Source",
+                    required_people_amount=1,
+                    required_skills={"backend": 1},
+                    members=[10, 11],
+                ),
+            ],
+            [
+                employee(10, skills={"backend": 3}, projects=[2]),
+                employee(11, skills={"backend": 1}, projects=[2]),
+                employee(30, skills={"backend": 3}),
+            ],
+        )
+
+        result = run_strict_rules(
+            use_case="project_rebalance",
+            target_project_id=1,
+            snapshot=snapshot,
+            config=StrictRuleConfig(max_candidate_plans=3),
+        )
+
+        top_move = result.candidate_plans[0].moves[0]
+        self.assertEqual(top_move.employee_id, 30)
+        self.assertEqual(top_move.action, "assign")
+        self.assertIsNone(top_move.from_project_id)
+        self.assertIn(
+            "add_assignment",
+            {move.action for plan in result.candidate_plans for move in plan.moves},
+        )
+
     def test_exact_skill_gap_match_beats_generic_headcount_fill(self):
         snapshot = normalize_snapshot(
             [
@@ -531,18 +571,18 @@ class TestMatchingStrictRules(unittest.TestCase):
         config = build_rule_config(
             policy_config={
                 "max_candidate_plans": 9,
-                "max_moves": 5,
+                "max_moves": 3,
                 "allow_understaff_current_project": True,
             },
         )
 
         self.assertEqual(config.max_candidate_plans, 9)
-        self.assertEqual(config.max_moves, 5)
+        self.assertEqual(config.max_moves, 3)
         self.assertTrue(config.allow_understaff_current_project)
 
-    def test_policy_config_rejects_more_than_five_moves(self):
-        with self.assertRaisesRegex(ValueError, "max_moves must be between 1 and 5"):
-            build_rule_config(policy_config={"max_moves": 6})
+    def test_policy_config_rejects_more_than_three_moves(self):
+        with self.assertRaisesRegex(ValueError, "max_moves must be between 1 and 3"):
+            build_rule_config(policy_config={"max_moves": 4})
 
     def test_unknown_config_keys_are_rejected_with_value_error(self):
         with self.assertRaisesRegex(ValueError, "Unknown matching rule config keys"):

@@ -245,7 +245,7 @@ Recommended config:
 }
 ```
 
-`max_moves` can be tuned from `1` through `5`; higher values allow broader
+`max_moves` can be tuned from `1` through `3`; higher values allow broader
 reshuffles but increase disruption and candidate-search work.
 
 Every run should persist the effective config after defaults and request

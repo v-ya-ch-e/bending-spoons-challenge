@@ -406,9 +406,9 @@ function ProjectDocumentationChatContent({
         <Separator />
         <ScrollArea
           ref={chatScrollAreaRef}
-          className="min-h-0 min-w-0 flex-1 overscroll-contain"
+          className="min-h-0 min-w-0 max-w-full flex-1 overflow-hidden overscroll-contain"
         >
-          <div className="min-w-0 space-y-3 pr-4">
+          <div className="w-full min-w-0 max-w-full space-y-3 overflow-x-hidden pr-4">
             {messages.length === 0 ? (
               <div className="min-w-0 space-y-3 overflow-hidden rounded-3xl border border-dashed p-4 text-sm text-muted-foreground">
                 <p>
@@ -439,7 +439,7 @@ function ProjectDocumentationChatContent({
                 <div
                   key={`${message.role}-${index}`}
                   className={cn(
-                    "w-fit min-w-0 max-w-[calc(100%-2rem)] overflow-hidden whitespace-pre-wrap break-words rounded-3xl px-4 py-3 text-sm leading-6 [overflow-wrap:anywhere]",
+                    "w-fit min-w-0 max-w-[calc(100%-2rem)] overflow-hidden whitespace-pre-wrap break-words rounded-3xl px-4 py-3 text-sm leading-6 [overflow-wrap:anywhere] [word-break:break-word]",
                     message.role === "user"
                       ? "ml-auto bg-primary text-primary-foreground"
                       : "mr-auto bg-muted"
@@ -454,12 +454,13 @@ function ProjectDocumentationChatContent({
           </div>
         </ScrollArea>
 
-        <form className="flex min-w-0 shrink-0 gap-2" onSubmit={handleChatSubmit}>
+        <form className="flex min-w-0 max-w-full shrink-0 gap-2" onSubmit={handleChatSubmit}>
           <Input
             value={chatInput}
             onChange={(event) => setChatInput(event.target.value)}
             placeholder="Ask about this documentation..."
             disabled={!canChat || isChatting}
+            className="min-w-0 flex-1"
           />
           <Button
             type="submit"
