@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { usePathname, useRouter } from "next/navigation"
 
 import {
@@ -83,6 +83,7 @@ export function AppShell({
   const [savedSpoonerId, setSavedSpoonerId] = useState<number | null>(
     initialSpoonerId
   )
+  const savedSpoonerIdRef = useRef(savedSpoonerId)
   const [employees, setEmployees] = useState<Employee[]>(
     () => getCachedEmployees() ?? []
   )
@@ -189,7 +190,7 @@ export function AppShell({
 
   useEffect(() => {
     if (urlSpoonerId !== null && urlSpoonerId !== savedSpoonerId) {
-      setSavedSpoonerId(urlSpoonerId)
+      savedSpoonerIdRef.current = urlSpoonerId
       window.localStorage.setItem(spoonerIdCookieName, String(urlSpoonerId))
       writePreferenceCookie(spoonerIdCookieName, String(urlSpoonerId))
     }
@@ -214,7 +215,7 @@ export function AppShell({
 
   function handleRoleChange(nextRole: AppRole) {
     if (nextRole === "spooner") {
-      const targetId = urlSpoonerId ?? savedSpoonerId
+      const targetId = urlSpoonerId ?? savedSpoonerIdRef.current
       if (targetId !== null) {
         router.push(`/spooner/${targetId}/${defaultSpoonerSection}`)
       } else {
@@ -226,6 +227,7 @@ export function AppShell({
   }
 
   function handleSpoonerChange(nextId: number) {
+    savedSpoonerIdRef.current = nextId
     setSavedSpoonerId(nextId)
     window.localStorage.setItem(spoonerIdCookieName, String(nextId))
     writePreferenceCookie(spoonerIdCookieName, String(nextId))
