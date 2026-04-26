@@ -1468,6 +1468,34 @@ def test_transition_instruction_crud_solve_and_completion(client: TestClient) ->
     assert client.get("/move-request-transition-instructions/2").status_code == 404
 
 
+def test_bench_move_completes_with_onboarding_only(client: TestClient) -> None:
+    employee_id = client.post("/employees", json=employee_payload()).json()["id"]
+    project_id = client.post("/projects", json=project_payload()).json()["id"]
+    request_id = client.post(
+        "/move-requests",
+        json=move_request_payload(employee_id, project_id),
+    ).json()["id"]
+
+    onboarding_create = client.post(
+        "/move-request-transition-instructions",
+        json=transition_instruction_payload(request_id, "onboarding"),
+    )
+    assert onboarding_create.status_code == 201
+
+    solve_onboarding = client.post(
+        f"/move-requests/{request_id}/transition-instructions/onboarding:solve"
+    )
+    assert solve_onboarding.status_code == 200
+    assert client.get(f"/move-requests/{request_id}").json()["status"] == "completed"
+    assert client.get(f"/employees/{employee_id}").json()["current_project_ids"] == [
+        project_id
+    ]
+    assert (
+        client.post(f"/move-requests/{request_id}:complete").json()["status"]
+        == "completed"
+    )
+
+
 def test_matching_run_crud_latest_and_cascade(client: TestClient, fake_db: InMemoryDatabase) -> None:
     project_id = client.post("/projects", json=project_payload()).json()["id"]
 

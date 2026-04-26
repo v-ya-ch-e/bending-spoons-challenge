@@ -530,7 +530,7 @@ Status behavior:
 - `POST /move-requests/{request_id}/approval` accepts `{ "approver": "cto" | "employee", "approval_status": "approved" | "rejected" | "pending" }`. A single approval moves a pending request to `accepted`; both approvals move it to `transition_started`; any rejection moves it to `rejected`.
 - Frontend approval flows should use the backend orchestration endpoint at `/api/move-requests/{request_id}/approval`; when the second approval moves the request to `transition_started`, the backend starts onboarding and offboarding instruction generation.
 - `POST /move-requests/{request_id}:start-transition` remains available for explicit DB API callers, requires both approvals, and sets `status` to `transition_started`.
-- `POST /move-requests/{request_id}:complete` requires both transition instruction rows to be `solved`, sets `status` to `completed`, removes `from_project_id` from the employee's assignments, and adds `to_project_id`.
+- `POST /move-requests/{request_id}:complete` requires solved onboarding plus solved offboarding when `from_project_id` is present. Bench-to-project moves with `from_project_id = null` require onboarding only. Completion sets `status` to `completed`, removes `from_project_id` from the employee's assignments when present, and adds `to_project_id`.
 - `completed` move requests are retained for audit history. They are not eligible for transition instruction regeneration.
 
 Foreign-key behavior:
@@ -599,7 +599,7 @@ Solve behavior:
 - `GET /employees/{employee_id}/transition-instructions` accepts optional `instruction_type`, `include_completed`, `limit`, and `offset`, and returns instructions joined with move-request employee/project display fields. Completed move requests are excluded unless `include_completed=true`.
 - `POST /move-requests/{request_id}/transition-instructions/{instruction_type}:solve` marks the selected instruction as `solved`; `/instructions/...:solve` is kept as a compatibility alias.
 - If `solved_by_employee_id` is omitted, the API uses the employee from the parent move request.
-- If both onboarding and offboarding rows for the same move request are `solved`, the API marks the parent move request `completed` and migrates the employee assignment to the target project.
+- If all required instruction rows for the same move request are `solved`, the API marks the parent move request `completed` and migrates the employee assignment to the target project. Bench-to-project moves only require onboarding; moves from a source project require both onboarding and offboarding.
 
 ## Policies
 

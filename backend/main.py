@@ -187,7 +187,7 @@ def _approve_move_request_and_start_transition(
         move_request = client.update_move_request_approval(request_id, payload)
         running_instruction_types: list[str] = []
         if _move_request_transition_started(move_request):
-            for instruction_type in ("onboarding", "offboarding"):
+            for instruction_type in _instruction_types_for_move_request(move_request):
                 try:
                     instruction = transition_instruction_service.start_transition_instruction_generation(
                         request_id,
@@ -218,6 +218,12 @@ def _move_request_transition_started(move_request: dict[str, Any]) -> bool:
         and move_request.get("cto_approval_status") == "approved"
         and move_request.get("employee_approval_status") == "approved"
     )
+
+
+def _instruction_types_for_move_request(move_request: dict[str, Any]) -> tuple[str, ...]:
+    if move_request.get("from_project_id") is None:
+        return ("onboarding",)
+    return ("onboarding", "offboarding")
 
 
 @app.post("/projects/{project_id}/matching:run", response_model=MatchingRunResponse)
