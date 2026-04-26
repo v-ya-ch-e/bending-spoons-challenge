@@ -25,7 +25,6 @@ export const currentUser = {
 export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
   cto: {
     label: "CTO",
-    primaryAction: "Create company",
     navItems: [
       {
         label: "Overview",

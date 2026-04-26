@@ -202,17 +202,50 @@ function ProjectDocumentationChatContent({
   const [isChatting, setIsChatting] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
   const chatScrollAreaRef = useRef<HTMLDivElement | null>(null)
+  const shouldAutoScrollRef = useRef(true)
+  const previousMessageCountRef = useRef(0)
   const canChat = Boolean(project && documentation?.content_markdown?.trim())
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      const viewport = chatScrollAreaRef.current?.querySelector<HTMLElement>(
-        "[data-slot='scroll-area-viewport']"
-      )
+    const viewport = getChatViewport(chatScrollAreaRef.current)
+    if (!viewport) {
+      return
+    }
+    const activeViewport = viewport
 
-      if (viewport) {
-        viewport.scrollTop = viewport.scrollHeight
+    function updateAutoScrollPreference() {
+      shouldAutoScrollRef.current = isNearChatBottom(activeViewport)
+    }
+
+    updateAutoScrollPreference()
+    activeViewport.addEventListener("scroll", updateAutoScrollPreference, {
+      passive: true,
+    })
+
+    return () => {
+      activeViewport.removeEventListener("scroll", updateAutoScrollPreference)
+    }
+  }, [])
+
+  useEffect(() => {
+    const hasNewMessage = messages.length > previousMessageCountRef.current
+    previousMessageCountRef.current = messages.length
+
+    if (hasNewMessage) {
+      shouldAutoScrollRef.current = true
+    }
+
+    if (!shouldAutoScrollRef.current) {
+      return
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = getChatViewport(chatScrollAreaRef.current)
+      if (!viewport) {
+        return
       }
+
+      viewport.scrollTop = viewport.scrollHeight
     })
 
     return () => window.cancelAnimationFrame(frame)
@@ -377,7 +410,7 @@ function ProjectDocumentationChatContent({
         >
           <div className="min-w-0 space-y-3 pr-4">
             {messages.length === 0 ? (
-                  <div className="min-w-0 space-y-3 overflow-hidden rounded-3xl border border-dashed p-4 text-sm text-muted-foreground">
+              <div className="min-w-0 space-y-3 overflow-hidden rounded-3xl border border-dashed p-4 text-sm text-muted-foreground">
                 <p>
                   {canChat
                     ? "Start with one of these prompts or ask your own question."
@@ -439,6 +472,16 @@ function ProjectDocumentationChatContent({
       </CardContent>
     </Card>
   )
+}
+
+function getChatViewport(root: HTMLDivElement | null) {
+  return (
+    root?.querySelector<HTMLElement>("[data-slot='scroll-area-viewport']") ?? null
+  )
+}
+
+function isNearChatBottom(viewport: HTMLElement) {
+  return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 32
 }
 
 export function EmptyDocumentationState({

@@ -154,7 +154,7 @@ export function EmployeeProjectResourcesScreen({
               This project is not linked to the selected Spooner.
             </p>
             <Button asChild variant="outline" className="mt-5">
-              <Link href={`/spooner/${employeeId}/my-project`}>Back to My Projects</Link>
+              <Link href={`/spooner/${employeeId}/my-project`}>Back to My Companies</Link>
             </Button>
           </CardContent>
         </Card>
@@ -196,7 +196,7 @@ function ProjectResourcesContent({
             </p>
           </div>
           <Button asChild variant="outline" className="w-fit rounded-full">
-            <Link href={`/spooner/${employee.id}/my-project`}>Back to My Projects</Link>
+            <Link href={`/spooner/${employee.id}/my-project`}>Back to My Companies</Link>
           </Button>
         </header>
 
