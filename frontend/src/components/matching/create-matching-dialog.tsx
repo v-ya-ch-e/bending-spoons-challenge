@@ -58,6 +58,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
   buildPreviewMovePlan,
+  formatMovementRoute,
   formatImpact,
   formatRequirement,
   formatRequestStatus,
@@ -992,8 +993,7 @@ function DraftPreviewAccordion({ plan }: { plan: MovePlan }) {
                       {movement.employee?.name ?? "Unknown employee"}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {movement.sourceProject?.project_name ?? "Bench"} to{" "}
-                      {movement.targetProject.project_name}
+                      {formatMovementRoute(movement)}
                     </p>
                   </div>
                   <PreviewStatusBadge>

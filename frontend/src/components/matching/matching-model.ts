@@ -286,6 +286,53 @@ export function formatImpact(impact: ImpactLevel) {
   return impact.charAt(0).toUpperCase() + impact.slice(1)
 }
 
+export function getMovementSourceLabel(movement: ProposedMovement) {
+  if (movement.sourceProject) {
+    return movement.sourceProject.project_name
+  }
+
+  if (movement.action === "add_assignment") {
+    const currentProjectNames =
+      movement.employee?.current_project_names?.filter(
+        (projectName) => projectName !== movement.targetProject.project_name
+      ) ?? []
+
+    if (currentProjectNames.length > 0) {
+      return currentProjectNames.join(", ")
+    }
+
+    const currentProject = movement.employee?.current_project
+    if (currentProject && currentProject !== movement.targetProject.project_name) {
+      return currentProject
+    }
+
+    return "Existing assignment"
+  }
+
+  return "Bench"
+}
+
+export function formatMovementRoute(movement: ProposedMovement) {
+  const sourceLabel = getMovementSourceLabel(movement)
+
+  if (movement.action === "add_assignment") {
+    return `${sourceLabel} + ${movement.targetProject.project_name}`
+  }
+
+  return `${sourceLabel} to ${movement.targetProject.project_name}`
+}
+
+export function formatMovementDescription(movement: ProposedMovement) {
+  const employeeName = movement.employee?.name ?? "Unknown employee"
+  const sourceLabel = getMovementSourceLabel(movement)
+
+  if (movement.action === "add_assignment") {
+    return `${employeeName} keeps ${sourceLabel} and adds ${movement.targetProject.project_name}.`
+  }
+
+  return `${employeeName} moving from ${sourceLabel} to ${movement.targetProject.project_name}.`
+}
+
 export function formatRequirement(requirement: ProjectSkillRequirement) {
   return ([1, 2, 3] as const)
     .map((level) => {

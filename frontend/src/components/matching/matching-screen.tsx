@@ -87,9 +87,12 @@ import { CreateMatchingDialog } from "@/components/matching/create-matching-dial
 import {
   buildMovePlans,
   formatImpact,
+  formatMovementDescription,
+  formatMovementRoute,
   formatRequestStatus,
   formatRequirement,
   getCreateFlowMetadata,
+  getMovementSourceLabel,
   skillLabels,
   type AffectedCompanyImpact,
   type EmployeeTransitionImpact,
@@ -1330,9 +1333,15 @@ function ProposedMovementsSection({
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-1 text-muted-foreground">
-                  <span>{movement.sourceProject?.project_name ?? "Bench"}</span>
-                  <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
-                  <span>{movement.targetProject.project_name}</span>
+                  {movement.action === "add_assignment" ? (
+                    <span>{formatMovementRoute(movement)}</span>
+                  ) : (
+                    <>
+                      <span>{getMovementSourceLabel(movement)}</span>
+                      <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+                      <span>{movement.targetProject.project_name}</span>
+                    </>
+                  )}
                 </div>
               </TableCell>
               <TableCell>{movement.expectedRole}</TableCell>
@@ -1711,7 +1720,7 @@ function DetailContent({
         <DetailHero
           eyebrow="Proposed movement"
           title={detail.movement.employee?.name ?? "Unknown employee"}
-          description={`${detail.movement.sourceProject?.project_name ?? "Bench"} to ${detail.movement.targetProject.project_name}`}
+          description={formatMovementRoute(detail.movement)}
           badge={<RequestStatusBadge status={detail.movement.requestStatus} />}
         />
         <DetailActions>
@@ -1805,7 +1814,10 @@ function DetailContent({
           items={[
             { label: "Status", value: formatRequestStatus(detail.movement.requestStatus) },
             { label: "Impact", value: formatImpact(detail.movement.currentProjectImpact) },
-            { label: "From", value: detail.movement.sourceProject?.project_name ?? "Bench" },
+            {
+              label: detail.movement.action === "add_assignment" ? "Keeps" : "From",
+              value: getMovementSourceLabel(detail.movement),
+            },
             { label: "To", value: detail.movement.targetProject.project_name },
           ]}
         />
@@ -1830,9 +1842,7 @@ function DetailContent({
           }
         />
         <DetailBlock label="What is this?">
-          {detail.movement.employee?.name ?? "Unknown employee"} moving from{" "}
-          {detail.movement.sourceProject?.project_name ?? "Bench"} to{" "}
-          {detail.movement.targetProject.project_name}.
+          {formatMovementDescription(detail.movement)}
         </DetailBlock>
         <DetailBlock label="Why it matters?">{detail.movement.reason}</DetailBlock>
         <DetailBlock label="Current status">
@@ -1948,7 +1958,7 @@ function DetailContent({
       <DetailHero
         eyebrow="Employee impact"
         title={detail.impact.employee?.name ?? "Unknown employee"}
-        description={`${detail.impact.movement.sourceProject?.project_name ?? "Bench"} to ${detail.impact.movement.targetProject.project_name}`}
+        description={formatMovementRoute(detail.impact.movement)}
         badge={<RequestStatusBadge status={detail.impact.status} />}
       />
       <DetailActions>
@@ -2013,8 +2023,8 @@ function DetailContent({
           { label: "Status", value: formatRequestStatus(detail.impact.status) },
           { label: "Effort", value: detail.impact.transitionEffort },
           {
-            label: "From",
-            value: detail.impact.movement.sourceProject?.project_name ?? "Bench",
+            label: detail.impact.movement.action === "add_assignment" ? "Keeps" : "From",
+            value: getMovementSourceLabel(detail.impact.movement),
           },
           { label: "To", value: detail.impact.movement.targetProject.project_name },
         ]}
