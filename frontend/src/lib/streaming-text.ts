@@ -53,7 +53,7 @@ export function createTextRevealer({
 }
 
 function splitIntoReadableTokens(text: string) {
-  const tokens = text.match(/\n+|[^\s]+(?:[ \t]+)?/g)
+  const tokens = text.match(/\n+|[ \t]*[^\s]+(?:[ \t]+)?|[ \t]+/g)
   return tokens && tokens.length > 0 ? tokens : [text]
 }
 

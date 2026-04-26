@@ -2,6 +2,9 @@ import type {
   ProjectDocumentation,
   ImpactLevel,
   MatchingRunUseCase,
+  MoveRequest,
+  MoveRequestApprovalActor,
+  MoveRequestApprovalStatus,
   ProjectPhase,
   ProjectSkillRequirements,
   SkillKey,
@@ -347,6 +350,23 @@ export function streamProjectDocumentationChat(
     },
     onEvent
   )
+}
+
+export function approveMoveRequest(
+  requestId: number,
+  approver: MoveRequestApprovalActor,
+  approvalStatus: MoveRequestApprovalStatus
+) {
+  return fetchBackendApi<MoveRequest>(`/move-requests/${requestId}/approval`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      approver,
+      approval_status: approvalStatus,
+    }),
+  })
 }
 
 export const skillKeys = backendSkillKeys

@@ -1210,17 +1210,35 @@ def transition_instructions_solved(cursor: DictCursor, request_id: int) -> bool:
     )
 
 
+def complete_move_request_if_ready(cursor: DictCursor, request_id: int) -> bool:
+    if not transition_instructions_solved(cursor, request_id):
+        return False
+
+    move_request = fetch_move_request(cursor, request_id)
+    current_project_ids, _ = fetch_employee_assignments(cursor, move_request["employee_id"])
+    next_project_ids = set(current_project_ids)
+    from_project_id = move_request["from_project_id"]
+    to_project_id = move_request["to_project_id"]
+
+    if from_project_id is not None and from_project_id != to_project_id:
+        next_project_ids.discard(from_project_id)
+    next_project_ids.add(to_project_id)
+    sync_employee_projects(cursor, move_request["employee_id"], sorted(next_project_ids))
+
+    execute_or_raise(
+        cursor,
+        "UPDATE move_requests SET status = %s, responded_at = %s WHERE id = %s",
+        [
+            MoveRequestStatus.completed.value,
+            datetime.now(UTC).replace(tzinfo=None),
+            request_id,
+        ],
+    )
+    return True
+
+
 def maybe_complete_move_request(cursor: DictCursor, request_id: int) -> None:
-    if transition_instructions_solved(cursor, request_id):
-        execute_or_raise(
-            cursor,
-            "UPDATE move_requests SET status = %s, responded_at = %s WHERE id = %s",
-            [
-                MoveRequestStatus.completed.value,
-                datetime.now(UTC).replace(tzinfo=None),
-                request_id,
-            ],
-        )
+    complete_move_request_if_ready(cursor, request_id)
 
 
 def policy_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1646,6 +1664,7 @@ def delete_employee(employee_id: int) -> Response:
 def list_employee_transition_instructions(
     employee_id: int,
     instruction_type: TransitionInstructionType | None = None,
+    include_completed: bool = Query(False),
     limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> list[dict[str, Any]]:
@@ -1654,6 +1673,9 @@ def list_employee_transition_instructions(
     if instruction_type is not None:
         clauses.append("instruction.instruction_type = %s")
         params.append(instruction_type.value)
+    if not include_completed:
+        clauses.append("mr.status != %s")
+        params.append(MoveRequestStatus.completed.value)
     where_clause = " AND ".join(clauses)
 
     with open_db_connection() as connection:
@@ -1770,22 +1792,20 @@ def start_move_request_transition(request_id: int) -> dict[str, Any]:
 def complete_move_request(request_id: int) -> dict[str, Any]:
     with open_db_connection() as connection:
         with connection.cursor() as cursor:
-            fetch_move_request(cursor, request_id)
-            if not transition_instructions_solved(cursor, request_id):
-                raise HTTPException(
-                    status_code=409,
-                    detail="Both onboarding and offboarding instructions must be solved first.",
-                )
-            execute_or_raise(
-                cursor,
-                "UPDATE move_requests SET status = %s, responded_at = %s WHERE id = %s",
-                [
-                    MoveRequestStatus.completed.value,
-                    datetime.now(UTC).replace(tzinfo=None),
-                    request_id,
-                ],
-            )
-            return fetch_move_request(cursor, request_id)
+            try:
+                connection.begin()
+                fetch_move_request(cursor, request_id)
+                if not complete_move_request_if_ready(cursor, request_id):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Both onboarding and offboarding instructions must be solved first.",
+                    )
+                completed = fetch_move_request(cursor, request_id)
+                connection.commit()
+                return completed
+            except Exception:
+                connection.rollback()
+                raise
 
 
 @app.delete("/move-requests/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1864,15 +1884,22 @@ def update_transition_instruction(
     assignments, values = update_fields_sql(payload)
     with open_db_connection() as connection:
         with connection.cursor() as cursor:
-            execute_or_raise(
-                cursor,
-                f"UPDATE move_request_transition_instructions SET {assignments} WHERE id = %s",
-                [*values, instruction_id],
-            )
-            updated = fetch_transition_instruction(cursor, instruction_id)
-            if updated["status"] == TransitionInstructionStatus.solved.value:
-                maybe_complete_move_request(cursor, updated["move_request_id"])
-            return fetch_transition_instruction(cursor, instruction_id)
+            try:
+                connection.begin()
+                execute_or_raise(
+                    cursor,
+                    f"UPDATE move_request_transition_instructions SET {assignments} WHERE id = %s",
+                    [*values, instruction_id],
+                )
+                updated = fetch_transition_instruction(cursor, instruction_id)
+                if updated["status"] == TransitionInstructionStatus.solved.value:
+                    maybe_complete_move_request(cursor, updated["move_request_id"])
+                refreshed = fetch_transition_instruction(cursor, instruction_id)
+                connection.commit()
+                return refreshed
+            except Exception:
+                connection.rollback()
+                raise
 
 
 @app.delete(

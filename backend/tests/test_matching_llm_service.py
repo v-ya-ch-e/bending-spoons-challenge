@@ -291,6 +291,40 @@ class TestSchemaConstraints(unittest.TestCase):
 
 
 class TestEvaluateMatchingFailures(unittest.TestCase):
+    def test_gpt5_models_omit_temperature_parameter(self):
+        payload = _request()
+        parse_calls = []
+
+        class _Response:
+            output_parsed = MatchingLlmResponse(
+                best=_valid_best(),
+                alternatives=[],
+                hiring_recommendations=[],
+            )
+
+        class _Responses:
+            @staticmethod
+            def parse(**kwargs):
+                parse_calls.append(kwargs)
+                return _Response()
+
+        class _Client:
+            responses = _Responses()
+
+            @staticmethod
+            def with_options(**_kwargs):
+                return _Client()
+
+        async def run_test():
+            with patch("services.matching_llm_service.get_openai_client", return_value=_Client()):
+                with patch("services.matching_llm_service.get_openai_model", return_value="gpt-5-mini"):
+                    await evaluate_matching(payload)
+
+            self.assertEqual(len(parse_calls), 1)
+            self.assertNotIn("temperature", parse_calls[0])
+
+        asyncio.run(run_test())
+
     def test_timeout_is_reported_cleanly(self):
         payload = _request()
 

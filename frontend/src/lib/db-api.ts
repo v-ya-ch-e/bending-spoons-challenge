@@ -118,6 +118,7 @@ export type MoveRequestStatus =
   | "completed"
 
 export type MoveRequestApprovalStatus = "pending" | "approved" | "rejected"
+export type MoveRequestApprovalActor = "cto" | "employee"
 
 export type MoveRequest = {
   id: number

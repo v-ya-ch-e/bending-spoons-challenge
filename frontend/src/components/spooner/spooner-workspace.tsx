@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 
 import { getCachedEmployees, listEmployees, type Employee } from "@/lib/db-api"
 import { EmployeeMyProjectScreen } from "@/components/spooner/employee-my-project-screen"
+import { EmployeeRequestsScreen } from "@/components/spooner/employee-requests-screen"
 import { Skeleton } from "@/components/ui/skeleton"
 
 type SpoonerWorkspaceProps = {
@@ -96,6 +97,10 @@ export function SpoonerWorkspace({
 
   if (section === "my-project") {
     return <EmployeeMyProjectScreen employee={employee} />
+  }
+
+  if (section === "requests") {
+    return <EmployeeRequestsScreen employee={employee} />
   }
 
   return (
