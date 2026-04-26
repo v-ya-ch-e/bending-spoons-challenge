@@ -81,7 +81,7 @@ export function SidebarNav({
     >
       <div
         className={cn(
-          "relative flex h-14 items-center overflow-hidden transition-all duration-300 ease-out",
+          "relative flex h-12 items-center overflow-hidden transition-all duration-300 ease-out",
           collapsed ? "justify-center" : "justify-start"
         )}
       >
@@ -92,7 +92,7 @@ export function SidebarNav({
           height={190}
           priority
           className={cn(
-            "h-14 w-auto max-w-[12.5rem] origin-left transition-[opacity,transform] duration-300 ease-out dark:hidden",
+            "h-20 w-auto max-w-[14.5rem] origin-left transition-[opacity,transform] duration-300 ease-out dark:hidden",
             collapsed
               ? "pointer-events-none scale-95 opacity-0"
               : "scale-100 opacity-100"
@@ -105,7 +105,7 @@ export function SidebarNav({
           height={190}
           priority
           className={cn(
-            "hidden h-14 w-auto max-w-[12.5rem] origin-left transition-[opacity,transform] duration-300 ease-out dark:block",
+            "hidden h-20 w-auto max-w-[14.5rem] origin-left transition-[opacity,transform] duration-300 ease-out dark:block",
             collapsed
               ? "pointer-events-none scale-95 opacity-0"
               : "scale-100 opacity-100"
@@ -118,7 +118,7 @@ export function SidebarNav({
           height={57}
           priority
           className={cn(
-            "absolute left-1/2 h-8 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out dark:hidden",
+            "absolute left-1/2 h-11 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out dark:hidden",
             collapsed
               ? "scale-100 opacity-100"
               : "pointer-events-none scale-90 opacity-0"
@@ -131,7 +131,7 @@ export function SidebarNav({
           height={57}
           priority
           className={cn(
-            "absolute left-1/2 hidden h-8 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out dark:block",
+            "absolute left-1/2 hidden h-11 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out dark:block",
             collapsed
               ? "scale-100 opacity-100"
               : "pointer-events-none scale-90 opacity-0"

@@ -20,7 +20,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Mixing Spooners Talent OS",
   description:
-    "Internal platform for staffing decisions, transitions, and project documentation.",
+    "Internal platform for staffing decisions, transitions, and company documentation.",
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },

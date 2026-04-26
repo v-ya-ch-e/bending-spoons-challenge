@@ -14,15 +14,18 @@ import { Topbar } from "@/components/topbar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import {
   getCachedEmployees,
-  getCachedMatchingRuns,
   getCachedProjects,
   listEmployeeTransitionInstructions,
   listEmployees,
+  listMatchingCandidates,
+  listMatchingRecommendations,
   listMatchingRuns,
   listMoveRequests,
   listProjects,
   type Employee,
 } from "@/lib/db-api"
+import type { AppShellInitialData } from "@/lib/server/db-api"
+import { buildMovePlans } from "@/components/matching/matching-model"
 import {
   preferenceCookieMaxAge,
   sidebarCollapsedCookieName,
@@ -36,6 +39,7 @@ type AppShellProps = {
   initialThemeMode: ThemeMode
   initialRole?: AppRole
   initialSpoonerId?: number | null
+  initialData?: AppShellInitialData | null
   children: ReactNode
 }
 
@@ -76,11 +80,45 @@ function buildSpoonerUser(employee: Employee) {
   }
 }
 
+async function loadMatchingPlanCount() {
+  const [employees, projects, moveRequests, matchingRuns] = await Promise.all([
+    listEmployees(),
+    listProjects(),
+    listMoveRequests(),
+    listMatchingRuns(),
+  ])
+  const recentRuns = matchingRuns
+    .filter((run) => run.use_case === "project_rebalance")
+    .sort(
+      (left, right) =>
+        new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+    )
+    .slice(0, 24)
+  const runBundles = await Promise.all(
+    recentRuns.map(async (run) => {
+      const [recommendations, candidates] = await Promise.all([
+        listMatchingRecommendations(run.id),
+        listMatchingCandidates(run.id),
+      ])
+
+      return { run, recommendations, candidates }
+    })
+  )
+
+  return buildMovePlans({
+    employees,
+    projects,
+    moveRequests,
+    runBundles,
+  }).length
+}
+
 export function AppShell({
   initialSidebarCollapsed,
   initialThemeMode,
   initialRole = "cto",
   initialSpoonerId = null,
+  initialData,
   children,
 }: AppShellProps) {
   const pathname = usePathname()
@@ -92,17 +130,18 @@ export function AppShell({
   )
   const savedSpoonerIdRef = useRef(savedSpoonerId)
   const [employees, setEmployees] = useState<Employee[]>(
-    () => getCachedEmployees() ?? []
+    () => initialData?.employees ?? getCachedEmployees() ?? []
   )
   const [projectCount, setProjectCount] = useState<number | undefined>(
-    () => getCachedProjects()?.length
+    () => initialData?.projectCount ?? getCachedProjects()?.length
   )
   const [employeeCount, setEmployeeCount] = useState<number | undefined>(
-    () => getCachedEmployees()?.length
+    () => initialData?.employeeCount ?? getCachedEmployees()?.length
   )
-  const [matchingRunCount, setMatchingRunCount] = useState<number | undefined>(
-    () => getCachedMatchingRuns()?.length
+  const [matchingPlanCount, setMatchingPlanCount] = useState<number | undefined>(
+    () => initialData?.matchingPlanCount
   )
+  const shouldSkipInitialRefreshRef = useRef(Boolean(initialData))
   const [spoonerNotificationCounts, setSpoonerNotificationCounts] = useState<
     { requests: number; onboarding: number; offboarding: number } | undefined
   >()
@@ -148,8 +187,8 @@ export function AppShell({
       if (nextItem.value === "employees" && employeeCount !== undefined) {
         return { ...nextItem, count: String(employeeCount) }
       }
-      if (nextItem.value === "matching" && matchingRunCount !== undefined) {
-        return { ...nextItem, count: String(matchingRunCount) }
+      if (nextItem.value === "matching" && matchingPlanCount !== undefined) {
+        return { ...nextItem, count: String(matchingPlanCount) }
       }
       if (
         role === "spooner" &&
@@ -178,7 +217,7 @@ export function AppShell({
     activeSpoonerId,
     projectCount,
     employeeCount,
-    matchingRunCount,
+    matchingPlanCount,
     spoonerNotificationCounts,
   ])
 
@@ -190,6 +229,11 @@ export function AppShell({
   }, [pathname, workspace.navItems])
 
   useEffect(() => {
+    if (shouldSkipInitialRefreshRef.current) {
+      shouldSkipInitialRefreshRef.current = false
+      return
+    }
+
     let isMounted = true
 
     listProjects()
@@ -206,9 +250,9 @@ export function AppShell({
       })
       .catch(() => {})
 
-    listMatchingRuns()
-      .then((runs) => {
-        if (isMounted) setMatchingRunCount(runs.length)
+    loadMatchingPlanCount()
+      .then((count) => {
+        if (isMounted) setMatchingPlanCount(count)
       })
       .catch(() => {})
 
@@ -334,6 +378,7 @@ export function AppShell({
               activeLabel={activeNavItem.label}
               primaryAction={activeNavItem.primaryAction ?? workspace.primaryAction}
               primaryActionHref={activeNavItem.primaryActionHref}
+              showPrimaryAction={activeNavItem.value !== "overview"}
               sidebarCollapsed={sidebarCollapsed}
               onSidebarCollapsedChange={handleSidebarCollapsedChange}
             />

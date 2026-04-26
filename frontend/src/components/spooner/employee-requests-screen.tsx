@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { Tick02Icon } from "@hugeicons/core-free-icons"
 
 import { approveMoveRequest } from "@/lib/backend-api"
 import {
@@ -209,7 +211,10 @@ function MoveRequestCard({
             <CardDescription>{request.expected_role}</CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <RequestBadge label={formatStatus(request.status)} />
+            <RequestBadge
+              label={formatStatus(request.status)}
+              tone={request.status === "completed" ? "success" : "neutral"}
+            />
             <RequestBadge
               label={`CTO ${formatApproval(request.cto_approval_status)}`}
             />
@@ -262,7 +267,25 @@ function Fact({ label, value }: { label: string; value: string }) {
   )
 }
 
-function RequestBadge({ label }: { label: string }) {
+function RequestBadge({
+  label,
+  tone = "neutral",
+}: {
+  label: string
+  tone?: "neutral" | "success"
+}) {
+  if (tone === "success") {
+    return (
+      <Badge
+        variant="outline"
+        className="border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300"
+      >
+        <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} aria-hidden="true" />
+        {label}
+      </Badge>
+    )
+  }
+
   return <Badge variant="secondary">{label}</Badge>
 }
 

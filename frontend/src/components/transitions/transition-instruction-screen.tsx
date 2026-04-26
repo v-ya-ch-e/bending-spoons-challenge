@@ -54,16 +54,16 @@ const statusLabels: Record<TransitionInstructionStatus, string> = {
 const screenCopy = {
   onboarding: {
     title: "Onboarding",
-    eyebrow: "New project ramp-up",
-    description: "Follow the generated instructions to join the target project cleanly.",
+    eyebrow: "New company ramp-up",
+    description: "Follow the generated instructions to join the target company cleanly.",
     emptyTitle: "No onboarding instructions yet",
     emptyDescription:
       "Once the transition is approved and instructions are generated, they will appear here.",
   },
   offboarding: {
     title: "Offboarding",
-    eyebrow: "Project handoff",
-    description: "Wrap up the source project with a clear handoff trail.",
+    eyebrow: "Company handoff",
+    description: "Wrap up the source company with a clear handoff trail.",
     emptyTitle: "No offboarding instructions yet",
     emptyDescription:
       "Once the transition is approved and handoff instructions are generated, they will appear here.",
@@ -226,7 +226,7 @@ export function TransitionInstructionScreen({
                   <div>
                     <CardTitle>Generated instructions</CardTitle>
                     <CardDescription>
-                      Markdown content generated from project documentation and transition context.
+                      Markdown content generated from company documentation and transition context.
                     </CardDescription>
                   </div>
                   <TransitionStatusBadge status={instruction.status} />
@@ -299,7 +299,7 @@ function TransitionSummaryCard({
         <dl className="space-y-3 text-sm">
           <SummaryItem label="Employee" value={instruction.employee_name} />
           <SummaryItem
-            label={instructionType === "onboarding" ? "Target project" : "Source project"}
+            label={instructionType === "onboarding" ? "Target company" : "Source company"}
             value={projectLabel ?? "Not set"}
           />
           <SummaryItem

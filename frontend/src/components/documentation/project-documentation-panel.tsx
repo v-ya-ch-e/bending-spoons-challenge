@@ -1,6 +1,8 @@
 "use client"
 
 import {
+  useEffect,
+  useRef,
   useState,
   type ComponentProps,
   type FormEvent,
@@ -74,7 +76,7 @@ export function ProjectDocumentationViewer({
   documentation,
   markdown,
   generationStatus,
-  noProjectDescription = "Create a project first.",
+  noProjectDescription = "Create a company first.",
   noRepositoriesDescription = "Add at least one GitHub repository to generate documentation.",
   noDocumentationDescription = "Fetch from GitHub to generate the first version.",
 }: {
@@ -87,7 +89,7 @@ export function ProjectDocumentationViewer({
   noDocumentationDescription?: string
 }) {
   if (!project) {
-    return <EmptyDocumentationState title="No projects" description={noProjectDescription} />
+    return <EmptyDocumentationState title="No companies" description={noProjectDescription} />
   }
 
   if (markdown) {
@@ -144,7 +146,7 @@ export function ProjectDocumentationChat({
   onEditingChange,
   onError,
   starterPrompts = defaultStarterPrompts,
-  description = "Ask questions about the generated project documentation.",
+  description = "Ask questions about the generated company documentation.",
   className,
 }: {
   project?: Project | null
@@ -199,7 +201,55 @@ function ProjectDocumentationChatContent({
   const [chatMode, setChatMode] = useState<ChatMode>("ask")
   const [isChatting, setIsChatting] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
+  const chatScrollAreaRef = useRef<HTMLDivElement | null>(null)
+  const shouldAutoScrollRef = useRef(true)
+  const previousMessageCountRef = useRef(0)
   const canChat = Boolean(project && documentation?.content_markdown?.trim())
+
+  useEffect(() => {
+    const viewport = getChatViewport(chatScrollAreaRef.current)
+    if (!viewport) {
+      return
+    }
+    const activeViewport = viewport
+
+    function updateAutoScrollPreference() {
+      shouldAutoScrollRef.current = isNearChatBottom(activeViewport)
+    }
+
+    updateAutoScrollPreference()
+    activeViewport.addEventListener("scroll", updateAutoScrollPreference, {
+      passive: true,
+    })
+
+    return () => {
+      activeViewport.removeEventListener("scroll", updateAutoScrollPreference)
+    }
+  }, [])
+
+  useEffect(() => {
+    const hasNewMessage = messages.length > previousMessageCountRef.current
+    previousMessageCountRef.current = messages.length
+
+    if (hasNewMessage) {
+      shouldAutoScrollRef.current = true
+    }
+
+    if (!shouldAutoScrollRef.current) {
+      return
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = getChatViewport(chatScrollAreaRef.current)
+      if (!viewport) {
+        return
+      }
+
+      viewport.scrollTop = viewport.scrollHeight
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [messages, isChatting])
 
   async function sendMessage(message: string) {
     const trimmedMessage = message.trim()
@@ -317,14 +367,14 @@ function ProjectDocumentationChatContent({
         className
       )}
     >
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+      <CardHeader className="shrink-0">
+        <CardTitle className="flex min-w-0 items-center gap-2">
           <HugeiconsIcon icon={AiBrainIcon} className="size-4" />
           Chat with docs
         </CardTitle>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
+      <CardContent className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden">
         {chatError ? (
           <Alert variant="destructive">
             <AlertTitle>Documentation chat failed</AlertTitle>
@@ -354,24 +404,27 @@ function ProjectDocumentationChatContent({
         ) : null}
 
         <Separator />
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-3 pr-4">
+        <ScrollArea
+          ref={chatScrollAreaRef}
+          className="min-h-0 min-w-0 flex-1 overscroll-contain"
+        >
+          <div className="min-w-0 space-y-3 pr-4">
             {messages.length === 0 ? (
-              <div className="space-y-3 rounded-3xl border border-dashed p-4 text-sm text-muted-foreground">
+              <div className="min-w-0 space-y-3 overflow-hidden rounded-3xl border border-dashed p-4 text-sm text-muted-foreground">
                 <p>
                   {canChat
                     ? "Start with one of these prompts or ask your own question."
                     : "Generated documentation is required before chat is available."}
                 </p>
                 {canChat ? (
-                  <div className="flex min-w-0 flex-wrap gap-2">
+                  <div className="flex min-w-0 flex-col gap-2">
                     {starterPrompts.map((prompt) => (
                       <Button
                         key={prompt}
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-auto min-w-0 max-w-full shrink whitespace-normal rounded-2xl text-left break-words"
+                        className="h-auto w-full min-w-0 shrink justify-start whitespace-normal rounded-2xl px-3 py-1.5 text-left leading-snug"
                         disabled={isChatting}
                         onClick={() => void sendMessage(prompt)}
                       >
@@ -386,7 +439,7 @@ function ProjectDocumentationChatContent({
                 <div
                   key={`${message.role}-${index}`}
                   className={cn(
-                    "w-fit max-w-[calc(100%-2rem)] whitespace-pre-wrap break-words rounded-3xl px-4 py-3 text-sm leading-6",
+                    "w-fit min-w-0 max-w-[calc(100%-2rem)] overflow-hidden whitespace-pre-wrap break-words rounded-3xl px-4 py-3 text-sm leading-6 [overflow-wrap:anywhere]",
                     message.role === "user"
                       ? "ml-auto bg-primary text-primary-foreground"
                       : "mr-auto bg-muted"
@@ -401,7 +454,7 @@ function ProjectDocumentationChatContent({
           </div>
         </ScrollArea>
 
-        <form className="flex gap-2" onSubmit={handleChatSubmit}>
+        <form className="flex min-w-0 shrink-0 gap-2" onSubmit={handleChatSubmit}>
           <Input
             value={chatInput}
             onChange={(event) => setChatInput(event.target.value)}
@@ -419,6 +472,16 @@ function ProjectDocumentationChatContent({
       </CardContent>
     </Card>
   )
+}
+
+function getChatViewport(root: HTMLDivElement | null) {
+  return (
+    root?.querySelector<HTMLElement>("[data-slot='scroll-area-viewport']") ?? null
+  )
+}
+
+function isNearChatBottom(viewport: HTMLElement) {
+  return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 32
 }
 
 export function EmptyDocumentationState({
@@ -537,7 +600,7 @@ export function isProjectDocumentation(value: unknown): value is ProjectDocument
 
 export function formatGeneratedAt(documentation: ProjectDocumentation) {
   if (documentation.status === "ready" && documentation.last_generated_at) {
-    return `Last generated ${new Intl.DateTimeFormat(undefined, {
+    return `Last generated ${new Intl.DateTimeFormat("en-GB", {
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(documentation.last_generated_at))}`

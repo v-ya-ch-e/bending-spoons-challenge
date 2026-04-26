@@ -1,5 +1,5 @@
-import { DocumentationScreen } from "@/components/documentation/documentation-screen"
+import { DocumentationClientPage } from "@/components/documentation/documentation-client-page"
 
 export default function CtoDocumentationPage() {
-  return <DocumentationScreen />
+  return <DocumentationClientPage />
 }

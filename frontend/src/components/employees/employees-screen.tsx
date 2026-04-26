@@ -17,6 +17,7 @@ import {
   type SkillKey,
   type Skills,
 } from "@/lib/db-api"
+import type { EmployeesInitialData } from "@/lib/server/db-api"
 import { CreateEmployeeDialog } from "@/components/employees/create-employee-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -51,6 +52,7 @@ import { cn } from "@/lib/utils"
 
 type EmployeesScreenProps = {
   selectedEmployeeId?: string
+  initialData?: EmployeesInitialData | null
 }
 
 type FilterKey = "all" | "assigned" | "unassigned"
@@ -77,19 +79,26 @@ const filterItems: Array<{
   { value: "unassigned", label: "Unassigned" },
 ]
 
-export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
+export function EmployeesScreen({
+  selectedEmployeeId,
+  initialData,
+}: EmployeesScreenProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const cachedEmployees = getCachedEmployees()
   const cachedProjects = getCachedProjects()
-  const [employees, setEmployees] = useState<Employee[]>(() => cachedEmployees ?? [])
-  const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
+  const [employees, setEmployees] = useState<Employee[]>(
+    () => initialData?.employees ?? cachedEmployees ?? []
+  )
+  const [projects, setProjects] = useState<Project[]>(
+    () => initialData?.projects ?? cachedProjects ?? []
+  )
   const [searchQuery, setSearchQuery] = useState("")
   const [filter, setFilter] = useState<FilterKey>("all")
   const [sort, setSort] = useState<SortKey>("name")
   const [isLoading, setIsLoading] = useState(
-    () => !cachedEmployees || !cachedProjects
+    () => !initialData && (!cachedEmployees || !cachedProjects)
   )
   const [error, setError] = useState<string | null>(null)
   const [activeEmployeeId, setActiveEmployeeId] = useState(selectedEmployeeId)
@@ -97,6 +106,10 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
   const createDialogOpen = searchParams.get("create") === "1"
 
   useEffect(() => {
+    if (initialData) {
+      return
+    }
+
     let isMounted = true
 
     async function loadEmployeesWorkspace() {
@@ -138,7 +151,7 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [initialData])
 
   useEffect(() => {
     function handlePopState() {
@@ -230,7 +243,7 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
         value: employees.length - assignedCount,
       },
       {
-        label: "Projects represented",
+        label: "Companies represented",
         value: representedProjects.size,
       },
     ]
@@ -320,7 +333,7 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
           <div className="max-w-2xl">
             <h1 className="text-2xl font-semibold tracking-tight">Employees</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Manage internal talent and understand current project allocation.
+              Manage internal talent and understand current company allocation.
             </p>
           </div>
 
@@ -332,7 +345,7 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
               <InputGroupInput
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Name, role, project, interest..."
+                placeholder="Name, role, company, interest..."
                 aria-label="Search employees"
               />
             </InputGroup>
@@ -349,7 +362,7 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
                 <SelectGroup>
                   <SelectItem value="name">Sort: Name</SelectItem>
                   <SelectItem value="role">Sort: Role</SelectItem>
-                  <SelectItem value="project">Sort: Project</SelectItem>
+                  <SelectItem value="project">Sort: Company</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
@@ -446,7 +459,7 @@ function EmployeesTable({
         <TableRow>
           <TableHead className="w-[14%]">Employee</TableHead>
           <TableHead>Role</TableHead>
-          <TableHead>Current project</TableHead>
+          <TableHead>Current company</TableHead>
           <TableHead>Top skills</TableHead>
           <TableHead>Preferences</TableHead>
           <TableHead className="w-24 text-right">Action</TableHead>
@@ -615,7 +628,7 @@ function EmployeeDetailPanel({
                     <p className="font-medium">{employee.current_project}</p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {project?.project_description ??
-                        "Project details are not available from the current API response."}
+                        "Company details are not available from the current API response."}
                     </p>
                   </div>
                   {project && (
@@ -630,7 +643,7 @@ function EmployeeDetailPanel({
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  This employee is not assigned to a current project.
+                  This employee is not assigned to a current company.
                 </p>
               )}
             </DetailSection>
@@ -641,7 +654,7 @@ function EmployeeDetailPanel({
             </DetailSection>
 
             {project && (
-              <DetailSection title="Project context">
+              <DetailSection title="Company context">
                 <div className="flex flex-col gap-3">
                   <div>
                     <p className="text-xs font-medium text-muted-foreground">

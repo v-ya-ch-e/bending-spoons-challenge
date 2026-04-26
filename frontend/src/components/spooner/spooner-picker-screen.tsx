@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 
 import { getCachedEmployees, listEmployees, type Employee } from "@/lib/db-api"
+import type { SpoonerPickerInitialData } from "@/lib/server/db-api"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -17,16 +18,24 @@ import { SearchIcon } from "@hugeicons/core-free-icons"
 
 const defaultSection = "my-project"
 
-export function SpoonerPickerScreen() {
+export function SpoonerPickerScreen({
+  initialData,
+}: {
+  initialData?: SpoonerPickerInitialData | null
+}) {
   const cachedEmployees = getCachedEmployees()
   const [employees, setEmployees] = useState<Employee[]>(
-    () => cachedEmployees ?? []
+    () => initialData?.employees ?? cachedEmployees ?? []
   )
-  const [isLoading, setIsLoading] = useState(() => !cachedEmployees)
+  const [isLoading, setIsLoading] = useState(() => !initialData && !cachedEmployees)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState("")
 
   useEffect(() => {
+    if (initialData) {
+      return
+    }
+
     let isMounted = true
 
     listEmployees()
@@ -50,7 +59,7 @@ export function SpoonerPickerScreen() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [initialData])
 
   const filteredEmployees = useMemo(() => {
     const trimmed = query.trim().toLowerCase()

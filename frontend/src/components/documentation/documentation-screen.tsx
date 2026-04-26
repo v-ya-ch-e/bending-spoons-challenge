@@ -20,6 +20,7 @@ import {
   type Project,
   type ProjectDocumentation,
 } from "@/lib/db-api"
+import type { DocumentationInitialData } from "@/lib/server/db-api"
 import {
   DocumentationStatusBadge,
   ProjectDocumentationChat,
@@ -29,6 +30,11 @@ import {
   isProjectDocumentation,
 } from "@/components/documentation/project-documentation-panel"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -46,16 +52,33 @@ import { createTextRevealer } from "@/lib/streaming-text"
 
 const documentationCardClass = "border border-border shadow-none ring-0"
 
-export function DocumentationScreen() {
+export function DocumentationScreen({
+  initialData,
+}: {
+  initialData?: DocumentationInitialData | null
+}) {
   const cachedProjects = getCachedProjects()
-  const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
+  const initialDocumentationByProject = initialData
+    ? indexDocumentation(initialData.documentation)
+    : {}
+  const initialSelectedProjectId = initialData?.projects[0]?.id ?? null
+  const [projects, setProjects] = useState<Project[]>(
+    () => initialData?.projects ?? cachedProjects ?? []
+  )
   const [documentationByProject, setDocumentationByProject] = useState<
     Record<number, ProjectDocumentation | undefined>
-  >({})
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
-  const [draft, setDraft] = useState("")
+  >(() => initialDocumentationByProject)
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(
+    initialSelectedProjectId
+  )
+  const [draft, setDraft] = useState(
+    () =>
+      (initialSelectedProjectId
+        ? initialDocumentationByProject[initialSelectedProjectId]?.content_markdown
+        : "") ?? ""
+  )
   const [isEditing, setIsEditing] = useState(false)
-  const [isLoading, setIsLoading] = useState(() => !cachedProjects)
+  const [isLoading, setIsLoading] = useState(() => !initialData && !cachedProjects)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [generationStatus, setGenerationStatus] = useState<string | null>(null)
@@ -71,6 +94,10 @@ export function DocumentationScreen() {
   const selectedDocumentationIsMock = isMockProjectDocumentation(selectedDocumentation)
 
   useEffect(() => {
+    if (initialData) {
+      return
+    }
+
     let isMounted = true
 
     async function loadWorkspace() {
@@ -116,7 +143,7 @@ export function DocumentationScreen() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [initialData])
 
   useEffect(() => {
     if (!selectedProject || !selectedDocumentation) {
@@ -265,7 +292,7 @@ export function DocumentationScreen() {
           <p className="text-sm text-muted-foreground">CTO workspace</p>
           <h1 className="text-2xl font-semibold tracking-tight">Documentation</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Generate, review, and tune project documentation from GitHub before it is
+            Generate, review, and tune company documentation from GitHub before it is
             reused for onboarding and offboarding.
           </p>
         </div>
@@ -279,7 +306,7 @@ export function DocumentationScreen() {
           }
           title={
             selectedDocumentationIsMock
-              ? "This project uses seeded mock documentation, so GitHub refresh is disabled."
+              ? "This company uses seeded mock documentation, so GitHub refresh is disabled."
               : undefined
           }
         >
@@ -302,8 +329,8 @@ export function DocumentationScreen() {
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)]">
         <Card className={cn(documentationCardClass, "flex min-h-0 flex-col overflow-hidden")}>
           <CardHeader>
-            <CardTitle>Projects</CardTitle>
-            <CardDescription>Select a project to inspect its generated docs.</CardDescription>
+            <CardTitle>Companies</CardTitle>
+            <CardDescription>Select a company to inspect its generated docs.</CardDescription>
           </CardHeader>
           <CardContent className="min-h-0 flex-1">
             <ScrollArea className="h-full pr-3">
@@ -325,11 +352,19 @@ export function DocumentationScreen() {
                       onClick={() => selectProject(project.id)}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{project.project_name}</p>
-                          <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                            {project.project_description}
-                          </p>
+                        <div className="flex min-w-0 gap-3">
+                          <Avatar className="size-9 bg-background ring-1 ring-border">
+                            <AvatarImage src={project.icon_url} alt="" />
+                            <AvatarFallback className="text-xs">
+                              {getInitials(project.project_name)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{project.project_name}</p>
+                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                              {project.project_description}
+                            </p>
+                          </div>
                         </div>
                         {documentation ? (
                           <DocumentationStatusBadge status={documentation.status} />
@@ -356,18 +391,26 @@ export function DocumentationScreen() {
           <Card className={cn(documentationCardClass, "flex min-h-0 flex-col overflow-hidden")}>
             <CardHeader className="gap-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <CardTitle>{selectedProject?.project_name ?? "No project selected"}</CardTitle>
-                    {selectedDocumentation ? (
-                      <DocumentationStatusBadge status={selectedDocumentation.status} />
-                    ) : null}
+                <div className="flex min-w-0 gap-3">
+                  {selectedProject ? (
+                    <Avatar size="lg" className="bg-background ring-1 ring-border">
+                      <AvatarImage src={selectedProject.icon_url} alt="" />
+                      <AvatarFallback>{getInitials(selectedProject.project_name)}</AvatarFallback>
+                    </Avatar>
+                  ) : null}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CardTitle>{selectedProject?.project_name ?? "No company selected"}</CardTitle>
+                      {selectedDocumentation ? (
+                        <DocumentationStatusBadge status={selectedDocumentation.status} />
+                      ) : null}
+                    </div>
+                    <CardDescription>
+                      {selectedDocumentation
+                        ? formatGeneratedAt(selectedDocumentation)
+                        : "No generated documentation has been stored yet."}
+                    </CardDescription>
                   </div>
-                  <CardDescription>
-                    {selectedDocumentation
-                      ? formatGeneratedAt(selectedDocumentation)
-                      : "No generated documentation has been stored yet."}
-                  </CardDescription>
                 </div>
                 <div className="flex gap-2">
                   {isEditing ? (
@@ -407,7 +450,7 @@ export function DocumentationScreen() {
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   className="h-full min-h-[360px] resize-none font-mono text-sm"
-                  placeholder="Write or paste project documentation in Markdown..."
+                  placeholder="Write or paste company documentation in Markdown..."
                 />
               ) : (
                 <ProjectDocumentationViewer
@@ -465,4 +508,13 @@ function DocumentationLoadingState() {
       </Card>
     </div>
   )
+}
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((part) => part.charAt(0))
+    .join("")
+    .slice(0, 2)
+    .toUpperCase()
 }

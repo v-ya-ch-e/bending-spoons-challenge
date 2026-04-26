@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
 
 import { AppShell } from "@/components/app-shell"
+import { loadAppShellInitialData } from "@/lib/server/db-api"
 import {
   parseSidebarCollapsed,
   parseSpoonerId,
@@ -16,6 +17,7 @@ export default async function CtoLayout({
   children: React.ReactNode
 }>) {
   const cookieStore = await cookies()
+  const initialData = await loadAppShellInitialData()
 
   return (
     <AppShell
@@ -25,6 +27,7 @@ export default async function CtoLayout({
       )}
       initialThemeMode={parseThemeMode(cookieStore.get(themeModeCookieName)?.value)}
       initialSpoonerId={parseSpoonerId(cookieStore.get(spoonerIdCookieName)?.value)}
+      initialData={initialData}
     >
       {children}
     </AppShell>

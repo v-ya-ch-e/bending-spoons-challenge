@@ -11,7 +11,7 @@ export type NavItem = {
 
 export type RoleWorkspace = {
   label: string
-  primaryAction: string
+  primaryAction?: string
   navItems: NavItem[]
 }
 
@@ -25,7 +25,6 @@ export const currentUser = {
 export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
   cto: {
     label: "CTO",
-    primaryAction: "Create project",
     navItems: [
       {
         label: "Overview",
@@ -33,7 +32,7 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
         href: "/cto/overview",
       },
       {
-        label: "Projects",
+        label: "Companies",
         value: "projects",
         href: "/cto/projects",
         primaryAction: "Add company",
@@ -63,10 +62,9 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
   },
   spooner: {
     label: "Spooner",
-    primaryAction: "Review request",
     navItems: [
       {
-        label: "My Projects",
+        label: "My Companies",
         value: "my-project",
         href: "/spooner/my-project",
       },
@@ -84,11 +82,6 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
         label: "Offboarding",
         value: "offboarding",
         href: "/spooner/offboarding",
-      },
-      {
-        label: "Resources",
-        value: "resources",
-        href: "/spooner/resources",
       },
     ],
   },
