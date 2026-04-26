@@ -63,7 +63,7 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
     primaryAction: "Review request",
     navItems: [
       {
-        label: "My Project",
+        label: "My Projects",
         value: "my-project",
         href: "/spooner/my-project",
       },

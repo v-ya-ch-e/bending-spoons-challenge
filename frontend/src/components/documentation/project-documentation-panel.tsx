@@ -349,8 +349,8 @@ function ProjectDocumentationChatContent({
         ) : null}
 
         <Separator />
-        <ScrollArea className="min-h-0 flex-1 pr-3">
-          <div className="space-y-3">
+        <ScrollArea className="min-h-0 flex-1">
+          <div className="space-y-3 pr-4">
             {messages.length === 0 ? (
               <div className="space-y-3 rounded-3xl border border-dashed p-4 text-sm text-muted-foreground">
                 <p>
@@ -381,7 +381,7 @@ function ProjectDocumentationChatContent({
                 <div
                   key={`${message.role}-${index}`}
                   className={cn(
-                    "w-fit max-w-[88%] whitespace-pre-wrap break-words rounded-3xl px-4 py-3 text-sm leading-6",
+                    "w-fit max-w-[calc(100%-2rem)] whitespace-pre-wrap break-words rounded-3xl px-4 py-3 text-sm leading-6",
                     message.role === "user"
                       ? "ml-auto bg-primary text-primary-foreground"
                       : "mr-auto bg-muted"

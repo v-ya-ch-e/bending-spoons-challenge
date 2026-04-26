@@ -30,7 +30,7 @@ The interface should be simple enough for a hackathon demo but polished enough t
 - Tailwind CSS
 - shadcn/ui
 - Specific shadcn preset to be applied globally
-- lucide-react for icons
+- Hugeicons for icons
 - Recharts for simple charts if needed
 - React Hook Form + Zod for forms if time allows
 - Framer Motion for minimal, purposeful transitions
@@ -125,9 +125,9 @@ If logos are unavailable or inconvenient, use clean text avatars or generated in
 Use a simple two-role structure:
 
 1. CTO / admin view
-2. Employee view
+2. Spooner / employee view
 
-For the demo, role switching can be a simple toggle in the header.
+For the demo, role switching lives in the profile menu. The Spooner view also has an employee picker so the demo can switch between seeded employees without authentication.
 
 ### Global app shell
 
@@ -148,7 +148,7 @@ For CTO:
 - Matching
 - Documentation
 
-For Employee:
+For Spooner:
 
 - My Project
 - Requests
@@ -162,39 +162,27 @@ To keep the demo clean, the sidebar can dynamically change based on selected rol
 
 ## 5. Routing structure
 
-Suggested Next.js routes:
+Current Next.js routes:
 
 ```txt
 /app
-  /(dashboard)
-    /cto
-      /overview
-      /projects
-      /projects/new
-      /projects/[projectId]
-      /projects/[projectId]/match
-      /employees
-      /employees/[employeeId]
-      /documentation
-    /employee
-      /home
-      /requests
-      /onboarding
-      /offboarding
-      /resources
+  /cto
+    /overview
+    /projects
+    /employees
+    /matching
+    /documentation
+  /spooner
+    /page
+    /[spoonerId]
+    /[spoonerId]/my-project
+    /[spoonerId]/requests
+    /[spoonerId]/onboarding
+    /[spoonerId]/offboarding
+    /[spoonerId]/resources
 ```
 
-For demo speed, this can also be simplified:
-
-```txt
-/cto
-/cto/projects/new
-/cto/projects/[id]
-/cto/employees
-/employee
-```
-
-The second option is likely enough for the hackathon demo.
+The app shell derives the active role from the URL and keeps the selected Spooner in local storage/cookies for quick switching from the profile menu.
 
 ---
 
@@ -207,6 +195,8 @@ The canonical API contract is [`../../docs/DB_API_DOCUMENTATION.md`](../../docs/
 - Use IDs for staffing logic, matching, and mutations. Use names only for display.
 - `preferences` are still project-name strings.
 - Move request responses include `employee_name`, `from_project_name`, and `to_project_name`, but accepting a move request does not automatically change assignments.
+- Project documentation is stored in `project_documentation`, keyed one row per project, and can be read through `/project-documentation` or `/projects/{project_id}/documentation`.
+- Transition instructions are stored in `move_request_transition_instructions` and exposed through `/employees/{employee_id}/transition-instructions` plus move-request-scoped aliases.
 
 ---
 
@@ -218,7 +208,7 @@ The CTO needs to:
 
 1. Understand the state of projects and staffing.
 2. Create a new project.
-3. Connect project sources such as GitHub, Notion, and Slack.
+3. Connect project sources. The current build uses GitHub; Notion and Slack remain planned integrations.
 4. Let the system infer required skills.
 5. Review and adjust project requirements.
 6. Get recommended employees.
@@ -288,7 +278,7 @@ Example rows:
 
 Examples:
 
-- “Eventbrite has low documentation coverage. Generate project capsule.”
+- “Eventbrite has low documentation coverage. Fetch GitHub docs.”
 - “3 backend-capable employees become available next week.”
 - “Remini needs one additional AI/backend profile.”
 
@@ -624,7 +614,7 @@ Keep destructive actions soft and operational. Use “Start offboarding” or �
 
 ### Purpose
 
-Show documentation quality across projects and allow generation of docs.
+Give the CTO a working project documentation studio: select a project, fetch GitHub-backed docs, review Markdown, edit/save changes, and chat with the generated documentation.
 
 ### Layout
 
@@ -635,27 +625,28 @@ Top:
 
 Main:
 
-- Documentation health table
-- Missing documentation panel
-- Generated docs preview
+- Project list with generated-doc status
+- Selected project documentation preview
+- Markdown editor for manual corrections
+- Chat panel with ask and edit-draft modes
 
 Columns:
 
 - Project
-- README
-- Architecture
-- Runbook
-- Onboarding
-- AI-agent context
+- GitHub sources
+- Documentation status
+- Last generated timestamp
 - Action
 
 Actions:
 
-- Generate capsule
-- Update docs
-- Open resources
+- Fetch new changes from GitHub
+- Edit docs
+- Save edited Markdown
+- Ask questions about the docs
+- Ask the assistant to draft an updated Markdown version
 
-This screen can be secondary in the demo, but the documentation generator itself should appear inside the project detail and employee offboarding flows.
+This screen is now a primary demo surface because its generated Markdown feeds the employee My Project view and transition instruction generation.
 
 ---
 
@@ -669,8 +660,8 @@ The employee needs to:
 2. Understand their current responsibilities.
 3. Receive project move requests.
 4. Accept or reject reassignment.
-5. See onboarding todos for a new project.
-6. See offboarding todos for the previous project.
+5. See onboarding instructions for a new project.
+6. See offboarding instructions for the previous project.
 7. Access all resources needed to ramp up.
 8. Generate handoff documentation when leaving a project.
 
@@ -682,43 +673,46 @@ The employee view should feel calm and helpful, not like surveillance.
 
 ### Purpose
 
-Give the employee a simple overview of their current assignment and next actions.
+Give the employee a simple overview of their assigned projects, relevant project context, generated documentation, and next actions.
 
 ### Layout
 
 Top:
 
-- Greeting/title: “My workspace”
-- Current projects card
+- Page title: “My Project”
+- Assigned project count, docs-ready count, and current role
 - Pending request banner if applicable
 
 Main cards:
 
-1. Current projects
-2. My tasks
-3. Project resources
-4. Documentation status
+1. Assigned project selector
+2. Project information and staffing coverage
+3. Repository links and current team
+4. Required skill fit for the selected employee
+5. Generated documentation preview
+6. Project-specific documentation chat
 
 ### Current projects card
 
 Content:
 
 - Project name
-- Role
+- Phase
 - Team members
-- Current allocation
-- Key resources
-- Current status
+- Staffing coverage
+- Planned headcount vs. current team
+- Repository links
+- Required skills compared with the employee's skill levels
 
 Example:
 
 ```txt
 Current project
 WeTransfer
-Role: Backend/platform engineer
-Allocation: 80%
+Phase: Growth
 Team: 5 people
-Status: Active
+Staffing: Covered
+Docs: Ready
 ```
 
 ### Pending request banner
@@ -783,11 +777,11 @@ For demo, accept/reject can update local state only.
 
 ---
 
-## 16. Employee screen 3 — Onboarding todos
+## 16. Employee screen 3 — Onboarding instructions
 
 ### Purpose
 
-Give the employee a structured path into the new project.
+Give the employee generated Markdown instructions for joining the target project after a move request enters transition.
 
 ### Layout
 
@@ -799,11 +793,13 @@ Top:
 
 Main:
 
-- Todo checklist grouped by day or category
-- Resource cards
-- Generated project capsule preview
+- Generated Markdown instructions
+- Source/target project summary
+- Instruction status badge
+- Progress indicator
+- "Mark as solved" action
 
-### Todo groups
+### Instruction content
 
 #### Day 1 — Understand context
 
@@ -827,19 +823,18 @@ Main:
 
 ### Components
 
-- Checkbox
 - Progress
-- Accordion
 - Card
 - Button
+- Markdown preview
 
 ---
 
-## 17. Employee screen 4 — Offboarding todos
+## 17. Employee screen 4 — Offboarding instructions
 
 ### Purpose
 
-Help the employee leave a current project cleanly.
+Help the employee leave a current project cleanly with generated Markdown handoff instructions.
 
 ### Layout
 
@@ -851,12 +846,13 @@ Top:
 
 Main:
 
-- Handoff checklist
-- Work summary generator
-- Open PR/issues panel
-- Documentation update suggestions
+- Generated Markdown handoff instructions
+- Source/target project summary
+- Instruction status badge
+- Progress indicator
+- "Mark as solved" action
 
-### Offboarding todo examples
+### Offboarding instruction examples
 
 - Summarize recent work
 - Link open PRs
@@ -888,12 +884,10 @@ Show a Markdown preview:
 
 Actions:
 
-- Generate handoff note
-- Save to Notion
-- Create GitHub issue
-- Mark offboarding complete
+- Review generated instructions
+- Mark as solved
 
-For demo, “Save to Notion” can be mocked.
+Completing both onboarding and offboarding instruction rows can complete the parent move request through the DB API.
 
 ---
 
@@ -966,7 +960,7 @@ This is the main CTO demo flow.
 
 1. CTO clicks “Create project.”
 2. CTO enters basic project details.
-3. CTO connects GitHub, Notion, and Slack sources.
+3. CTO connects GitHub sources.
 4. Platform analyzes the sources.
 5. Platform pre-fills required skill categories and levels.
 6. CTO adjusts requirements.
@@ -974,7 +968,7 @@ This is the main CTO demo flow.
 8. CTO sends move requests.
 9. Employee receives request.
 10. Employee accepts.
-11. Platform generates onboarding and offboarding todos.
+11. Platform generates onboarding and offboarding instructions.
 12. Platform shows project resources and generated documentation.
 
 This should be the central demo path.
@@ -989,11 +983,11 @@ This should be the central demo path.
 2. Employee opens request details.
 3. Employee sees why they were selected.
 4. Employee reviews project context.
-5. Employee accepts.
-6. Platform creates offboarding checklist for old project.
-7. Platform creates onboarding checklist for new project.
-8. Employee opens new project resources.
-9. Employee generates or reviews handoff documentation.
+5. Employee accepts and the CTO approval path starts the transition.
+6. Backend generates offboarding instructions for the source project from stored project docs and GitHub context.
+7. Backend generates onboarding instructions for the target project from stored project docs and team context.
+8. Employee reviews each instruction page and marks it solved.
+9. Once both instruction rows are solved, the move request can be completed.
 
 ---
 
@@ -1003,19 +997,20 @@ This should be the central demo path.
 
 1. User opens project detail.
 2. Platform shows documentation health.
-3. User clicks “Generate project capsule.”
-4. Platform analyzes GitHub, Notion, and Slack context.
-5. Platform generates docs:
+3. User clicks “Fetch new changes from GitHub.”
+4. Platform streams GitHub repository context into the documentation generator.
+5. Platform generates Markdown docs:
    - Project overview
    - Architecture summary
    - Runbook
    - Onboarding guide
    - CLAUDE.md
    - AGENTS.md
-6. User previews docs.
-7. User exports/saves docs to Notion or GitHub.
+6. User previews docs as they stream in.
+7. User edits the Markdown manually or asks the chat assistant to draft changes.
+8. User saves the project documentation row for employee and transition flows.
 
-For the demo, generation can be mocked or use one LLM call.
+The current implementation is GitHub-first and LLM-backed. Notion/Slack export remains future scope.
 
 ---
 
@@ -1113,25 +1108,28 @@ Props:
 - reason
 - actions
 
-### TodoChecklist
+### TransitionInstructionScreen
 
-Used for onboarding/offboarding.
+Used for onboarding/offboarding instruction pages.
 
 Props:
 
-- grouped tasks
-- progress
+- employee id
+- instruction type
 - status
+- markdown content
+- progress
 
-### DocumentationPreview
+### ProjectDocumentationPanel
 
-Used for generated docs.
+Used for generated docs in CTO and Spooner workspaces.
 
 Props:
 
-- tabs: Overview, Architecture, Runbook, CLAUDE.md, AGENTS.md
 - markdown content
-- export actions
+- documentation status
+- starter prompts
+- ask/edit chat mode
 
 ---
 
@@ -1216,8 +1214,9 @@ If time is limited, build only these screens:
 4. Matching Results
 5. Employee Registry
 6. Employee Move Request
-7. Employee Onboarding/Offboarding
-8. Project Resources + Documentation Preview
+7. CTO Documentation Workspace
+8. Spooner Picker and My Project
+9. Employee Onboarding/Offboarding Instructions
 
 This is enough to tell the full story.
 
@@ -1228,7 +1227,7 @@ This is enough to tell the full story.
 1. Start in CTO Overview.
 2. Show Eventbrite needs a team.
 3. Click “Create project” or open existing Eventbrite project.
-4. Connect GitHub/Notion/Slack sources.
+4. Connect GitHub sources.
 5. Show AI-inferred required skills.
 6. CTO adjusts skill levels.
 7. Show recommended team.
@@ -1236,9 +1235,9 @@ This is enough to tell the full story.
 9. Switch to employee view.
 10. Employee sees request.
 11. Employee accepts.
-12. Show generated onboarding/offboarding todos.
-13. Open project resources.
-14. Show generated documentation pack.
+12. Show generated onboarding/offboarding instructions.
+13. Open My Project resources and docs.
+14. Chat with the generated documentation pack.
 
 End message:
 

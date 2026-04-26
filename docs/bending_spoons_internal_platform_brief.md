@@ -2,11 +2,25 @@
 
 ## What we are building
 
-We are building an internal platform for Mixing Spooners that helps leadership and employees manage dynamic project staffing, especially across newly acquired companies and products. The platform combines an employee skill/capability registry, a project registry, a project-to-employee matching engine, and a documentation engine connected to GitHub, Notion, and Slack.
+We are building an internal platform for Mixing Spooners that helps leadership and employees manage dynamic project staffing, especially across newly acquired companies and products. The platform combines an employee skill/capability registry, a project registry, a project-to-employee matching engine, and a documentation engine. The current build is GitHub-first; Notion and Slack are planned context sources.
 
 The core idea is simple: when a new project or acquired product needs a team, the platform helps the CTO understand available talent, recommend the right people, manage reassignment requests, and generate the onboarding/offboarding documentation needed to make transitions fast and low-friction.
 
 This is not meant to be a traditional HR tool. It is an internal operating system for allocating people, preserving project knowledge, and reducing ramp-up time.
+
+---
+
+## Current implemented surface
+
+The current demo build covers the core staffing and documentation loop with a GitHub-first implementation:
+
+- CTO workspace for project/employee management, project skill-profile generation, strict-rule matching persistence, and move-request approval.
+- CTO documentation workspace that fetches GitHub repository context, streams generated Markdown, supports manual editing, and offers an AI chat mode for questions or draft rewrites.
+- Spooner workspace with an employee picker, assigned-project overview, staffing/skill fit context, repository links, generated documentation, and project-specific documentation chat.
+- Transition instruction flows for approved move requests, producing onboarding and offboarding Markdown from stored project documentation, move-request context, team context, and offboarding commit history when available.
+- Database persistence for generated project documentation and move-request transition instructions, including status tracking and solved/completed transitions.
+
+Notion and Slack remain product-direction integrations. The current implementation stores GitHub repository links and uses GitHub context for generation.
 
 ---
 
@@ -33,16 +47,18 @@ Key capabilities:
 
 ### 2. Employees
 
-The employee view helps each person understand their current assignments, see project move requests, accept or reject reassignment proposals, and receive structured onboarding/offboarding todos.
+The employee view helps each person understand their current assignments, see project move requests, accept or reject reassignment proposals, and receive structured onboarding/offboarding instructions.
 
 Key capabilities:
 
 - See current projects and roles.
+- Switch between assigned projects in the My Project workspace.
 - See pending requests to move to another project.
 - Accept or reject move requests.
-- View generated onboarding todos for the new project.
-- View generated offboarding todos for the affected current project.
-- Access all relevant project resources: GitHub repos, Notion docs, Slack channels, ownership notes, architecture docs, runbooks, and project context.
+- View generated onboarding instructions for the new project.
+- View generated offboarding instructions for the affected current project.
+- Access project resources and generated docs from the assigned-project view.
+- Ask project-specific questions against generated documentation.
 - Eventually trigger automations such as requesting Slack channel access or adding the employee to project resources.
 
 ### 3. Platform / operations layer
@@ -53,7 +69,7 @@ Key capabilities:
 
 - Keep the employee registry up to date.
 - Keep the project registry up to date.
-- Use GitHub, Notion, and Slack signals to understand project context.
+- Use GitHub signals to understand project context now, with Notion and Slack signals planned.
 - Use integrations proactively inside core flows instead of only storing links.
 - Automatically infer required project skills from connected repositories, docs, and team conversations.
 - Let the CTO review and manually adjust AI-generated project requirements before matching starts.
@@ -197,7 +213,7 @@ Example flow:
 6. CTO reviews explanations and tradeoffs.
 7. CTO sends move requests to selected employees.
 8. Employees accept/reject.
-9. Platform generates offboarding and onboarding todos.
+9. Platform generates offboarding and onboarding instructions.
 10. Platform provides all project resources and documentation.
 
 ---
@@ -208,13 +224,14 @@ The employee view should make transitions clear and useful, not bureaucratic.
 
 Core screens:
 
+- Spooner picker for choosing which employee workspace to view in the demo.
 - Current projects overview.
 - Pending project move request.
 - Accept/reject request action.
-- Onboarding todos for the new project.
-- Offboarding todos for the affected current project.
-- Project resources page.
-- Generated documentation pack.
+- Onboarding instructions for the new project.
+- Offboarding instructions for the affected current project.
+- Assigned-project details with staffing coverage, team list, required skill fit, and repository links.
+- Generated documentation pack with a project-specific chat assistant.
 
 Example employee move request:
 
@@ -245,7 +262,7 @@ It has two main functions:
 
 ### A. Project documentation generation and maintenance
 
-The system scans GitHub, Notion, and Slack to generate or update documentation for a project.
+The current system scans connected GitHub repositories to generate or update documentation for a project. Notion and Slack are still planned context sources.
 
 Generated materials can include:
 
@@ -260,9 +277,11 @@ Generated materials can include:
 - Recent important decisions.
 - AI-agent context files such as `CLAUDE.md`, `AGENTS.md`, or Codex-style project skills.
 
+The CTO can review the generated Markdown, edit it directly, save a corrected version, ask questions against the documentation, or ask the AI assistant to draft an updated Markdown version.
+
 ### B. Employee offboarding documentation
 
-When someone leaves a project, the system helps them generate a structured summary of what they worked on.
+When someone leaves a project, the system helps them generate structured offboarding instructions from project documentation, move-request context, team context, and available GitHub commit history.
 
 Generated offboarding materials can include:
 
@@ -274,6 +293,8 @@ Generated offboarding materials can include:
 - Key files/services touched.
 - Handoff notes for the next person.
 - Suggested updates to project documentation.
+
+Onboarding instructions use the target project's generated documentation to recommend first reading, setup steps, key workflows, and teammates to ask.
 
 This solves the problem that project knowledge is often scattered across code, docs, and conversations.
 
@@ -384,9 +405,9 @@ For the functional demo, we should focus on the core story and avoid overcomplic
 8. CTO review/edit step for generated project requirements.
 9. Project-to-employee matching recommendations.
 10. Employee move request view.
-11. Onboarding/offboarding todo generation.
-12. Project resource page with GitHub, Notion, and Slack links.
-13. Documentation generator preview.
+11. Onboarding/offboarding instruction generation from approved move requests.
+12. Employee My Project workspace with assigned projects, GitHub links, generated docs, and docs chat.
+13. CTO documentation workspace with GitHub refresh, streaming preview, edit/save, and docs chat.
 
 ### Nice-to-have demo features
 
@@ -420,8 +441,8 @@ The demo should follow one simple story:
 3. The system recommends the best team members.
 4. CTO sends project move requests.
 5. Employee sees the request and accepts.
-6. The system generates offboarding todos from the old project.
-7. The system generates onboarding todos and resources for the new project.
+6. The system generates offboarding instructions from the old project.
+7. The system generates onboarding instructions and resources for the new project.
 8. The documentation engine creates or updates the project documentation.
 9. The new team member can ramp up faster with all context in one place.
 
@@ -431,8 +452,8 @@ The demo should follow one simple story:
 
 We are building an internal Talent, Project & Documentation OS for Mixing Spooners.
 
-The platform helps leadership dynamically assign employees to projects, especially newly acquired products, while helping employees transition smoothly between teams. It combines an employee capability registry, a project registry, an explainable matching engine, and a documentation engine connected to GitHub, Notion, and Slack.
+The platform helps leadership dynamically assign employees to projects, especially newly acquired products, while helping employees transition smoothly between teams. It combines an employee capability registry, a project registry, an explainable matching engine, and a GitHub-backed documentation engine.
 
-The CTO can create a new project, receive team recommendations, and send move requests. Employees can accept or reject project moves, see onboarding/offboarding todos, and access all relevant project resources. The documentation engine keeps project knowledge up to date and helps employees generate handoff documentation when they leave a project.
+The CTO can create a new project, receive team recommendations, and send move requests. Employees can accept or reject project moves, see onboarding/offboarding instructions, and access generated project documentation and repository resources. The documentation engine keeps project knowledge up to date and helps employees generate handoff documentation when they leave a project.
 
 The goal is to reduce ramp-up time, preserve project knowledge, and make dynamic team allocation faster, clearer, and less dependent on informal communication.
