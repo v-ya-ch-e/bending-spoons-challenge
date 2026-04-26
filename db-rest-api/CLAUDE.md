@@ -44,9 +44,13 @@ The `fixtures/` directory is created on first run by the generator.
 ## Schema
 
 - `projects`: `project_name`, `project_description`, `project_phase` (enum: `new acquisition`, `growth`, `maintenance`), `icon_url`, `poster_url`, `required_people_amount`, `required_skills` JSON, `github_repositories` JSON.
-- `employees`: `name`, `role`, `skills` JSON, `preferences` JSON, `interests` JSON.
+- `project_documentation`: one generated documentation row per project, with generation status, markdown content, source repository/snapshot JSON, model metadata, latest error, and generation timestamps.
+- `employees`: `name`, `role`, optional `github_username`, `skills` JSON, `preferences` JSON, `interests` JSON.
+- `project_documentation`: one generated documentation row per project, with generation status, markdown content, source repository/snapshot JSON, model metadata, latest error, and generation timestamps.
+- `employees`: `name`, `role`, optional `github_username`, `skills` JSON, `preferences` JSON, `interests` JSON.
 - `project_assignments`: `employee_id` FK, `project_id` FK, with composite primary key. This is the source of truth for current staffing.
-- `move_requests`: `employee_id` FK, `from_project_id` FK (nullable), `to_project_id` FK, `reason`, `expected_role`, `current_project_impact` enum, `status` enum (`pending`, `accepted`, `rejected`, `clarification_requested`), `created_at`, `responded_at` (nullable).
+- `move_requests`: `employee_id` FK, `from_project_id` FK (nullable), `to_project_id` FK, `reason`, `expected_role`, `current_project_impact` enum, lifecycle `status`, CTO/employee approval statuses and timestamps, `created_at`, `responded_at` (nullable).
+- `move_request_transition_instructions`: onboarding/offboarding Markdown instructions per move request, with generation status, solve status, source documentation, snapshots, model metadata, and timestamps.
 - `policies`: named/versioned matching rule configurations, exactly one active policy. The seeded default is `Balanced strict matching`; backend matching can also select policies per run.
 - `matching_runs`: matching pipeline run lifecycle, target project, effective rule config, immutable input snapshot, counts, summary/error, and timestamps.
 - `matching_candidates`: deterministic strict-rule candidate plans for a matching run.
@@ -108,11 +112,12 @@ When editing the prompt, keep the hard requirements section authoritative. The p
 
 ### `load_fixtures.py`
 
-Reads the fixture JSON and inserts in dependency order: `projects` -> `employees` -> `project_assignments` -> `move_requests`.
+Reads the fixture JSON and inserts in dependency order: `projects` -> `employees` -> `project_assignments` -> `move_requests` -> mock `project_documentation` rows for non-Mixing Spoons projects.
 
 - Employee assignment names and move-request names are resolved to numeric IDs at insert time using maps built from `cursor.lastrowid` after each project/employee insert.
 - All inserts run in a single transaction; any failure rolls back.
 - Re-runs require `init_db.py --reset` first because `name`/`project_name` are unique columns.
+- `seed_mock_documentation.py` can backfill or refresh mock documentation rows in an existing database without resetting fixture data.
 
 ## Conventions
 
@@ -128,7 +133,5 @@ Reads the fixture JSON and inserts in dependency order: `projects` -> `employees
 
 The following appear in the brief but are deliberately not modeled in the database yet. Mention them if a feature needs them; do not add tables speculatively.
 
-- Onboarding/offboarding todos
 - Project resource pages (Notion, Slack links)
-- Generated documentation artifacts
 - Acquired-company registry, employee status lifecycle history

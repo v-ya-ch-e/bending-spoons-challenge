@@ -1,11 +1,12 @@
 # Backend API
 
-FastAPI service for the main Bending Spoons Challenge backend. Database-facing endpoints live in
+FastAPI service for the main Mixing Spooners backend. Database-facing endpoints live in
 `../db-rest-api`; keep shared DB access there.
 
-This service is the orchestration layer for project skill-profile generation and
-matching. It should call clients/services for DB API and LLM work rather than
-owning direct database connection code.
+This service is the orchestration layer for project skill-profile generation,
+project documentation generation/chat, transition instruction generation, and matching. It should call
+clients/services for DB API and LLM work rather than owning direct database
+connection code.
 
 ## Local Development
 
@@ -19,7 +20,12 @@ Ensure `OPENAI_API_KEY` is set to enable LLM-powered features. `GITHUB_TOKEN` is
 optional: `clients/github_client.py` passes it to the GitHub REST API for better
 rate limits; private repositories require a token with repo access. Public repos
 work without a token, subject to unauthenticated rate limits.
-`DB_API_BASE_URL` must point at the db-rest-api service for matching runs.
+`DB_API_BASE_URL` must point at the db-rest-api service for matching runs,
+generated project documentation persistence, and transition instruction storage.
+`OPENAI_MATCHING_TIMEOUT_SECONDS` is optional and bounds the LLM ranking step for
+matching requests; default is 20 seconds.
+`BACKEND_CORS_ALLOW_ORIGIN_REGEX` is optional and defaults to allowing local
+browser origins such as `http://localhost:3000` and `http://127.0.0.1:3000`.
 
 ## Testing
 
@@ -46,7 +52,7 @@ The backend implements a sophisticated staffing analysis engine in `services/ski
     - **NEW**: Suggests senior "Leads" and architects to establish technical foundations.
     - **GROWTH**: Suggests a balanced mix of Seniors and Mids to maximize delivery speed.
     - **MAINTENANCE**: Suggests a minimal crew of Mids/Juniors to ensure stability.
-- **Skill Levels (0-3)**: All recommendations follow the Bending Spoons standard proficiency scale:
+- **Skill Levels (0-3)**: All recommendations follow the Mixing Spooners standard proficiency scale:
     - `0`: No experience
     - `1`: Basic familiarity
     - `2`: Strong working capability
@@ -82,6 +88,11 @@ Health check:
 Current orchestration endpoints:
 
 - `POST /skill-profile`
+- `POST /projects/{project_id}/documentation:refresh`
+- `POST /projects/{project_id}/documentation:refresh-stream`
+- `POST /projects/{project_id}/documentation:chat`
+- `POST /projects/{project_id}/documentation:chat-stream`
+- `POST /move-requests/{request_id}/instructions/{instruction_type}:generate`
 - `POST /projects/{project_id}/matching:run`
 - `POST /matching/portfolio:rebalance`
 

@@ -44,6 +44,19 @@ class MoveRequestStatus(str, Enum):
     accepted = "accepted"
     rejected = "rejected"
     clarification_requested = "clarification_requested"
+    transition_started = "transition_started"
+    completed = "completed"
+
+
+class ApprovalStatus(str, Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class ApprovalActor(str, Enum):
+    cto = "cto"
+    employee = "employee"
 
 
 class MatchingUseCase(str, Enum):
@@ -57,6 +70,26 @@ class MatchingRunStatus(str, Enum):
     running = "running"
     completed = "completed"
     failed = "failed"
+
+
+class ProjectDocumentationStatus(str, Enum):
+    pending = "pending"
+    running = "running"
+    ready = "ready"
+    failed = "failed"
+
+
+class TransitionInstructionType(str, Enum):
+    onboarding = "onboarding"
+    offboarding = "offboarding"
+
+
+class TransitionInstructionStatus(str, Enum):
+    pending = "pending"
+    running = "running"
+    ready = "ready"
+    failed = "failed"
+    solved = "solved"
 
 
 class MatchingEventLevel(str, Enum):
@@ -194,12 +227,64 @@ class Project(ProjectBase):
     current_team_members: list[str]
 
 
+class ProjectDocumentationCreate(ApiModel):
+    project_id: int = Field(gt=0)
+    status: ProjectDocumentationStatus = ProjectDocumentationStatus.pending
+    content_markdown: str = ""
+    source_repositories: list[str] = Field(default_factory=list)
+    source_snapshot: dict[str, Any] | None = None
+    model_metadata: dict[str, Any] | None = None
+    last_error: str | None = None
+    last_generated_at: datetime | None = None
+
+
+class ProjectDocumentationUpdate(UpdateModel):
+    status: ProjectDocumentationStatus = None
+    content_markdown: str = None
+    source_repositories: list[str] = None
+    source_snapshot: dict[str, Any] | None = None
+    model_metadata: dict[str, Any] | None = None
+    last_error: str | None = None
+    last_generated_at: datetime | None = None
+
+
+class ProjectDocumentation(ProjectDocumentationCreate):
+    id: int
+    project_name: str
+    created_at: datetime
+    updated_at: datetime
+
+
+def normalize_github_username(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        value = value.decode("utf-8")
+    if not isinstance(value, str):
+        value = str(value)
+    normalized = value.strip().lstrip("@").strip()
+    return normalized or None
+
+
 class EmployeeBase(ApiModel):
     name: str = Field(min_length=1, max_length=255)
     role: str = Field(min_length=1, max_length=255)
+    github_username: str | None = Field(default=None, max_length=255)
     skills: Skills
     preferences: list[str]
     interests: list[str]
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_github_username_input(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        if "github_username" in normalized:
+            normalized["github_username"] = normalize_github_username(
+                normalized["github_username"]
+            )
+        return normalized
 
 
 class EmployeeCreate(EmployeeBase):
@@ -210,11 +295,24 @@ class EmployeeCreate(EmployeeBase):
 class EmployeeUpdate(UpdateModel):
     name: str = Field(default=None, min_length=1, max_length=255)
     role: str = Field(default=None, min_length=1, max_length=255)
+    github_username: str | None = Field(default=None, max_length=255)
     current_project_ids: list[int] | None = None
     current_project: str | None = Field(default=None, max_length=255)
     skills: Skills = None
     preferences: list[str] = None
     interests: list[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_github_username_input(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        if "github_username" in normalized:
+            normalized["github_username"] = normalize_github_username(
+                normalized["github_username"]
+            )
+        return normalized
 
 
 class Employee(EmployeeBase):
@@ -232,6 +330,10 @@ class MoveRequestCreate(ApiModel):
     expected_role: str = Field(min_length=1, max_length=255)
     current_project_impact: CurrentProjectImpact
     status: MoveRequestStatus = MoveRequestStatus.pending
+    cto_approval_status: ApprovalStatus = ApprovalStatus.pending
+    cto_approved_at: datetime | None = None
+    employee_approval_status: ApprovalStatus = ApprovalStatus.pending
+    employee_approved_at: datetime | None = None
 
 
 class MoveRequestUpdate(UpdateModel):
@@ -242,6 +344,15 @@ class MoveRequestUpdate(UpdateModel):
     expected_role: str = Field(default=None, min_length=1, max_length=255)
     current_project_impact: CurrentProjectImpact = None
     status: MoveRequestStatus = None
+    cto_approval_status: ApprovalStatus = None
+    cto_approved_at: datetime | None = None
+    employee_approval_status: ApprovalStatus = None
+    employee_approved_at: datetime | None = None
+
+
+class MoveRequestApproval(ApiModel):
+    approver: ApprovalActor
+    approval_status: ApprovalStatus
 
 
 class MoveRequest(ApiModel):
@@ -256,8 +367,55 @@ class MoveRequest(ApiModel):
     expected_role: str
     current_project_impact: CurrentProjectImpact
     status: MoveRequestStatus
+    cto_approval_status: ApprovalStatus
+    cto_approved_at: datetime | None
+    employee_approval_status: ApprovalStatus
+    employee_approved_at: datetime | None
     created_at: datetime
     responded_at: datetime | None
+
+
+class TransitionInstructionCreate(ApiModel):
+    move_request_id: int = Field(gt=0)
+    instruction_type: TransitionInstructionType
+    status: TransitionInstructionStatus = TransitionInstructionStatus.pending
+    content_markdown: str = ""
+    input_snapshot: dict[str, Any] | None = None
+    source_documentation_id: int | None = Field(default=None, gt=0)
+    source_documentation_updated_at: datetime | None = None
+    model_metadata: dict[str, Any] | None = None
+    last_error: str | None = None
+    solved_at: datetime | None = None
+    solved_by_employee_id: int | None = Field(default=None, gt=0)
+
+
+class TransitionInstructionUpdate(UpdateModel):
+    instruction_type: TransitionInstructionType = None
+    status: TransitionInstructionStatus = None
+    content_markdown: str = None
+    input_snapshot: dict[str, Any] | None = None
+    source_documentation_id: int | None = Field(default=None, gt=0)
+    source_documentation_updated_at: datetime | None = None
+    model_metadata: dict[str, Any] | None = None
+    last_error: str | None = None
+    solved_at: datetime | None = None
+    solved_by_employee_id: int | None = Field(default=None, gt=0)
+
+
+class TransitionInstructionSolve(ApiModel):
+    solved_by_employee_id: int | None = Field(default=None, gt=0)
+
+
+class TransitionInstruction(TransitionInstructionCreate):
+    id: int
+    employee_id: int
+    employee_name: str
+    from_project_id: int | None
+    from_project_name: str | None
+    to_project_id: int
+    to_project_name: str
+    created_at: datetime
+    updated_at: datetime
 
 
 class PolicyCreate(ApiModel):
@@ -502,6 +660,10 @@ def unique_int_ids(values: list[int]) -> list[int]:
     return unique_values
 
 
+def enum_value(value: Enum | str) -> str:
+    return value.value if isinstance(value, Enum) else value
+
+
 def serialize_project(
     row: dict[str, Any],
     current_team_member_ids: list[int] | None = None,
@@ -518,12 +680,47 @@ def serialize_project(
     return project
 
 
+PROJECT_DOCUMENTATION_SELECT = """
+    SELECT
+        doc.id,
+        doc.project_id,
+        project.project_name,
+        doc.status,
+        doc.content_markdown,
+        doc.source_repositories,
+        doc.source_snapshot,
+        doc.model_metadata,
+        doc.last_error,
+        doc.last_generated_at,
+        doc.created_at,
+        doc.updated_at
+    FROM project_documentation AS doc
+    INNER JOIN projects AS project ON project.id = doc.project_id
+"""
+
+
+def serialize_project_documentation(row: dict[str, Any]) -> dict[str, Any]:
+    documentation = dict(row)
+    for column in ("source_repositories", "source_snapshot", "model_metadata"):
+        documentation[column] = parse_json_column(documentation[column])
+    return documentation
+
+
 def serialize_employee(
     row: dict[str, Any],
     current_project_ids: list[int] | None = None,
     current_project_names: list[str] | None = None,
 ) -> dict[str, Any]:
     employee = dict(row)
+    employee = {
+        "id": employee["id"],
+        "name": employee["name"],
+        "role": employee["role"],
+        "github_username": normalize_github_username(employee.get("github_username")),
+        "skills": employee["skills"],
+        "preferences": employee["preferences"],
+        "interests": employee["interests"],
+    }
     for column in ("skills", "preferences", "interests"):
         employee[column] = parse_json_column(employee[column])
     project_ids = current_project_ids or []
@@ -536,6 +733,13 @@ def serialize_employee(
 
 def serialize_move_request(row: dict[str, Any]) -> dict[str, Any]:
     return dict(row)
+
+
+def serialize_transition_instruction(row: dict[str, Any]) -> dict[str, Any]:
+    instruction = dict(row)
+    for column in ("input_snapshot", "model_metadata"):
+        instruction[column] = parse_json_column(instruction[column])
+    return instruction
 
 
 def serialize_policy(row: dict[str, Any]) -> dict[str, Any]:
@@ -628,6 +832,33 @@ def fetch_project(cursor: DictCursor, project_id: int) -> dict[str, Any]:
     return serialize_project(row, member_ids, member_names)
 
 
+def fetch_project_documentation(cursor: DictCursor, documentation_id: int) -> dict[str, Any]:
+    execute_or_raise(
+        cursor,
+        f"{PROJECT_DOCUMENTATION_SELECT} WHERE doc.id = %s",
+        (documentation_id,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Project documentation not found.")
+    return serialize_project_documentation(row)
+
+
+def fetch_project_documentation_by_project(
+    cursor: DictCursor,
+    project_id: int,
+) -> dict[str, Any]:
+    execute_or_raise(
+        cursor,
+        f"{PROJECT_DOCUMENTATION_SELECT} WHERE doc.project_id = %s",
+        (project_id,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Project documentation not found.")
+    return serialize_project_documentation(row)
+
+
 def fetch_employee(cursor: DictCursor, employee_id: int) -> dict[str, Any]:
     execute_or_raise(cursor, "SELECT * FROM employees WHERE id = %s", (employee_id,))
     row = cursor.fetchone()
@@ -676,9 +907,43 @@ MOVE_REQUEST_SELECT = """
         mr.expected_role,
         mr.current_project_impact,
         mr.status,
+        mr.cto_approval_status,
+        mr.cto_approved_at,
+        mr.employee_approval_status,
+        mr.employee_approved_at,
         mr.created_at,
         mr.responded_at
     FROM move_requests AS mr
+    INNER JOIN employees AS employee ON employee.id = mr.employee_id
+    LEFT JOIN projects AS from_project ON from_project.id = mr.from_project_id
+    INNER JOIN projects AS to_project ON to_project.id = mr.to_project_id
+"""
+
+
+TRANSITION_INSTRUCTION_SELECT = """
+    SELECT
+        instruction.id,
+        instruction.move_request_id,
+        instruction.instruction_type,
+        instruction.status,
+        instruction.content_markdown,
+        instruction.input_snapshot,
+        instruction.source_documentation_id,
+        instruction.source_documentation_updated_at,
+        instruction.model_metadata,
+        instruction.last_error,
+        instruction.solved_at,
+        instruction.solved_by_employee_id,
+        instruction.created_at,
+        instruction.updated_at,
+        mr.employee_id,
+        employee.name AS employee_name,
+        mr.from_project_id,
+        from_project.project_name AS from_project_name,
+        mr.to_project_id,
+        to_project.project_name AS to_project_name
+    FROM move_request_transition_instructions AS instruction
+    INNER JOIN move_requests AS mr ON mr.id = instruction.move_request_id
     INNER JOIN employees AS employee ON employee.id = mr.employee_id
     LEFT JOIN projects AS from_project ON from_project.id = mr.from_project_id
     INNER JOIN projects AS to_project ON to_project.id = mr.to_project_id
@@ -695,6 +960,40 @@ def fetch_move_request(cursor: DictCursor, request_id: int) -> dict[str, Any]:
     if row is None:
         raise HTTPException(status_code=404, detail="Move request not found.")
     return serialize_move_request(row)
+
+
+def fetch_transition_instruction(
+    cursor: DictCursor,
+    instruction_id: int,
+) -> dict[str, Any]:
+    execute_or_raise(
+        cursor,
+        f"{TRANSITION_INSTRUCTION_SELECT} WHERE instruction.id = %s",
+        (instruction_id,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Transition instruction not found.")
+    return serialize_transition_instruction(row)
+
+
+def fetch_transition_instruction_by_move_request(
+    cursor: DictCursor,
+    request_id: int,
+    instruction_type: TransitionInstructionType | str,
+) -> dict[str, Any]:
+    execute_or_raise(
+        cursor,
+        f"""
+        {TRANSITION_INSTRUCTION_SELECT}
+        WHERE instruction.move_request_id = %s AND instruction.instruction_type = %s
+        """,
+        (request_id, enum_value(instruction_type)),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Transition instruction not found.")
+    return serialize_transition_instruction(row)
 
 
 def fetch_policy(cursor: DictCursor, policy_id: int) -> dict[str, Any]:
@@ -812,8 +1111,17 @@ def project_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return prepared
 
 
+def project_documentation_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return serialize_json_fields(
+        payload,
+        ("source_repositories", "source_snapshot", "model_metadata"),
+    )
+
+
 def employee_payload(payload: dict[str, Any]) -> dict[str, Any]:
     prepared = dict(payload)
+    if "github_username" in prepared:
+        prepared["github_username"] = normalize_github_username(prepared["github_username"])
     for column in ("skills", "preferences", "interests"):
         if column in prepared:
             prepared[column] = json_column(prepared[column])
@@ -829,6 +1137,90 @@ def move_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
             else datetime.now(UTC).replace(tzinfo=None)
         )
     return prepared
+
+
+def transition_instruction_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return serialize_json_fields(payload, ("input_snapshot", "model_metadata"))
+
+
+def apply_move_request_approval_update(
+    move_request: dict[str, Any],
+    approval: MoveRequestApproval,
+) -> dict[str, Any]:
+    now = datetime.now(UTC).replace(tzinfo=None)
+    payload: dict[str, Any] = {}
+    approver = approval.approver.value if isinstance(approval.approver, Enum) else approval.approver
+    approval_status = (
+        approval.approval_status.value
+        if isinstance(approval.approval_status, Enum)
+        else approval.approval_status
+    )
+    status_column = f"{approver}_approval_status"
+    approved_at_column = f"{approver}_approved_at"
+    payload[status_column] = approval_status
+    payload[approved_at_column] = (
+        now if approval_status == ApprovalStatus.approved.value else None
+    )
+
+    cto_status = payload.get("cto_approval_status", move_request["cto_approval_status"])
+    employee_status = payload.get(
+        "employee_approval_status",
+        move_request["employee_approval_status"],
+    )
+    if ApprovalStatus.rejected.value in {cto_status, employee_status}:
+        payload["status"] = MoveRequestStatus.rejected.value
+    elif (
+        cto_status == ApprovalStatus.approved.value
+        and employee_status == ApprovalStatus.approved.value
+    ):
+        payload["status"] = MoveRequestStatus.transition_started.value
+    elif move_request["status"] == MoveRequestStatus.pending.value:
+        payload["status"] = MoveRequestStatus.accepted.value
+
+    return move_request_payload(payload)
+
+
+def validate_move_request_can_start(move_request: dict[str, Any]) -> None:
+    if (
+        move_request["cto_approval_status"] != ApprovalStatus.approved.value
+        or move_request["employee_approval_status"] != ApprovalStatus.approved.value
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="Move request requires CTO and employee approval before transition starts.",
+        )
+
+
+def transition_instructions_solved(cursor: DictCursor, request_id: int) -> bool:
+    execute_or_raise(
+        cursor,
+        """
+        SELECT instruction_type, status
+        FROM move_request_transition_instructions
+        WHERE move_request_id = %s
+        """,
+        (request_id,),
+    )
+    statuses = {row["instruction_type"]: row["status"] for row in cursor.fetchall()}
+    return (
+        statuses.get(TransitionInstructionType.onboarding.value)
+        == TransitionInstructionStatus.solved.value
+        and statuses.get(TransitionInstructionType.offboarding.value)
+        == TransitionInstructionStatus.solved.value
+    )
+
+
+def maybe_complete_move_request(cursor: DictCursor, request_id: int) -> None:
+    if transition_instructions_solved(cursor, request_id):
+        execute_or_raise(
+            cursor,
+            "UPDATE move_requests SET status = %s, responded_at = %s WHERE id = %s",
+            [
+                MoveRequestStatus.completed.value,
+                datetime.now(UTC).replace(tzinfo=None),
+                request_id,
+            ],
+        )
 
 
 def policy_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -910,8 +1302,10 @@ def read_root() -> dict[str, Any]:
             "/health/db",
             "/version",
             "/projects",
+            "/project-documentation",
             "/employees",
             "/move-requests",
+            "/move-request-transition-instructions",
             "/policies",
             "/matching-runs",
             "/docs",
@@ -1033,6 +1427,130 @@ def delete_project(project_id: int) -> Response:
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@app.get("/project-documentation", response_model=list[ProjectDocumentation])
+def list_project_documentation(
+    limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> list[dict[str, Any]]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                f"{PROJECT_DOCUMENTATION_SELECT} ORDER BY doc.id LIMIT %s OFFSET %s",
+                (limit, offset),
+            )
+            return [serialize_project_documentation(row) for row in cursor.fetchall()]
+
+
+@app.post(
+    "/project-documentation",
+    response_model=ProjectDocumentation,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_project_documentation(
+    documentation: ProjectDocumentationCreate,
+) -> dict[str, Any]:
+    payload = project_documentation_payload(model_payload(documentation))
+    columns = ", ".join(payload)
+    placeholders = ", ".join(["%s"] * len(payload))
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                f"INSERT INTO project_documentation ({columns}) VALUES ({placeholders})",
+                list(payload.values()),
+            )
+            return fetch_project_documentation(cursor, cursor.lastrowid)
+
+
+@app.get("/project-documentation/{documentation_id}", response_model=ProjectDocumentation)
+def get_project_documentation(documentation_id: int) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            return fetch_project_documentation(cursor, documentation_id)
+
+
+@app.put("/project-documentation/{documentation_id}", response_model=ProjectDocumentation)
+def update_project_documentation(
+    documentation_id: int,
+    documentation: ProjectDocumentationUpdate,
+) -> dict[str, Any]:
+    payload = project_documentation_payload(model_payload(documentation, exclude_unset=True))
+    assignments, values = update_fields_sql(payload)
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                f"UPDATE project_documentation SET {assignments} WHERE id = %s",
+                [*values, documentation_id],
+            )
+            return fetch_project_documentation(cursor, documentation_id)
+
+
+@app.delete("/project-documentation/{documentation_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project_documentation(documentation_id: int) -> Response:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                "DELETE FROM project_documentation WHERE id = %s",
+                (documentation_id,),
+            )
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Project documentation not found.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/projects/{project_id}/documentation", response_model=ProjectDocumentation)
+def get_project_documentation_for_project(project_id: int) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            return fetch_project_documentation_by_project(cursor, project_id)
+
+
+@app.put("/projects/{project_id}/documentation", response_model=ProjectDocumentation)
+def upsert_project_documentation_for_project(
+    project_id: int,
+    documentation: ProjectDocumentationUpdate,
+    response: Response,
+) -> dict[str, Any]:
+    raw_payload = model_payload(documentation, exclude_unset=True)
+    payload = project_documentation_payload(raw_payload)
+    assignments, values = update_fields_sql(payload)
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            try:
+                fetch_project_documentation_by_project(cursor, project_id)
+            except HTTPException as exc:
+                if exc.status_code != 404:
+                    raise
+                fetch_project(cursor, project_id)
+                create_payload = {
+                    "project_id": project_id,
+                    "status": ProjectDocumentationStatus.pending.value,
+                    "content_markdown": "",
+                    "source_repositories": [],
+                    **raw_payload,
+                }
+                storage_payload = project_documentation_payload(create_payload)
+                columns = ", ".join(storage_payload)
+                placeholders = ", ".join(["%s"] * len(storage_payload))
+                execute_or_raise(
+                    cursor,
+                    f"INSERT INTO project_documentation ({columns}) VALUES ({placeholders})",
+                    list(storage_payload.values()),
+                )
+                response.status_code = status.HTTP_201_CREATED
+                return fetch_project_documentation(cursor, cursor.lastrowid)
+
+            execute_or_raise(
+                cursor,
+                f"UPDATE project_documentation SET {assignments} WHERE project_id = %s",
+                [*values, project_id],
+            )
+            return fetch_project_documentation_by_project(cursor, project_id)
+
+
 @app.get("/employees", response_model=list[Employee])
 def list_employees(
     limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
@@ -1121,6 +1639,39 @@ def delete_employee(employee_id: int) -> Response:
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@app.get(
+    "/employees/{employee_id}/transition-instructions",
+    response_model=list[TransitionInstruction],
+)
+def list_employee_transition_instructions(
+    employee_id: int,
+    instruction_type: TransitionInstructionType | None = None,
+    limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> list[dict[str, Any]]:
+    clauses = ["mr.employee_id = %s"]
+    params: list[Any] = [employee_id]
+    if instruction_type is not None:
+        clauses.append("instruction.instruction_type = %s")
+        params.append(instruction_type.value)
+    where_clause = " AND ".join(clauses)
+
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            fetch_employee(cursor, employee_id)
+            execute_or_raise(
+                cursor,
+                f"""
+                {TRANSITION_INSTRUCTION_SELECT}
+                WHERE {where_clause}
+                ORDER BY instruction.updated_at DESC, instruction.id DESC
+                LIMIT %s OFFSET %s
+                """,
+                [*params, limit, offset],
+            )
+            return [serialize_transition_instruction(row) for row in cursor.fetchall()]
+
+
 @app.get("/move-requests", response_model=list[MoveRequest])
 def list_move_requests(
     limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
@@ -1172,6 +1723,71 @@ def update_move_request(request_id: int, move_request: MoveRequestUpdate) -> dic
             return fetch_move_request(cursor, request_id)
 
 
+@app.post("/move-requests/{request_id}/approval", response_model=MoveRequest)
+def update_move_request_approval(
+    request_id: int,
+    approval: MoveRequestApproval,
+) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            try:
+                connection.begin()
+                move_request = fetch_move_request(cursor, request_id)
+                payload = apply_move_request_approval_update(move_request, approval)
+                assignments, values = update_fields_sql(payload)
+                execute_or_raise(
+                    cursor,
+                    f"UPDATE move_requests SET {assignments} WHERE id = %s",
+                    [*values, request_id],
+                )
+                updated = fetch_move_request(cursor, request_id)
+                connection.commit()
+                return updated
+            except Exception:
+                connection.rollback()
+                raise
+
+
+@app.post("/move-requests/{request_id}:start-transition", response_model=MoveRequest)
+def start_move_request_transition(request_id: int) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            move_request = fetch_move_request(cursor, request_id)
+            validate_move_request_can_start(move_request)
+            execute_or_raise(
+                cursor,
+                "UPDATE move_requests SET status = %s, responded_at = %s WHERE id = %s",
+                [
+                    MoveRequestStatus.transition_started.value,
+                    datetime.now(UTC).replace(tzinfo=None),
+                    request_id,
+                ],
+            )
+            return fetch_move_request(cursor, request_id)
+
+
+@app.post("/move-requests/{request_id}:complete", response_model=MoveRequest)
+def complete_move_request(request_id: int) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            fetch_move_request(cursor, request_id)
+            if not transition_instructions_solved(cursor, request_id):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Both onboarding and offboarding instructions must be solved first.",
+                )
+            execute_or_raise(
+                cursor,
+                "UPDATE move_requests SET status = %s, responded_at = %s WHERE id = %s",
+                [
+                    MoveRequestStatus.completed.value,
+                    datetime.now(UTC).replace(tzinfo=None),
+                    request_id,
+                ],
+            )
+            return fetch_move_request(cursor, request_id)
+
+
 @app.delete("/move-requests/{request_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_move_request(request_id: int) -> Response:
     with open_db_connection() as connection:
@@ -1184,6 +1800,244 @@ def delete_move_request(request_id: int) -> Response:
             if cursor.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Move request not found.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get(
+    "/move-request-transition-instructions",
+    response_model=list[TransitionInstruction],
+)
+def list_transition_instructions(
+    limit: int = Query(100, ge=1, le=MAX_LIST_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> list[dict[str, Any]]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                f"{TRANSITION_INSTRUCTION_SELECT} ORDER BY instruction.id LIMIT %s OFFSET %s",
+                (limit, offset),
+            )
+            return [serialize_transition_instruction(row) for row in cursor.fetchall()]
+
+
+@app.post(
+    "/move-request-transition-instructions",
+    response_model=TransitionInstruction,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_transition_instruction(
+    instruction: TransitionInstructionCreate,
+) -> dict[str, Any]:
+    payload = transition_instruction_payload(model_payload(instruction))
+    columns = ", ".join(payload)
+    placeholders = ", ".join(["%s"] * len(payload))
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            fetch_move_request(cursor, payload["move_request_id"])
+            execute_or_raise(
+                cursor,
+                f"INSERT INTO move_request_transition_instructions ({columns}) VALUES ({placeholders})",
+                list(payload.values()),
+            )
+            return fetch_transition_instruction(cursor, cursor.lastrowid)
+
+
+@app.get(
+    "/move-request-transition-instructions/{instruction_id}",
+    response_model=TransitionInstruction,
+)
+def get_transition_instruction(instruction_id: int) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            return fetch_transition_instruction(cursor, instruction_id)
+
+
+@app.put(
+    "/move-request-transition-instructions/{instruction_id}",
+    response_model=TransitionInstruction,
+)
+def update_transition_instruction(
+    instruction_id: int,
+    instruction: TransitionInstructionUpdate,
+) -> dict[str, Any]:
+    payload = transition_instruction_payload(model_payload(instruction, exclude_unset=True))
+    assignments, values = update_fields_sql(payload)
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                f"UPDATE move_request_transition_instructions SET {assignments} WHERE id = %s",
+                [*values, instruction_id],
+            )
+            updated = fetch_transition_instruction(cursor, instruction_id)
+            if updated["status"] == TransitionInstructionStatus.solved.value:
+                maybe_complete_move_request(cursor, updated["move_request_id"])
+            return fetch_transition_instruction(cursor, instruction_id)
+
+
+@app.delete(
+    "/move-request-transition-instructions/{instruction_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_transition_instruction(instruction_id: int) -> Response:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            execute_or_raise(
+                cursor,
+                "DELETE FROM move_request_transition_instructions WHERE id = %s",
+                (instruction_id,),
+            )
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Transition instruction not found.")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get(
+    "/move-requests/{request_id}/transition-instructions/{instruction_type}",
+    response_model=TransitionInstruction,
+)
+@app.get(
+    "/move-requests/{request_id}/instructions/{instruction_type}",
+    response_model=TransitionInstruction,
+)
+def get_transition_instruction_for_move_request(
+    request_id: int,
+    instruction_type: TransitionInstructionType,
+) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            fetch_move_request(cursor, request_id)
+            return fetch_transition_instruction_by_move_request(cursor, request_id, instruction_type)
+
+
+@app.put(
+    "/move-requests/{request_id}/transition-instructions/{instruction_type}",
+    response_model=TransitionInstruction,
+)
+@app.put(
+    "/move-requests/{request_id}/instructions/{instruction_type}",
+    response_model=TransitionInstruction,
+)
+def upsert_transition_instruction_for_move_request(
+    request_id: int,
+    instruction_type: TransitionInstructionType,
+    instruction: TransitionInstructionUpdate,
+    response: Response,
+) -> dict[str, Any]:
+    raw_payload = model_payload(instruction, exclude_unset=True)
+    raw_payload.pop("instruction_type", None)
+    payload = transition_instruction_payload(raw_payload)
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            try:
+                connection.begin()
+                fetch_move_request(cursor, request_id)
+                try:
+                    existing = fetch_transition_instruction_by_move_request(
+                        cursor,
+                        request_id,
+                        instruction_type,
+                    )
+                except HTTPException as exc:
+                    if exc.status_code != 404:
+                        raise
+                    create_payload = {
+                        "move_request_id": request_id,
+                        "instruction_type": enum_value(instruction_type),
+                        "status": TransitionInstructionStatus.pending.value,
+                        "content_markdown": "",
+                        **raw_payload,
+                    }
+                    storage_payload = transition_instruction_payload(create_payload)
+                    columns = ", ".join(storage_payload)
+                    placeholders = ", ".join(["%s"] * len(storage_payload))
+                    execute_or_raise(
+                        cursor,
+                        f"INSERT INTO move_request_transition_instructions ({columns}) VALUES ({placeholders})",
+                        list(storage_payload.values()),
+                    )
+                    response.status_code = status.HTTP_201_CREATED
+                    created = fetch_transition_instruction(cursor, cursor.lastrowid)
+                    if created["status"] == TransitionInstructionStatus.solved.value:
+                        maybe_complete_move_request(cursor, request_id)
+                    connection.commit()
+                    return fetch_transition_instruction(cursor, created["id"])
+
+                if payload:
+                    assignments, values = update_fields_sql(payload)
+                    execute_or_raise(
+                        cursor,
+                        f"""
+                        UPDATE move_request_transition_instructions
+                        SET {assignments}
+                        WHERE move_request_id = %s AND instruction_type = %s
+                        """,
+                        [*values, request_id, enum_value(instruction_type)],
+                    )
+                updated = fetch_transition_instruction(cursor, existing["id"])
+                if updated["status"] == TransitionInstructionStatus.solved.value:
+                    maybe_complete_move_request(cursor, request_id)
+                connection.commit()
+                return fetch_transition_instruction(cursor, existing["id"])
+            except Exception:
+                connection.rollback()
+                raise
+
+
+@app.post(
+    "/move-requests/{request_id}/transition-instructions/{instruction_type}:solve",
+    response_model=TransitionInstruction,
+)
+@app.post(
+    "/move-requests/{request_id}/instructions/{instruction_type}:solve",
+    response_model=TransitionInstruction,
+)
+def solve_transition_instruction(
+    request_id: int,
+    instruction_type: TransitionInstructionType,
+    solve: TransitionInstructionSolve | None = None,
+) -> dict[str, Any]:
+    with open_db_connection() as connection:
+        with connection.cursor() as cursor:
+            try:
+                connection.begin()
+                move_request = fetch_move_request(cursor, request_id)
+                instruction = fetch_transition_instruction_by_move_request(
+                    cursor,
+                    request_id,
+                    instruction_type,
+                )
+                solved_by_employee_id = (
+                    solve.solved_by_employee_id
+                    if solve is not None and solve.solved_by_employee_id is not None
+                    else move_request["employee_id"]
+                )
+                if solved_by_employee_id != move_request["employee_id"]:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Transition instructions can only be solved by the move-request employee.",
+                    )
+                execute_or_raise(
+                    cursor,
+                    """
+                    UPDATE move_request_transition_instructions
+                    SET status = %s, solved_at = %s, solved_by_employee_id = %s
+                    WHERE id = %s
+                    """,
+                    [
+                        TransitionInstructionStatus.solved.value,
+                        datetime.now(UTC).replace(tzinfo=None),
+                        solved_by_employee_id,
+                        instruction["id"],
+                    ],
+                )
+                maybe_complete_move_request(cursor, request_id)
+                solved = fetch_transition_instruction(cursor, instruction["id"])
+                connection.commit()
+                return solved
+            except Exception:
+                connection.rollback()
+                raise
 
 
 @app.get("/policies", response_model=list[Policy])

@@ -221,7 +221,7 @@ def compute_project_coverage(
         available_skill_counts,
     )
     skill_gap = _flatten_skill_requirement_levels(skill_gap_requirements)
-    headcount_gap = max(project.required_people_amount - len(team_member_ids), 0)
+    headcount_gap = max(project.effective_required_people_amount - len(team_member_ids), 0)
     coverage_ratio = round(
         (
             _headcount_ratio(project, len(team_member_ids))
@@ -323,7 +323,7 @@ def _select_portfolio_scope(
         for project_id, project in snapshot.projects.items()
         if project_id not in blocked_project_ids
         and project_id not in needy_project_ids
-        and len(project.current_team_member_ids) > project.required_people_amount
+        and len(project.current_team_member_ids) > project.effective_required_people_amount
     ]
     ordered_project_ids = sorted(
         needy_project_ids,
@@ -1030,9 +1030,10 @@ def _with_candidate_id(candidate: CandidatePlan, index: int) -> CandidatePlan:
 
 
 def _headcount_ratio(project: ProjectSnapshot, team_size: int) -> float:
-    if project.required_people_amount <= 0:
+    effective = project.effective_required_people_amount
+    if effective <= 0:
         return 1.0
-    return min(team_size / project.required_people_amount, 1.0)
+    return min(team_size / effective, 1.0)
 
 
 def _skill_ratio(

@@ -13,6 +13,15 @@ import mysql.connector
 from dotenv import load_dotenv
 
 DEFAULT_FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "seed_data.json"
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from mock_documentation import (  # noqa: E402
+    build_mock_documentation_payload,
+    is_mock_documentation_project,
+)
+
 SKILL_KEYS = ("android", "ios", "web", "backend", "infrastructure", "ai")
 PROJECT_SKILL_LEVEL_KEYS = ("level_1", "level_2", "level_3")
 
@@ -136,8 +145,8 @@ def insert_projects(cursor, projects: list[dict[str, Any]]) -> dict[str, int]:
 def insert_employees(cursor, employees: list[dict[str, Any]]) -> dict[str, int]:
     sql = """
         INSERT INTO employees (
-            name, role, skills, preferences, interests
-        ) VALUES (%s, %s, %s, %s, %s)
+            name, role, github_username, skills, preferences, interests
+        ) VALUES (%s, %s, %s, %s, %s, %s)
     """
     name_to_id: dict[str, int] = {}
     for employee in employees:
@@ -146,6 +155,8 @@ def insert_employees(cursor, employees: list[dict[str, Any]]) -> dict[str, int]:
             (
                 employee["name"],
                 employee["role"],
+                employee.get("github_username"),
+                employee.get("github_username"),
                 json.dumps(employee["skills"]),
                 json.dumps(employee["preferences"]),
                 json.dumps(employee["interests"]),
@@ -235,6 +246,48 @@ def insert_move_requests(
     return count
 
 
+def insert_mock_project_documentation(
+    cursor,
+    projects: list[dict[str, Any]],
+    project_ids: dict[str, int],
+) -> int:
+    sql = """
+        INSERT INTO project_documentation (
+            project_id, status, content_markdown, source_repositories,
+            source_snapshot, model_metadata, last_error, last_generated_at
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ON DUPLICATE KEY UPDATE
+            status = VALUES(status),
+            content_markdown = VALUES(content_markdown),
+            source_repositories = VALUES(source_repositories),
+            source_snapshot = VALUES(source_snapshot),
+            model_metadata = VALUES(model_metadata),
+            last_error = VALUES(last_error),
+            last_generated_at = VALUES(last_generated_at)
+    """
+    count = 0
+    for project in projects:
+        if not is_mock_documentation_project(project):
+            continue
+        project_id = project_ids[project["project_name"]]
+        payload = build_mock_documentation_payload(project)
+        cursor.execute(
+            sql,
+            (
+                project_id,
+                payload["status"],
+                payload["content_markdown"],
+                json.dumps(payload["source_repositories"]),
+                json.dumps(payload["source_snapshot"]),
+                json.dumps(payload["model_metadata"]),
+                payload["last_error"],
+                payload["last_generated_at"],
+            ),
+        )
+        count += 1
+    return count
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Load Atlas seed fixtures into MySQL.")
     parser.add_argument(
@@ -260,11 +313,15 @@ def main() -> None:
         move_count = insert_move_requests(
             cursor, data["move_requests"], employee_ids, project_ids
         )
+        documentation_count = insert_mock_project_documentation(
+            cursor, data["projects"], project_ids
+        )
         connection.commit()
         cursor.close()
         print(
             f"Inserted {len(project_ids)} projects, {len(employee_ids)} employees, "
-            f"{assignment_count} assignments, {move_count} move requests from {args.fixture}."
+            f"{assignment_count} assignments, {move_count} move requests, "
+            f"{documentation_count} mock documentation rows from {args.fixture}."
         )
     except Exception:
         connection.rollback()

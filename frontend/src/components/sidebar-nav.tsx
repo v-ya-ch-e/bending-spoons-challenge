@@ -17,6 +17,7 @@ import {
 } from "@hugeicons/core-free-icons"
 
 import type { AppRole, RoleWorkspace } from "@/data/mock-navigation"
+import type { Employee } from "@/lib/db-api"
 import type { ThemeMode } from "@/lib/ui-preferences"
 import {
   Tooltip,
@@ -40,6 +41,9 @@ type SidebarNavProps = {
   collapsed: boolean
   themeMode: ThemeMode
   onThemeModeChange: (mode: ThemeMode) => void
+  spoonerId: number | null
+  spoonerOptions: Employee[]
+  onSpoonerChange: (id: number) => void
 }
 
 const navIcons = {
@@ -64,6 +68,9 @@ export function SidebarNav({
   collapsed,
   themeMode,
   onThemeModeChange,
+  spoonerId,
+  spoonerOptions,
+  onSpoonerChange,
 }: SidebarNavProps) {
   return (
     <aside
@@ -74,18 +81,18 @@ export function SidebarNav({
     >
       <div
         className={cn(
-          "relative flex h-11 items-center overflow-hidden transition-all duration-300 ease-out",
+          "relative flex h-14 items-center overflow-hidden transition-all duration-300 ease-out",
           collapsed ? "justify-center" : "justify-start"
         )}
       >
         <Image
           src="/logo_bending_spoons.svg"
-          alt="Bending Spoons"
+          alt="Mixing Spooners"
           width={410}
           height={190}
           priority
           className={cn(
-            "h-11 w-auto origin-left transition-[opacity,transform] duration-300 ease-out dark:hidden",
+            "h-14 w-auto max-w-[12.5rem] origin-left transition-[opacity,transform] duration-300 ease-out dark:hidden",
             collapsed
               ? "pointer-events-none scale-95 opacity-0"
               : "scale-100 opacity-100"
@@ -93,12 +100,12 @@ export function SidebarNav({
         />
         <Image
           src="/logo_bending_spoons_dark.svg"
-          alt="Bending Spoons"
+          alt="Mixing Spooners"
           width={410}
           height={190}
           priority
           className={cn(
-            "hidden h-11 w-auto origin-left transition-[opacity,transform] duration-300 ease-out dark:block",
+            "hidden h-14 w-auto max-w-[12.5rem] origin-left transition-[opacity,transform] duration-300 ease-out dark:block",
             collapsed
               ? "pointer-events-none scale-95 opacity-0"
               : "scale-100 opacity-100"
@@ -106,12 +113,12 @@ export function SidebarNav({
         />
         <Image
           src="/logo_bending_spoons_icon.svg"
-          alt="Bending Spoons"
+          alt="Mixing Spooners"
           width={107}
           height={57}
           priority
           className={cn(
-            "absolute left-1/2 h-5 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out dark:hidden",
+            "absolute left-1/2 h-8 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out dark:hidden",
             collapsed
               ? "scale-100 opacity-100"
               : "pointer-events-none scale-90 opacity-0"
@@ -119,12 +126,12 @@ export function SidebarNav({
         />
         <Image
           src="/logo_bending_spoons_icon_dark.svg"
-          alt="Bending Spoons"
+          alt="Mixing Spooners"
           width={107}
           height={57}
           priority
           className={cn(
-            "absolute left-1/2 hidden h-5 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out dark:block",
+            "absolute left-1/2 hidden h-8 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out dark:block",
             collapsed
               ? "scale-100 opacity-100"
               : "pointer-events-none scale-90 opacity-0"
@@ -205,6 +212,9 @@ export function SidebarNav({
           compact={collapsed}
           themeMode={themeMode}
           onThemeModeChange={onThemeModeChange}
+          spoonerId={spoonerId}
+          spoonerOptions={spoonerOptions}
+          onSpoonerChange={onSpoonerChange}
         />
       </div>
     </aside>

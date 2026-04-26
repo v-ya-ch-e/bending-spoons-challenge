@@ -87,6 +87,31 @@ class DbApiClient:
     def delete_project(self, project_id: int) -> None:
         self._request("DELETE", f"/projects/{project_id}")
 
+    # ---- project documentation -------------------------------------------
+
+    def list_project_documentation(self, limit: int = 100, offset: int = 0) -> list[dict]:
+        return self._request(
+            "GET", "/project-documentation", params={"limit": limit, "offset": offset}
+        )
+
+    def create_project_documentation(self, payload: dict) -> dict:
+        return self._request("POST", "/project-documentation", json=payload)
+
+    def get_project_documentation(self, documentation_id: int) -> dict:
+        return self._request("GET", f"/project-documentation/{documentation_id}")
+
+    def update_project_documentation(self, documentation_id: int, payload: dict) -> dict:
+        return self._request("PUT", f"/project-documentation/{documentation_id}", json=payload)
+
+    def delete_project_documentation(self, documentation_id: int) -> None:
+        self._request("DELETE", f"/project-documentation/{documentation_id}")
+
+    def get_project_documentation_by_project(self, project_id: int) -> dict:
+        return self._request("GET", f"/projects/{project_id}/documentation")
+
+    def upsert_project_documentation_by_project(self, project_id: int, payload: dict) -> dict:
+        return self._request("PUT", f"/projects/{project_id}/documentation", json=payload)
+
     # ---- employees -------------------------------------------------------
 
     def list_employees(self, limit: int = 100, offset: int = 0) -> list[dict]:
@@ -122,8 +147,77 @@ class DbApiClient:
     def update_move_request(self, request_id: int, payload: dict) -> dict:
         return self._request("PUT", f"/move-requests/{request_id}", json=payload)
 
+    def update_move_request_approval(self, request_id: int, payload: dict) -> dict:
+        return self._request("POST", f"/move-requests/{request_id}/approval", json=payload)
+
+    def start_move_request_transition(self, request_id: int) -> dict:
+        return self._request("POST", f"/move-requests/{request_id}:start-transition")
+
+    def complete_move_request(self, request_id: int) -> dict:
+        return self._request("POST", f"/move-requests/{request_id}:complete")
+
     def delete_move_request(self, request_id: int) -> None:
         self._request("DELETE", f"/move-requests/{request_id}")
+
+    # ---- transition instructions -----------------------------------------
+
+    def list_transition_instructions(self, limit: int = 100, offset: int = 0) -> list[dict]:
+        return self._request(
+            "GET",
+            "/move-request-transition-instructions",
+            params={"limit": limit, "offset": offset},
+        )
+
+    def create_transition_instruction(self, payload: dict) -> dict:
+        return self._request("POST", "/move-request-transition-instructions", json=payload)
+
+    def get_transition_instruction(self, instruction_id: int) -> dict:
+        return self._request("GET", f"/move-request-transition-instructions/{instruction_id}")
+
+    def update_transition_instruction(self, instruction_id: int, payload: dict) -> dict:
+        return self._request(
+            "PUT",
+            f"/move-request-transition-instructions/{instruction_id}",
+            json=payload,
+        )
+
+    def delete_transition_instruction(self, instruction_id: int) -> None:
+        self._request("DELETE", f"/move-request-transition-instructions/{instruction_id}")
+
+    def get_transition_instruction_by_move_request(
+        self,
+        request_id: int,
+        instruction_type: str,
+    ) -> dict:
+        return self._request(
+            "GET",
+            f"/move-requests/{request_id}/instructions/{instruction_type}",
+        )
+
+    def upsert_transition_instruction_by_move_request(
+        self,
+        request_id: int,
+        instruction_type: str,
+        payload: dict,
+    ) -> dict:
+        return self._request(
+            "PUT",
+            f"/move-requests/{request_id}/instructions/{instruction_type}",
+            json=payload,
+        )
+
+    def solve_transition_instruction(
+        self,
+        request_id: int,
+        instruction_type: str,
+        payload: dict | None = None,
+    ) -> dict:
+        kwargs = {"json": payload} if payload is not None else {}
+        return self._request(
+            "POST",
+            f"/move-requests/{request_id}/instructions/{instruction_type}:solve",
+            **kwargs,
+        )
 
     # ---- policies --------------------------------------------------------
 

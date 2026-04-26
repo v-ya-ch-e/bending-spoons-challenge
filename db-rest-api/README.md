@@ -1,15 +1,15 @@
 # DB REST API
 
-Small FastAPI service exposed publicly behind nginx at `/db-api`, plus the MySQL schema and seed-data tooling for the Atlas hackathon platform. The product brief lives in [../docs/bending_spoons_internal_platform_brief.md](../docs/bending_spoons_internal_platform_brief.md).
+Small FastAPI service exposed publicly behind nginx at `/db-api`, plus the MySQL schema and seed-data tooling for the Mixing Spooners hackathon platform. The product brief lives in [../docs/bending_spoons_internal_platform_brief.md](../docs/bending_spoons_internal_platform_brief.md).
 
-Production is served at `https://doubleu.team/db-api/...`; development is served at `https://dev.doubleu.team/db-api/...`. Both environments keep `ROOT_PATH=/db-api`; the split is by hostname, not by path.
+Production is served at `https://mixing-spooners.club/db-api/...`; development is served at `https://dev.mixing-spooners.club/db-api/...`. Both environments keep `ROOT_PATH=/db-api`; the split is by hostname, not by path.
 
 For the canonical agent-facing API contract, payload shapes, schema notes, and safe update workflow, see [../docs/DB_API_DOCUMENTATION.md](../docs/DB_API_DOCUMENTATION.md).
 
 ## What this provides
 
 - A FastAPI service with health, version, database connectivity, and CRUD endpoints.
-- A MySQL schema for staffing data plus matching pipeline persistence, defined in plain SQL.
+- A MySQL schema for staffing data, project documentation, transition instructions, and matching pipeline persistence, defined in plain SQL.
 - A script to apply the schema to AWS RDS.
 - A script that uses the OpenAI API to generate realistic seed data as JSON.
 - A script that loads that JSON into the database.
@@ -88,6 +88,13 @@ Useful endpoints:
 - `GET /projects/{project_id}`
 - `PUT /projects/{project_id}`
 - `DELETE /projects/{project_id}`
+- `GET /project-documentation`
+- `POST /project-documentation`
+- `GET /project-documentation/{documentation_id}`
+- `PUT /project-documentation/{documentation_id}`
+- `DELETE /project-documentation/{documentation_id}`
+- `GET /projects/{project_id}/documentation`
+- `PUT /projects/{project_id}/documentation`
 - `GET /employees`
 - `POST /employees`
 - `GET /employees/{employee_id}`
@@ -97,7 +104,19 @@ Useful endpoints:
 - `POST /move-requests`
 - `GET /move-requests/{request_id}`
 - `PUT /move-requests/{request_id}`
+- `POST /move-requests/{request_id}/approval`
+- `POST /move-requests/{request_id}:start-transition`
+- `POST /move-requests/{request_id}:complete`
 - `DELETE /move-requests/{request_id}`
+- `GET /move-request-transition-instructions`
+- `POST /move-request-transition-instructions`
+- `GET /move-request-transition-instructions/{instruction_id}`
+- `PUT /move-request-transition-instructions/{instruction_id}`
+- `DELETE /move-request-transition-instructions/{instruction_id}`
+- `GET /employees/{employee_id}/transition-instructions`
+- `GET /move-requests/{request_id}/transition-instructions/{instruction_type}`
+- `PUT /move-requests/{request_id}/transition-instructions/{instruction_type}`
+- `POST /move-requests/{request_id}/transition-instructions/{instruction_type}:solve`
 - `GET /policies`
 - `POST /policies`
 - `GET /policies/active`
@@ -150,7 +169,7 @@ For frontend work, use `current_team_member_ids` and `current_project_ids` as th
     "infrastructure": { "level_1": 0, "level_2": 1, "level_3": 0 },
     "ai": { "level_1": 0, "level_2": 1, "level_3": 0 }
   },
-  "github_repositories": ["https://github.com/bendingspoons/evernote-core"]
+  "github_repositories": ["https://github.com/mixing-spooners/evernote-core"]
 }
 ```
 
@@ -160,6 +179,7 @@ For frontend work, use `current_team_member_ids` and `current_project_ids` as th
 {
   "name": "Marco Bianchi",
   "role": "Backend engineer",
+  "github_username": "marco-bianchi",
   "current_project_ids": [1, 2],
   "skills": {
     "android": 0,
@@ -199,6 +219,7 @@ python scripts/init_db.py
 ```
 
 This applies [db/schema.sql](db/schema.sql). Statements are idempotent (`CREATE TABLE IF NOT EXISTS`), so running it on an already-initialized database adds missing tables without resetting existing data.
+The initializer also applies additive schema fixes for known employee fields such as `github_username`.
 
 To wipe and recreate the demo tables (drops matching persistence tables, `move_requests`, `project_assignments`, `employees`, and `projects` in FK-safe order):
 
@@ -226,9 +247,15 @@ Use `--employees`, `--projects`, `--move-requests`, `--attempts`, `--model`, `--
 python scripts/load_fixtures.py
 ```
 
-Reads `db-rest-api/fixtures/seed_data.json` and inserts in dependency order: `projects` -> `employees` -> `project_assignments` -> `move_requests`. Employee `current_projects` plus move-request `employee_name`, `from_project_name`, and `to_project_name` are resolved to numeric IDs using the rows just inserted. The whole load runs inside one transaction; failures roll back.
+Reads `db-rest-api/fixtures/seed_data.json` and inserts in dependency order: `projects` -> `employees` -> `project_assignments` -> `move_requests` -> mock `project_documentation` rows for non-Mixing Spoons projects. Employee `current_projects` plus move-request `employee_name`, `from_project_name`, and `to_project_name` are resolved to numeric IDs using the rows just inserted. The whole load runs inside one transaction; failures roll back.
 
 Use `--fixture PATH` to load a different file.
+
+To backfill mock documentation into an existing database without resetting data:
+
+```bash
+python scripts/seed_mock_documentation.py
+```
 
 ### Full reset + reload
 
@@ -244,9 +271,11 @@ You only need to re-run `generate_fixtures.py` when you want a new dataset; the 
 See [db/schema.sql](db/schema.sql) for the source of truth. Summary:
 
 - `projects(id, project_name, project_description, project_phase, icon_url, poster_url, required_people_amount, required_skills, github_repositories)`
-- `employees(id, name, role, skills, preferences, interests)`
+- `employees(id, name, role, github_username, skills, preferences, interests)`
 - `project_assignments(employee_id FK, project_id FK)`
-- `move_requests(id, employee_id FK, from_project_id FK nullable, to_project_id FK, reason, expected_role, current_project_impact, status, created_at, responded_at)`
+- `move_requests(id, employee_id FK, from_project_id FK nullable, to_project_id FK, reason, expected_role, current_project_impact, status, approval statuses, created_at, responded_at)`
+- `project_documentation(id, project_id FK, status, content_markdown, source_repositories, source_snapshot, model_metadata, last_error, timestamps)`
+- `move_request_transition_instructions(id, move_request_id FK, instruction_type, status, content_markdown, input_snapshot, source_documentation_id FK nullable, model_metadata, solved metadata, timestamps)`
 - `policies(id, name, description, config, is_active, created_at, updated_at, activated_at)`
 - `matching_runs(id, use_case, target_project_id FK nullable, status, requested_by, rule_config, input_snapshot, counts, selected_candidate_plan_id, summary, error_message, timestamps)`
 - `matching_candidates(id, run_id FK, candidate_plan_id, strict_score, hard_rule_summary, plan_payload, rejected_reason, created_at)`
@@ -261,13 +290,17 @@ candidates, recommendations, hiring recommendations, and events through this
 API. The action endpoint can turn a selected recommendation's `suggested_moves`
 into `move_requests`, but it does not update `project_assignments`.
 
+Project documentation and transition instruction rows are generated by
+`backend/` and persisted here. Solving both onboarding and offboarding
+instructions for a move request can mark that move request completed.
+
 For agent-facing context (conventions, JSON column rules, when to add new tables), see [CLAUDE.md](CLAUDE.md).
 
 ## Deployment
 
 CI/CD is branch-based:
 
-- `main` deploys production (`bsc-prod`, localhost port `8001`).
-- `dev` deploys development (`bsc-dev`, localhost port `8002`).
+- `main` deploys production (`mixing-spooners-prod`, localhost port `8001`).
+- `dev` deploys development (`mixing-spooners-dev`, localhost port `8002`).
 
 See [../docs/deployment.md](../docs/deployment.md) for GitHub Actions, EC2 paths, nginx routing, TLS setup, and verification commands.

@@ -36,6 +36,22 @@ class ProjectSnapshot:
     required_skill_counts: SkillRequirementMap
     current_team_member_ids: tuple[int, ...]
 
+    @property
+    def min_required_people_from_skills(self) -> int:
+        # A single person cannot cover two different levels of the same skill
+        # (e.g. iOS level_1 and iOS level_2), so each (skill, level) demand
+        # requires a distinct person. The minimum headcount implied by the
+        # skill requirements is therefore the sum of all per-level counts.
+        return sum(
+            count
+            for levels in self.required_skill_counts.values()
+            for count in levels.values()
+        )
+
+    @property
+    def effective_required_people_amount(self) -> int:
+        return max(self.required_people_amount, self.min_required_people_from_skills)
+
 
 @dataclass(frozen=True)
 class EmployeeSnapshot:

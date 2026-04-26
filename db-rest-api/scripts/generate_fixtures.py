@@ -57,6 +57,8 @@ class ProjectSkillRequirements(StrictBaseModel):
 class Employee(StrictBaseModel):
     name: str
     role: str
+    github_username: str | None = None
+    github_username: str | None = None
     current_projects: list[str] = Field(max_length=3)
     skills: Skills
     preferences: list[str] = Field(max_length=3)
@@ -110,6 +112,7 @@ Hard requirements:
 - Every employee.preferences entry must match a project_name from projects.
 - Every move_request.employee_name must match an employee name; from_project_name (if not null) and to_project_name must match a project_name.
 - A move request's from_project_name must be one of that employee's current_projects, and to_project_name must be different from from_project_name.
+- Every employee.github_username must be a unique, realistic mock GitHub username using only letters, numbers, and hyphens.
 - Vary roles, seniority, skill profiles, project mixes, and staffing gaps.
 """
 
@@ -310,8 +313,10 @@ Employee guidance:
 - Assign at least one employee to every project.
 - Assign most employees to 1-2 current_projects, but leave a few employees unassigned by setting current_projects to an empty array.
 - Do not reuse any existing employee name.
+- Generate a unique mock GitHub username for every employee.
 - Use varied roles across iOS, Android, web, backend, infrastructure, AI/ML, product engineering, tech lead, and engineering manager profiles.
 - Use realistic European/international names.
+- Set github_username for every employee to a plausible bare GitHub handle derived from the name. Do not include @.
 - Each preferences list should contain 1-3 project names from the available project list.
 - Each interests list should contain 2-4 short keyword phrases."""
 
@@ -354,9 +359,23 @@ def duplicates(values: list[str]) -> list[str]:
     return sorted(value for value, count in Counter(values).items() if count > 1)
 
 
+def default_github_username(name: str) -> str:
+    parts = []
+    for raw_part in name.lower().split():
+        part = "".join(char for char in raw_part if char.isalnum())
+        if part:
+            parts.append(part)
+    return "-".join(parts) or "github-user"
+
+
 def normalize_seed_data(data: SeedData) -> None:
     """Normalize null-like values and keep move requests aligned with assignments."""
     for employee in data.employees:
+        employee.github_username = (
+            employee.github_username.strip().lstrip("@").strip()
+            if employee.github_username
+            else default_github_username(employee.name)
+        )
         employee.current_projects = [
             project_name
             for project_name in employee.current_projects
@@ -416,6 +435,7 @@ def validate_seed_data(
 ) -> list[str]:
     errors: list[str] = []
     employee_names = [employee.name for employee in data.employees]
+    github_usernames = [employee.github_username.lower() for employee in data.employees]
     project_names = [project.project_name for project in data.projects]
     employee_name_set = set(employee_names)
     project_name_set = set(project_names)
@@ -437,6 +457,8 @@ def validate_seed_data(
 
     for name in duplicates(employee_names):
         errors.append(f"Duplicate employee name: {name!r}")
+    for username in duplicates(github_usernames):
+        errors.append(f"Duplicate employee GitHub username: {username!r}")
     for name in duplicates(project_names):
         errors.append(f"Duplicate project name: {name!r}")
 
