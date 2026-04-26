@@ -9,13 +9,6 @@ import {
 } from "@/lib/db-api"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -129,23 +122,28 @@ export function CtoMoveRequestsScreen({
 
       <div className="grid gap-3 sm:grid-cols-3">
         {metrics.map((metric) => (
-          <Card key={metric.label} className="rounded-3xl">
-            <CardHeader className="pb-2">
-              <CardDescription>{metric.label}</CardDescription>
-              <CardTitle className="text-3xl">{isLoading ? "-" : metric.value}</CardTitle>
-            </CardHeader>
-          </Card>
+          <div
+            key={metric.label}
+            className="animate-in fade-in-0 slide-in-from-bottom-1 rounded-3xl border border-border bg-card px-4 py-3 duration-300"
+          >
+            <p className="text-xs font-medium text-muted-foreground">
+              {metric.label}
+            </p>
+            <p className="mt-2 text-2xl font-semibold tracking-tight">
+              {isLoading ? "-" : metric.value}
+            </p>
+          </div>
         ))}
       </div>
 
-      <Card className="min-h-0 rounded-3xl">
-        <CardHeader>
-          <CardTitle>Current move requests</CardTitle>
-          <CardDescription>
+      <section className="min-h-0 overflow-hidden rounded-3xl border border-border bg-card">
+        <div className="px-4 pt-4">
+          <h2 className="font-medium">Current move requests</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             Completed and rejected requests are kept out of this operational view.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </p>
+        </div>
+        <div className="p-4">
           {isLoading ? (
             <div className="grid gap-3">
               <Skeleton className="h-12" />
@@ -205,8 +203,8 @@ export function CtoMoveRequestsScreen({
               </p>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
   )
 }
