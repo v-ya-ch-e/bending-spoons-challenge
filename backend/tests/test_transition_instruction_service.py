@@ -211,6 +211,29 @@ def test_start_generation_requires_approved_move_request() -> None:
         start_transition_instruction_generation(7, "onboarding", db_client=db)
 
 
+def test_start_generation_rejects_completed_move_request() -> None:
+    db = FakeDbClient()
+    db.move_request["status"] = "completed"
+
+    with pytest.raises(ValueError, match="transition started"):
+        start_transition_instruction_generation(7, "onboarding", db_client=db)
+
+
+def test_start_generation_skips_offboarding_for_bench_move() -> None:
+    db = FakeDbClient()
+    db.move_request["from_project_id"] = None
+    db.move_request["from_project_name"] = None
+    db.employee["current_project_ids"] = []
+    db.employee["current_project_names"] = []
+
+    with pytest.raises(ValueError, match="Bench-to-project"):
+        start_transition_instruction_generation(7, "offboarding", db_client=db)
+
+    result = start_transition_instruction_generation(7, "onboarding", db_client=db)
+    assert result["status"] == "running"
+    assert result["source_documentation_id"] == 200
+
+
 def test_start_generation_stores_running_instruction_with_documentation_source() -> None:
     db = FakeDbClient()
 

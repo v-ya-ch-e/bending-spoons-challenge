@@ -2,6 +2,9 @@ import type {
   ProjectDocumentation,
   ImpactLevel,
   MatchingRunUseCase,
+  MoveRequest,
+  MoveRequestApprovalActor,
+  MoveRequestApprovalStatus,
   ProjectPhase,
   ProjectSkillRequirements,
   SkillKey,
@@ -121,7 +124,7 @@ export type MatchingRunResponse = {
 type StreamEventHandler = (event: string, data: Record<string, unknown>) => void
 
 const backendApiBasePath =
-  process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL ?? "/api"
+  process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL?.trim() || "/api"
 const backendSkillKeys: SkillKey[] = [
   "android",
   "ios",
@@ -347,6 +350,23 @@ export function streamProjectDocumentationChat(
     },
     onEvent
   )
+}
+
+export function approveMoveRequest(
+  requestId: number,
+  approver: MoveRequestApprovalActor,
+  approvalStatus: MoveRequestApprovalStatus
+) {
+  return fetchBackendApi<MoveRequest>(`/move-requests/${requestId}/approval`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      approver,
+      approval_status: approvalStatus,
+    }),
+  })
 }
 
 export const skillKeys = backendSkillKeys

@@ -406,34 +406,41 @@ class TestMatchingStrictRules(unittest.TestCase):
         self.assertEqual(result.candidate_plans, ())
         self.assertEqual(len(result.hiring_gaps), 1)
 
-    def test_pending_move_requests_block_candidates(self):
-        snapshot = normalize_snapshot(
-            [
-                project(1, name="Target", required_people_amount=1, required_skills={"backend": 3}),
-            ],
-            [
-                employee(10, skills={"backend": 3}),
-            ],
-            [
-                {
-                    "id": 100,
-                    "employee_id": 10,
-                    "from_project_id": None,
-                    "to_project_id": 1,
-                    "status": "pending",
-                }
-            ],
-        )
+    def test_open_move_requests_block_candidates(self):
+        for status in ("pending", "accepted", "clarification_requested", "transition_started"):
+            with self.subTest(status=status):
+                snapshot = normalize_snapshot(
+                    [
+                        project(
+                            1,
+                            name="Target",
+                            required_people_amount=1,
+                            required_skills={"backend": 3},
+                        ),
+                    ],
+                    [
+                        employee(10, skills={"backend": 3}),
+                    ],
+                    [
+                        {
+                            "id": 100,
+                            "employee_id": 10,
+                            "from_project_id": None,
+                            "to_project_id": 1,
+                            "status": status,
+                        }
+                    ],
+                )
 
-        result = run_strict_rules(
-            use_case="project_rebalance",
-            target_project_id=1,
-            snapshot=snapshot,
-            config=StrictRuleConfig(),
-        )
+                result = run_strict_rules(
+                    use_case="project_rebalance",
+                    target_project_id=1,
+                    snapshot=snapshot,
+                    config=StrictRuleConfig(),
+                )
 
-        self.assertEqual(result.candidate_plans, ())
-        self.assertEqual(len(result.hiring_gaps), 1)
+                self.assertEqual(result.candidate_plans, ())
+                self.assertEqual(len(result.hiring_gaps), 1)
 
     def test_new_acquisition_hiring_gap_is_high_urgency(self):
         snapshot = normalize_snapshot(

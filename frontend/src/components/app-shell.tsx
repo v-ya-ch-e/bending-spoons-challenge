@@ -16,8 +16,10 @@ import {
   getCachedEmployees,
   getCachedMatchingRuns,
   getCachedProjects,
+  listEmployeeTransitionInstructions,
   listEmployees,
   listMatchingRuns,
+  listMoveRequests,
   listProjects,
   type Employee,
 } from "@/lib/db-api"
@@ -39,6 +41,11 @@ type AppShellProps = {
 
 const spoonerPathRegex = /^\/spooner\/(\d+)(?:\/|$)/
 const defaultSpoonerSection = "my-project"
+const actionableMoveRequestStatuses = new Set([
+  "pending",
+  "accepted",
+  "clarification_requested",
+])
 
 function writePreferenceCookie(name: string, value: string) {
   document.cookie = `${name}=${value}; path=/; max-age=${preferenceCookieMaxAge}; samesite=lax`
@@ -96,6 +103,9 @@ export function AppShell({
   const [matchingRunCount, setMatchingRunCount] = useState<number | undefined>(
     () => getCachedMatchingRuns()?.length
   )
+  const [spoonerNotificationCounts, setSpoonerNotificationCounts] = useState<
+    { requests: number; onboarding: number; offboarding: number } | undefined
+  >()
 
   const role: AppRole = pathname.startsWith("/spooner")
     ? "spooner"
@@ -141,6 +151,23 @@ export function AppShell({
       if (nextItem.value === "matching" && matchingRunCount !== undefined) {
         return { ...nextItem, count: String(matchingRunCount) }
       }
+      if (
+        role === "spooner" &&
+        activeSpoonerId !== null &&
+        spoonerNotificationCounts
+      ) {
+        const count =
+          nextItem.value === "requests"
+            ? spoonerNotificationCounts.requests
+            : nextItem.value === "onboarding"
+              ? spoonerNotificationCounts.onboarding
+              : nextItem.value === "offboarding"
+                ? spoonerNotificationCounts.offboarding
+                : 0
+        if (count > 0) {
+          return { ...nextItem, count: String(count) }
+        }
+      }
       return nextItem
     })
     return { ...baseWorkspace, navItems }
@@ -148,9 +175,11 @@ export function AppShell({
     baseWorkspace,
     role,
     urlSpoonerId,
+    activeSpoonerId,
     projectCount,
     employeeCount,
     matchingRunCount,
+    spoonerNotificationCounts,
   ])
 
   const activeNavItem = useMemo(() => {
@@ -183,10 +212,44 @@ export function AppShell({
       })
       .catch(() => {})
 
+    if (activeSpoonerId !== null) {
+      Promise.all([
+        listMoveRequests(),
+        listEmployeeTransitionInstructions(activeSpoonerId, "onboarding").catch(
+          () => []
+        ),
+        listEmployeeTransitionInstructions(activeSpoonerId, "offboarding").catch(
+          () => []
+        ),
+      ])
+        .then(([moveRequests, onboardingInstructions, offboardingInstructions]) => {
+          if (!isMounted) return
+          setSpoonerNotificationCounts({
+            requests: moveRequests.filter(
+              (request) =>
+                request.employee_id === activeSpoonerId &&
+                actionableMoveRequestStatuses.has(request.status) &&
+                request.employee_approval_status === "pending"
+            ).length,
+            onboarding: onboardingInstructions.filter(
+              (instruction) => instruction.status !== "solved"
+            ).length,
+            offboarding: offboardingInstructions.filter(
+              (instruction) => instruction.status !== "solved"
+            ).length,
+          })
+        })
+        .catch(() => {
+          if (isMounted) {
+            setSpoonerNotificationCounts(undefined)
+          }
+        })
+    }
+
     return () => {
       isMounted = false
     }
-  }, [pathname])
+  }, [pathname, activeSpoonerId])
 
   useEffect(() => {
     if (urlSpoonerId !== null && urlSpoonerId !== savedSpoonerId) {

@@ -118,6 +118,7 @@ export type MoveRequestStatus =
   | "completed"
 
 export type MoveRequestApprovalStatus = "pending" | "approved" | "rejected"
+export type MoveRequestApprovalActor = "cto" | "employee"
 
 export type MoveRequest = {
   id: number
@@ -346,7 +347,7 @@ export type MatchingRunEvent = {
   created_at: string
 }
 
-const dbApiBasePath = process.env.NEXT_PUBLIC_DB_API_BASE_URL ?? "/db-api"
+const dbApiBasePath = process.env.NEXT_PUBLIC_DB_API_BASE_URL?.trim() || "/db-api"
 const listCacheTtlMs = 5 * 60 * 1000
 
 type ListCacheEntry<T> = {

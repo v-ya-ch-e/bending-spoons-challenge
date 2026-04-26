@@ -146,18 +146,16 @@ export function TransitionInstructionScreen({
     try {
       setIsSaving(true)
       setError(null)
-      const solvedInstruction = await markTransitionInstructionSolved(
+      await markTransitionInstructionSolved(
         instruction.move_request_id,
         instruction.instruction_type,
         employeeId
       )
-      setInstructions((current) =>
-        current.map((currentInstruction) =>
-          currentInstruction.id === solvedInstruction.id
-            ? solvedInstruction
-            : currentInstruction
-        )
+      const nextInstructions = await listEmployeeTransitionInstructions(
+        employeeId,
+        instructionType
       )
+      setInstructions(nextInstructions)
     } catch (saveError) {
       setError(
         saveError instanceof Error

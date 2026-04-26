@@ -22,7 +22,7 @@ Public environments:
 - Reuse `open_db_connection()` or `get_db_connection()` from `db-rest-api/main.py` for DB-backed endpoints.
 - JSON columns must be serialized before writes and deserialized before API responses.
 - Project assignments are stored by ID in `project_assignments`; name-based assignment fields are response aliases only.
-- Updating a move request only updates the `move_requests` row. It does not automatically move employees between projects.
+- Move-request completion migrates `project_assignments` from the source project to the target project. Earlier lifecycle updates only update the `move_requests` row.
 - Matching policies are versioned rows in `policies`; exactly one policy should be active. The seeded default active policy is `Balanced strict matching`, and backend matching run endpoints use balanced unless a request selects a different policy.
 - If the DB schema or public API changes, update this document in the same change.
 
@@ -80,7 +80,7 @@ Common DB error mapping:
 - `employees[].current_project` is a compatibility alias for the first assigned project name. It can be `null` even though the canonical field is always `current_project_ids: []`.
 - `employees[].preferences` still contains project-name strings, not IDs.
 - Project cards can use `icon_url` for compact/app-icon UI and `poster_url` for wide hero/card imagery.
-- Updating a move request status does not change `project_assignments`; a frontend should not assume accepted requests automatically move employees.
+- Accepted and active move requests do not change `project_assignments`. Completion after solved onboarding/offboarding is the point where assignment rows are migrated.
 
 ## Canonical Enum Values
 
@@ -528,8 +528,10 @@ Status behavior:
 - Updating `status` back to `pending` clears `responded_at`.
 - Updating other fields without `status` leaves `responded_at` unchanged.
 - `POST /move-requests/{request_id}/approval` accepts `{ "approver": "cto" | "employee", "approval_status": "approved" | "rejected" | "pending" }`. A single approval moves a pending request to `accepted`; both approvals move it to `transition_started`; any rejection moves it to `rejected`.
-- `POST /move-requests/{request_id}:start-transition` requires both approvals and sets `status` to `transition_started`.
-- `POST /move-requests/{request_id}:complete` requires both transition instruction rows to be `solved` and sets `status` to `completed`.
+- Frontend approval flows should use the backend orchestration endpoint at `/api/move-requests/{request_id}/approval`; when the second approval moves the request to `transition_started`, the backend starts onboarding and offboarding instruction generation.
+- `POST /move-requests/{request_id}:start-transition` remains available for explicit DB API callers, requires both approvals, and sets `status` to `transition_started`.
+- `POST /move-requests/{request_id}:complete` requires solved onboarding plus solved offboarding when `from_project_id` is present. Bench-to-project moves with `from_project_id = null` require onboarding only. Completion sets `status` to `completed`, removes `from_project_id` from the employee's assignments when present, and adds `to_project_id`.
+- `completed` move requests are retained for audit history. They are not eligible for transition instruction regeneration.
 
 Foreign-key behavior:
 
@@ -594,10 +596,10 @@ Create payload:
 
 Solve behavior:
 
-- `GET /employees/{employee_id}/transition-instructions` accepts optional `instruction_type` plus `limit` and `offset`, and returns instructions joined with move-request employee/project display fields.
+- `GET /employees/{employee_id}/transition-instructions` accepts optional `instruction_type`, `include_completed`, `limit`, and `offset`, and returns instructions joined with move-request employee/project display fields. Completed move requests are excluded unless `include_completed=true`.
 - `POST /move-requests/{request_id}/transition-instructions/{instruction_type}:solve` marks the selected instruction as `solved`; `/instructions/...:solve` is kept as a compatibility alias.
 - If `solved_by_employee_id` is omitted, the API uses the employee from the parent move request.
-- If both onboarding and offboarding rows for the same move request are `solved`, the API marks the parent move request `completed`.
+- If all required instruction rows for the same move request are `solved`, the API marks the parent move request `completed` and migrates the employee assignment to the target project. Bench-to-project moves only require onboarding; moves from a source project require both onboarding and offboarding.
 
 ## Policies
 
@@ -954,7 +956,7 @@ Action behavior:
   `move_requests` row per suggested move.
 - The action returns `{"move_requests": [...]}` with the standard move-request
   response shape.
-- The action does not update `project_assignments`.
+- The action does not update `project_assignments`; assignments are migrated only when the resulting move request completes after solved onboarding/offboarding instructions.
 - Suggested moves must include `employee_id`, `to_project_id`,
   `current_project_impact`, and either `suggested_role` or `expected_role`.
   `from_project_id` can be `null`. The action uses `move_request_reason`, then

@@ -69,6 +69,8 @@ The workflow sets separate localhost ports for production and development so bot
 
 The backend talks to the DB REST API through Docker DNS (`DB_API_BASE_URL=http://db-rest-api:8000`) inside Compose. Local non-Docker backend runs can still use `.env` to point `DB_API_BASE_URL` at a localhost or public `/db-api` endpoint.
 
+The frontend has two kinds of API URLs. Server-side rewrite targets (`DB_API_BASE_URL` and `BACKEND_API_BASE_URL`) use Docker-internal service names such as `http://db-rest-api:8000` and `http://backend:8000`. Public browser variables must stay same-origin, for example `NEXT_PUBLIC_BACKEND_API_BASE_URL=/api` and `NEXT_PUBLIC_DB_API_BASE_URL=/db-api`, so browsers call nginx rather than their own `localhost`.
+
 Manual server commands:
 
 ```bash
