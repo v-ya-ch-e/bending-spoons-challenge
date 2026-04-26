@@ -180,7 +180,7 @@ export function MatchingScreen({
         listProjects(),
         listMoveRequests(),
         listMatchingPolicies(),
-        listMatchingRuns(),
+        listMatchingRuns({ force: true }),
       ])
       const recentRuns = matchingRuns
         .filter((run) => run.use_case === "project_rebalance")

@@ -58,8 +58,8 @@ export function CtoOverviewScreen({ initialData }: CtoOverviewScreenProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-background">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 p-4 md:p-8">
-        <header className="mx-auto flex max-w-3xl flex-col items-center gap-4 py-8 text-center md:py-12">
+      <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col p-4 md:p-8">
+        <header className="mx-auto flex max-w-3xl flex-1 flex-col items-center justify-center gap-4 py-8 text-center md:py-10">
           <Badge variant="outline">CTO workspace</Badge>
           <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
             Welcome to Mixing Spooners.

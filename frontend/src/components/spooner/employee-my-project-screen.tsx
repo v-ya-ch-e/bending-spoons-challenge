@@ -68,6 +68,8 @@ const skillLabels: Record<SkillKey, string> = {
   ai: "AI",
 }
 
+const spoonerCardClass = "border border-border shadow-none ring-0"
+
 export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenProps) {
   const cachedProjects = getCachedProjects()
   const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
@@ -194,7 +196,7 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
           <EmptyAssignedProjects employee={employee} />
         ) : (
           <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-            <Card className="h-fit xl:sticky xl:top-6">
+            <Card className={cn(spoonerCardClass, "h-fit xl:sticky xl:top-6")}>
               <CardHeader>
                 <CardTitle>Assigned companies</CardTitle>
                 <CardDescription>
@@ -290,11 +292,11 @@ function ProjectInformationCard({
   const staffingGap = getStaffingGap(project)
 
   return (
-    <Card className="shrink-0">
+    <Card className={cn(spoonerCardClass, "shrink-0")}>
       <CardHeader className="gap-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex min-w-0 gap-4">
-            <Avatar size="lg" className="bg-background shadow-sm ring-1 ring-border">
+            <Avatar size="lg" className="bg-background ring-1 ring-border">
               <AvatarImage src={project.icon_url} alt="" />
               <AvatarFallback>{getInitials(project.project_name)}</AvatarFallback>
             </Avatar>
@@ -310,7 +312,7 @@ function ProjectInformationCard({
           </div>
           <Button
             asChild
-            className="h-11 shrink-0 rounded-full px-5 shadow-sm"
+            className="h-11 shrink-0 rounded-full px-5"
           >
             <Link href={`/spooner/${employee.id}/resources/${project.id}`}>
               <HugeiconsIcon icon={BookOpen01Icon} className="size-4" />
@@ -486,7 +488,7 @@ function TeamCard({ project }: { project: Project }) {
 
 function EmptyAssignedProjects({ employee }: { employee: Employee }) {
   return (
-    <Card className="border-dashed">
+    <Card className={cn(spoonerCardClass, "border-dashed")}>
       <CardContent className="flex min-h-[420px] flex-col items-center justify-center p-8 text-center">
         <HugeiconsIcon icon={Briefcase01Icon} className="mb-3 size-9 text-muted-foreground" />
         <h2 className="text-lg font-semibold">No assigned companies</h2>
@@ -505,7 +507,7 @@ function EmptyAssignedProjects({ employee }: { employee: Employee }) {
 function EmployeeMyProjectLoadingState() {
   return (
     <div className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)]">
-      <Card>
+      <Card className={spoonerCardClass}>
         <CardHeader>
           <Skeleton className="h-5 w-36" />
           <Skeleton className="h-4 w-56" />
@@ -516,7 +518,7 @@ function EmployeeMyProjectLoadingState() {
           ))}
         </CardContent>
       </Card>
-      <Card>
+      <Card className={spoonerCardClass}>
         <CardHeader>
           <Skeleton className="h-6 w-56" />
           <Skeleton className="h-4 w-80" />

@@ -16,10 +16,10 @@ export type RoleWorkspace = {
 }
 
 export const currentUser = {
-  name: "Demo User",
-  email: "demo@example.com",
-  initials: "DU",
-  team: "Platform Operations",
+  name: "Elena Rossi",
+  email: "elena.rossi@mixingspoons.com",
+  initials: "ER",
+  team: "CTO",
 }
 
 export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {

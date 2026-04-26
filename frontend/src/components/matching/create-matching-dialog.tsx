@@ -730,7 +730,7 @@ function ConstraintsStep({
             disabled={!formState.preferFewerMoves}
             onValueChange={(maxMoves) => onConstraintChange({ maxMoves })}
           >
-            <SelectTrigger size="sm" className="w-32">
+            <SelectTrigger size="sm" className="w-44">
               <SelectValue placeholder="Max moves" />
             </SelectTrigger>
             <SelectContent>
