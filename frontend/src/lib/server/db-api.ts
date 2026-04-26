@@ -10,13 +10,16 @@ import type {
   Project,
   ProjectDocumentation,
 } from "@/lib/db-api"
-import type { MatchingRunBundle } from "@/components/matching/matching-model"
+import {
+  buildMovePlans,
+  type MatchingRunBundle,
+} from "@/components/matching/matching-model"
 
 export type AppShellInitialData = {
   employees: Employee[]
   projectCount: number
   employeeCount: number
-  matchingRunCount: number
+  matchingPlanCount: number
 }
 
 export type DocumentationInitialData = {
@@ -124,23 +127,33 @@ export function listServerMatchingRecommendations(runId: number) {
   )
 }
 
+async function loadMatchingPlanCount() {
+  const initialData = await loadMatchingInitialData()
+
+  if (!initialData) {
+    return 0
+  }
+
+  return buildMovePlans(initialData).length
+}
+
 export async function loadAppShellInitialData(): Promise<AppShellInitialData | null> {
-  const [employeesResult, projectsResult, matchingRunsResult] = await Promise.allSettled([
+  const [employeesResult, projectsResult, matchingPlanCountResult] = await Promise.allSettled([
     listServerEmployees(),
     listServerProjects(),
-    listServerMatchingRuns(),
+    loadMatchingPlanCount(),
   ])
   const employees =
     employeesResult.status === "fulfilled" ? employeesResult.value : []
   const projects =
     projectsResult.status === "fulfilled" ? projectsResult.value : []
-  const matchingRuns =
-    matchingRunsResult.status === "fulfilled" ? matchingRunsResult.value : []
+  const matchingPlanCount =
+    matchingPlanCountResult.status === "fulfilled" ? matchingPlanCountResult.value : 0
 
   if (
     employeesResult.status === "rejected" &&
     projectsResult.status === "rejected" &&
-    matchingRunsResult.status === "rejected"
+    matchingPlanCountResult.status === "rejected"
   ) {
     return null
   }
@@ -149,7 +162,7 @@ export async function loadAppShellInitialData(): Promise<AppShellInitialData | n
     employees,
     projectCount: projects.length,
     employeeCount: employees.length,
-    matchingRunCount: matchingRuns.length,
+    matchingPlanCount,
   }
 }
 

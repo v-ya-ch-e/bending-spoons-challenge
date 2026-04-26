@@ -1,8 +1,5 @@
-import { DocumentationScreen } from "@/components/documentation/documentation-screen"
-import { loadDocumentationInitialData } from "@/lib/server/db-api"
+import { DocumentationClientPage } from "@/components/documentation/documentation-client-page"
 
-export default async function CtoDocumentationPage() {
-  const initialData = await loadDocumentationInitialData()
-
-  return <DocumentationScreen initialData={initialData} />
+export default function CtoDocumentationPage() {
+  return <DocumentationClientPage />
 }
