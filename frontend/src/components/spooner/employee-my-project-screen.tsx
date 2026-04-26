@@ -1,14 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
-  Add01Icon,
   ArrowRight01Icon,
   BookOpen01Icon,
   Briefcase01Icon,
-  CheckListIcon,
 } from "@hugeicons/core-free-icons"
 
 import {
@@ -25,8 +23,6 @@ import {
 } from "@/lib/db-api"
 import {
   DocumentationStatusBadge,
-  ProjectDocumentationChat,
-  ProjectDocumentationViewer,
   formatGeneratedAt,
   indexDocumentation,
 } from "@/components/documentation/project-documentation-panel"
@@ -45,21 +41,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
 type EmployeeMyProjectScreenProps = {
@@ -83,13 +68,6 @@ const skillLabels: Record<SkillKey, string> = {
   infrastructure: "Infra",
   ai: "AI",
 }
-
-const chatPrompts = [
-  "What should I read first?",
-  "Summarize the architecture for my role.",
-  "Which repositories should I pay attention to?",
-  "What are the likely onboarding risks?",
-]
 
 export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenProps) {
   const cachedProjects = getCachedProjects()
@@ -181,7 +159,6 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
   const selectedDocumentation = selectedProject
     ? documentationByProject[selectedProject.id]
     : undefined
-  const documentationMarkdown = selectedDocumentation?.content_markdown ?? ""
   const readyDocumentationCount = assignedProjects.filter(
     (project) => documentationByProject[project.id]?.status === "ready"
   ).length
@@ -250,81 +227,16 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
                 <ProjectInformationCard
                   employee={employee}
                   project={selectedProject}
-                  documentation={selectedDocumentation}
                 />
               ) : null}
 
-              <Tabs defaultValue="documentation" className="gap-4">
-                <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="px-1">
-                    <p className="text-sm font-medium">Project knowledge</p>
-                    <p className="text-xs text-muted-foreground">
-                      Switch between full documentation and the interactive assistant.
-                    </p>
-                  </div>
-                  <TabsList>
-                    <TabsTrigger value="documentation">Documentation</TabsTrigger>
-                    <TabsTrigger value="chat">Chat</TabsTrigger>
-                  </TabsList>
-                </div>
-
-                <TabsContent value="documentation" className="mt-0">
-                  <Card className="min-h-[32rem]">
-                    <CardHeader className="gap-3">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <CardTitle>Documentation</CardTitle>
-                            {selectedDocumentation ? (
-                              <DocumentationStatusBadge status={selectedDocumentation.status} />
-                            ) : (
-                              <Badge variant="outline">No docs</Badge>
-                            )}
-                          </div>
-                          <CardDescription>
-                            {selectedDocumentation
-                              ? formatGeneratedAt(selectedDocumentation)
-                              : "No generated documentation has been stored yet."}
-                          </CardDescription>
-                        </div>
-                        <Button type="button" variant="outline" size="sm" asChild>
-                          <Link href={`/spooner/${employee.id}/onboarding`}>
-                            <HugeiconsIcon icon={CheckListIcon} className="size-4" />
-                            Onboarding
-                          </Link>
-                        </Button>
-                      </div>
-                      {selectedProject ? (
-                        <div className="flex flex-wrap gap-2">
-                          {selectedProject.github_repositories.map((repo) => (
-                            <Badge key={repo} variant="secondary" className="max-w-full truncate">
-                              {repo}
-                            </Badge>
-                          ))}
-                        </div>
-                      ) : null}
-                    </CardHeader>
-                    <CardContent className="min-h-[24rem]">
-                      <ProjectDocumentationViewer
-                        project={selectedProject}
-                        documentation={selectedDocumentation}
-                        markdown={documentationMarkdown}
-                        noDocumentationDescription="Generated docs are not ready yet. Ask your CTO to fetch documentation from GitHub."
-                      />
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="chat" className="mt-0">
-                  <ProjectDocumentationChat
-                    project={selectedProject}
-                    documentation={selectedDocumentation}
-                    starterPrompts={chatPrompts}
-                    description="Ask about this project's docs from your employee perspective."
-                    className="min-h-[32rem]"
-                  />
-                </TabsContent>
-              </Tabs>
+              {selectedProject ? (
+                <ProjectResourcesCallout
+                  employee={employee}
+                  project={selectedProject}
+                  documentation={selectedDocumentation}
+                />
+              ) : null}
             </div>
           </div>
         )}
@@ -382,11 +294,9 @@ function AssignedProjectButton({
 function ProjectInformationCard({
   employee,
   project,
-  documentation,
 }: {
   employee: Employee
   project: Project
-  documentation?: ProjectDocumentation
 }) {
   const staffingGap = getStaffingGap(project)
 
@@ -408,14 +318,6 @@ function ProjectInformationCard({
                 {project.project_description}
               </CardDescription>
             </div>
-          </div>
-          <div className="flex gap-2">
-            <ProjectResourcesSheet
-              key={project.id}
-              employee={employee}
-              project={project}
-              documentation={documentation}
-            />
           </div>
         </div>
       </CardHeader>
@@ -457,14 +359,7 @@ function ProjectInformationCard({
   )
 }
 
-type AddedProjectResource = {
-  id: string
-  title: string
-  url: string
-  note: string
-}
-
-function ProjectResourcesSheet({
+function ProjectResourcesCallout({
   employee,
   project,
   documentation,
@@ -473,201 +368,45 @@ function ProjectResourcesSheet({
   project: Project
   documentation?: ProjectDocumentation
 }) {
-  const [isAddingResource, setIsAddingResource] = useState(false)
-  const [addedResources, setAddedResources] = useState<AddedProjectResource[]>([])
-  const [draftTitle, setDraftTitle] = useState("")
-  const [draftUrl, setDraftUrl] = useState("")
-  const [draftNote, setDraftNote] = useState("")
-  const repositories = Array.from(
-    new Set([
-      ...project.github_repositories,
-      ...(documentation?.source_repositories ?? []),
-    ])
-  )
-
-  function handleAddResource(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const title = draftTitle.trim()
-
-    if (!title) {
-      return
-    }
-
-    setAddedResources((currentResources) => [
-      {
-        id: `${Date.now()}-${title}`,
-        title,
-        url: draftUrl.trim(),
-        note: draftNote.trim(),
-      },
-      ...currentResources,
-    ])
-    setDraftTitle("")
-    setDraftUrl("")
-    setDraftNote("")
-    setIsAddingResource(false)
-  }
-
   return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
-          <HugeiconsIcon icon={BookOpen01Icon} className="size-4" />
-          Resources
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="right" className="w-full overflow-hidden p-0 sm:max-w-xl">
-        <SheetHeader className="border-b border-border pr-14">
-          <SheetTitle>{project.project_name} resources</SheetTitle>
-          <SheetDescription>
-            Documentation, repositories, and project belongings for {employee.name}.
-          </SheetDescription>
-        </SheetHeader>
-
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-5 p-6">
-            <section className="rounded-3xl border border-border bg-card p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium">Project documentation</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {documentation
-                      ? formatGeneratedAt(documentation)
-                      : "No generated documentation has been stored yet."}
-                  </p>
-                </div>
-                {documentation ? (
-                  <DocumentationStatusBadge status={documentation.status} />
-                ) : (
-                  <Badge variant="outline">No docs</Badge>
-                )}
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Open the Documentation tab below the project preview to read the full
-                project guide.
-              </p>
-            </section>
-
-            <section>
-              <p className="mb-2 text-sm font-medium">GitHub repositories</p>
-              {repositories.length ? (
-                <div className="space-y-2">
-                  {repositories.map((repository) => (
-                    <a
-                      key={repository}
-                      href={repository}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="group flex items-center gap-2 rounded-2xl bg-muted px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-foreground"
-                    >
-                      <span className="min-w-0 flex-1 truncate">{repository}</span>
-                      <HugeiconsIcon
-                        icon={ArrowRight01Icon}
-                        className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground"
-                      />
-                    </a>
-                  ))}
-                </div>
-              ) : (
-                <p className="rounded-2xl border border-dashed p-3 text-sm text-muted-foreground">
-                  No repositories connected.
-                </p>
-              )}
-            </section>
-
-            <section className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl bg-muted p-3">
-                <p className="text-sm font-medium">Project phase</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {formatPhase(project.project_phase)}
-                </p>
-              </div>
-              <div className="rounded-2xl bg-muted p-3">
-                <p className="text-sm font-medium">Current team</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {project.current_team_members.length} teammate
-                  {project.current_team_members.length === 1 ? "" : "s"}
-                </p>
-              </div>
-            </section>
-
-            <section>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-sm font-medium">Added resources</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsAddingResource((current) => !current)}
-                >
-                  <HugeiconsIcon icon={Add01Icon} className="size-4" />
-                  Add resource
-                </Button>
-              </div>
-
-              {isAddingResource ? (
-                <form
-                  className="mb-3 space-y-3 rounded-3xl border border-border p-3"
-                  onSubmit={handleAddResource}
-                >
-                  <Input
-                    value={draftTitle}
-                    onChange={(event) => setDraftTitle(event.target.value)}
-                    placeholder="Resource name"
-                  />
-                  <Input
-                    value={draftUrl}
-                    onChange={(event) => setDraftUrl(event.target.value)}
-                    placeholder="Optional URL"
-                    type="url"
-                  />
-                  <Textarea
-                    value={draftNote}
-                    onChange={(event) => setDraftNote(event.target.value)}
-                    placeholder="Optional note"
-                  />
-                  <Button type="submit" size="sm" disabled={!draftTitle.trim()}>
-                    Save mock resource
-                  </Button>
-                </form>
-              ) : null}
-
-              {addedResources.length ? (
-                <div className="space-y-2">
-                  {addedResources.map((resource) => (
-                    <div
-                      key={resource.id}
-                      className="rounded-2xl border border-border bg-card p-3"
-                    >
-                      <p className="text-sm font-medium">{resource.title}</p>
-                      {resource.url ? (
-                        <a
-                          href={resource.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-1 block truncate text-xs text-muted-foreground hover:text-foreground"
-                        >
-                          {resource.url}
-                        </a>
-                      ) : null}
-                      {resource.note ? (
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          {resource.note}
-                        </p>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="rounded-2xl border border-dashed p-3 text-sm text-muted-foreground">
-                  Add a resource to mock how extra project links will appear here.
-                </p>
-              )}
-            </section>
+    <Card className="overflow-hidden border-primary/20 bg-primary/5">
+      <CardContent className="flex flex-col gap-5 p-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 gap-4">
+          <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground">
+            <HugeiconsIcon icon={BookOpen01Icon} className="size-6" />
           </div>
-        </ScrollArea>
-      </SheetContent>
-    </Sheet>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold tracking-tight">
+                Go to Resources
+              </h2>
+              {documentation ? (
+                <DocumentationStatusBadge status={documentation.status} />
+              ) : (
+                <Badge variant="outline">No docs</Badge>
+              )}
+            </div>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+              Open {project.project_name} resources to read the documentation and chat
+              with it side by side.
+            </p>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {documentation
+                ? formatGeneratedAt(documentation)
+                : `${project.github_repositories.length} connected repo${
+                    project.github_repositories.length === 1 ? "" : "s"
+                  }`}
+            </p>
+          </div>
+        </div>
+        <Button asChild className="shrink-0 rounded-full">
+          <Link href={`/spooner/${employee.id}/resources/${project.id}`}>
+            Open resources
+            <HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 
