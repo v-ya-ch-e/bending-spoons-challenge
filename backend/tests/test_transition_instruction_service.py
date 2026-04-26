@@ -269,6 +269,30 @@ def test_generate_offboarding_includes_source_docs_and_commit_context() -> None:
     assert prompt_payload["commit_context"][0]["commits"][0]["message"] == "Improve sync worker"
 
 
+def test_generate_offboarding_skips_commit_context_for_mock_documentation() -> None:
+    db = FakeDbClient()
+    db.documentation[10]["source_snapshot"] = {"generated_from": "mock"}
+    db.documentation[10]["model_metadata"] = {"source": "mock_documentation_seed"}
+    github = FakeGitHubClient()
+    openai = FakeOpenAIClient()
+
+    result = asyncio.run(
+        generate_transition_instruction(
+            7,
+            "offboarding",
+            db_client=db,
+            github_client=github,
+            openai_client=openai,
+        )
+    )
+
+    assert result["status"] == "ready"
+    assert result["input_snapshot"]["commit_repositories"] == []
+    assert github.calls == []
+    prompt_payload = json.loads(openai.messages[1]["content"])
+    assert prompt_payload["commit_context"] == []
+
+
 def test_generate_marks_instruction_failed_when_documentation_is_not_ready() -> None:
     db = FakeDbClient()
     db.documentation[20]["status"] = "running"

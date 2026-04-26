@@ -181,3 +181,58 @@ def test_fixture_loader_rejects_noncanonical_skill_maps() -> None:
 
     with pytest.raises(SystemExit):
         loader.validate_fixture_contract(data)
+
+
+def test_fixture_loader_inserts_mock_documentation_except_internal_project() -> None:
+    loader = load_module(
+        "load_fixtures_with_mock_documentation",
+        DB_API_DIR / "scripts" / "load_fixtures.py",
+    )
+    cursor = RecordingCursor()
+    projects = [
+        {
+            "project_name": "Evernote",
+            "project_description": "Personal productivity app.",
+            "project_phase": "growth",
+            "required_people_amount": 2,
+            "required_skills": {
+                "android": {"level_1": 0, "level_2": 0, "level_3": 0},
+                "ios": {"level_1": 0, "level_2": 0, "level_3": 0},
+                "web": {"level_1": 0, "level_2": 1, "level_3": 0},
+                "backend": {"level_1": 0, "level_2": 1, "level_3": 0},
+                "infrastructure": {"level_1": 0, "level_2": 0, "level_3": 0},
+                "ai": {"level_1": 0, "level_2": 0, "level_3": 0},
+            },
+            "github_repositories": ["https://github.com/bendingspoons/evernote-core"],
+        },
+        {
+            "project_name": "Mixing Spoons",
+            "project_description": "Internal platform with a real repository.",
+            "project_phase": "growth",
+            "required_people_amount": 2,
+            "required_skills": {
+                "android": {"level_1": 0, "level_2": 0, "level_3": 0},
+                "ios": {"level_1": 0, "level_2": 0, "level_3": 0},
+                "web": {"level_1": 0, "level_2": 1, "level_3": 0},
+                "backend": {"level_1": 0, "level_2": 1, "level_3": 0},
+                "infrastructure": {"level_1": 0, "level_2": 0, "level_3": 0},
+                "ai": {"level_1": 0, "level_2": 0, "level_3": 0},
+            },
+            "github_repositories": ["https://github.com/example/mixing-spoons"],
+        },
+    ]
+
+    inserted_count = loader.insert_mock_project_documentation(
+        cursor,
+        projects,
+        {"Evernote": 1, "Mixing Spoons": 2},
+    )
+
+    assert inserted_count == 1
+    assert len(cursor.calls) == 1
+    sql, params = cursor.calls[0]
+    assert sql.startswith("INSERT INTO project_documentation")
+    assert params[0] == 1
+    assert params[1] == "ready"
+    assert "# Evernote" in params[2]
+    assert json.loads(params[5])["source"] == "mock_documentation_seed"

@@ -90,6 +90,14 @@ export function ProjectDocumentationViewer({
     return <EmptyDocumentationState title="No projects" description={noProjectDescription} />
   }
 
+  if (markdown) {
+    return (
+      <ScrollArea className="h-full pr-4">
+        <MarkdownDocument markdown={markdown} />
+      </ScrollArea>
+    )
+  }
+
   if (!project.github_repositories.length) {
     return (
       <EmptyDocumentationState
@@ -117,14 +125,6 @@ export function ProjectDocumentationViewer({
         title="Generation failed"
         description={documentation.last_error ?? "Try fetching from GitHub again."}
       />
-    )
-  }
-
-  if (markdown) {
-    return (
-      <ScrollArea className="h-full pr-4">
-        <MarkdownDocument markdown={markdown} />
-      </ScrollArea>
     )
   }
 
