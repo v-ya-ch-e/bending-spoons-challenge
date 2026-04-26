@@ -14,8 +14,10 @@ import {
 import {
   getCachedProjects,
   listProjectDocumentation,
+  listMoveRequests,
   listProjects,
   type Employee,
+  type MoveRequest,
   type Project,
   type ProjectDocumentation,
   type ProjectSkillRequirement,
@@ -82,6 +84,7 @@ const chatPrompts = [
 export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenProps) {
   const cachedProjects = getCachedProjects()
   const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
+  const [transitionRequests, setTransitionRequests] = useState<MoveRequest[]>([])
   const [documentationByProject, setDocumentationByProject] = useState<
     Record<number, ProjectDocumentation | undefined>
   >({})
@@ -98,9 +101,10 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
           setIsLoading(true)
         }
         setError(null)
-        const [nextProjects, documentation] = await Promise.all([
+        const [nextProjects, documentation, moveRequests] = await Promise.all([
           listProjects(),
           listProjectDocumentation().catch(() => []),
+          listMoveRequests().catch(() => []),
         ])
 
         if (!isMounted) {
@@ -108,9 +112,19 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
         }
 
         setProjects(nextProjects)
+        const nextTransitionRequests = moveRequests.filter(
+          (request) =>
+            request.employee_id === employee.id &&
+            request.status === "transition_started"
+        )
+        setTransitionRequests(nextTransitionRequests)
         setDocumentationByProject(indexDocumentation(documentation))
         setSelectedProjectId((currentProjectId) => {
-          const nextAssignedProjects = getAssignedProjects(employee, nextProjects)
+          const nextAssignedProjects = getAssignedProjects(
+            employee,
+            nextProjects,
+            nextTransitionRequests
+          )
           if (
             currentProjectId &&
             nextAssignedProjects.some((project) => project.id === currentProjectId)
@@ -143,8 +157,8 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
   }, [employee])
 
   const assignedProjects = useMemo(
-    () => getAssignedProjects(employee, projects),
-    [employee, projects]
+    () => getAssignedProjects(employee, projects, transitionRequests),
+    [employee, projects, transitionRequests]
   )
   const activeSelectedProjectId =
     selectedProjectId &&
@@ -644,9 +658,19 @@ function PhaseBadge({ phase }: { phase: Project["project_phase"] }) {
   return <Badge variant="secondary">{formatPhase(phase)}</Badge>
 }
 
-function getAssignedProjects(employee: Employee, projects: Project[]) {
+function getAssignedProjects(
+  employee: Employee,
+  projects: Project[],
+  transitionRequests: MoveRequest[] = []
+) {
   const assignedIds = new Set(employee.current_project_ids ?? [])
   const assignedNames = new Set(employee.current_project_names ?? [])
+  for (const request of transitionRequests) {
+    if (request.from_project_id !== null) {
+      assignedIds.add(request.from_project_id)
+    }
+    assignedIds.add(request.to_project_id)
+  }
 
   return projects
     .filter(

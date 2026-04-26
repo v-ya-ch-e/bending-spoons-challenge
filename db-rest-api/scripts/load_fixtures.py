@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,7 @@ from mock_documentation import (  # noqa: E402
 
 SKILL_KEYS = ("android", "ios", "web", "backend", "infrastructure", "ai")
 PROJECT_SKILL_LEVEL_KEYS = ("level_1", "level_2", "level_3")
+FIXTURE_TIMESTAMP = datetime(2026, 4, 25, 12, 0, 0)
 
 
 def get_connection():
@@ -203,16 +205,19 @@ def insert_move_requests(
     move_requests: list[dict[str, Any]],
     employee_ids: dict[str, int],
     project_ids: dict[str, int],
-) -> int:
+) -> list[dict[str, Any]]:
     sql = """
         INSERT INTO move_requests (
             employee_id, from_project_id, to_project_id,
             reason, expected_role,
-            current_project_impact, status
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            current_project_impact, status,
+            cto_approval_status, cto_approved_at,
+            employee_approval_status, employee_approved_at,
+            responded_at
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
-    count = 0
-    for request in move_requests:
+    created: list[dict[str, Any]] = []
+    for index, request in enumerate(move_requests):
         employee_id = employee_ids.get(request["employee_name"])
         if employee_id is None:
             sys.exit(f"Move request references unknown employee {request['employee_name']!r}")
@@ -230,6 +235,16 @@ def insert_move_requests(
                 f"Move request references unknown from_project {from_project_name!r}"
             )
 
+        cto_approval_status, employee_approval_status = approval_statuses_for_request(request)
+        cto_approved_at = approval_timestamp(index, 0) if cto_approval_status == "approved" else None
+        employee_approved_at = (
+            approval_timestamp(index, 1) if employee_approval_status == "approved" else None
+        )
+        responded_at = (
+            None
+            if request["status"] == "pending"
+            else approval_timestamp(index, 2)
+        )
         cursor.execute(
             sql,
             (
@@ -240,10 +255,99 @@ def insert_move_requests(
                 request["expected_role"],
                 request["current_project_impact"],
                 request["status"],
+                cto_approval_status,
+                cto_approved_at,
+                employee_approval_status,
+                employee_approved_at,
+                responded_at,
             ),
         )
-        count += 1
+        created.append(
+            {
+                **request,
+                "id": cursor.lastrowid,
+                "employee_id": employee_id,
+                "from_project_id": from_project_id,
+                "to_project_id": to_project_id,
+            }
+        )
+    return created
+
+
+def approval_statuses_for_request(request: dict[str, Any]) -> tuple[str, str]:
+    cto_status = request.get("cto_approval_status")
+    employee_status = request.get("employee_approval_status")
+    if cto_status and employee_status:
+        return cto_status, employee_status
+
+    status = request["status"]
+    if status in {"transition_started", "completed"}:
+        return "approved", "approved"
+    if status == "accepted":
+        return "approved", "pending"
+    if status == "rejected":
+        return "rejected", "pending"
+    return "pending", "pending"
+
+
+def approval_timestamp(index: int, offset_minutes: int) -> datetime:
+    return FIXTURE_TIMESTAMP + timedelta(minutes=(index * 3) + offset_minutes)
+
+
+def insert_mock_transition_instructions(cursor, move_requests: list[dict[str, Any]]) -> int:
+    sql = """
+        INSERT INTO move_request_transition_instructions (
+            move_request_id, instruction_type, status, content_markdown,
+            input_snapshot, model_metadata, solved_at, solved_by_employee_id
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    count = 0
+    for request in move_requests:
+        if request["status"] not in {"transition_started", "completed"}:
+            continue
+        instruction_status = "solved" if request["status"] == "completed" else "ready"
+        solved_at = approval_timestamp(request["id"], 0) if instruction_status == "solved" else None
+        for instruction_type in ("onboarding", "offboarding"):
+            project_name = (
+                request["to_project_name"]
+                if instruction_type == "onboarding"
+                else request.get("from_project_name") or request["to_project_name"]
+            )
+            cursor.execute(
+                sql,
+                (
+                    request["id"],
+                    instruction_type,
+                    instruction_status,
+                    mock_transition_markdown(request, instruction_type, project_name),
+                    json.dumps(
+                        {
+                            "generated_from": "fixture",
+                            "source_project": request.get("from_project_name"),
+                            "target_project": request["to_project_name"],
+                        }
+                    ),
+                    json.dumps({"source": "mock_transition_seed"}),
+                    solved_at,
+                    request["employee_id"] if instruction_status == "solved" else None,
+                ),
+            )
+            count += 1
     return count
+
+
+def mock_transition_markdown(
+    request: dict[str, Any],
+    instruction_type: str,
+    project_name: str,
+) -> str:
+    title = "Onboarding" if instruction_type == "onboarding" else "Offboarding"
+    return (
+        f"# {title}: {project_name}\n\n"
+        f"- Review the move reason for {request['employee_name']}: {request['reason']}\n"
+        f"- Confirm ownership, documentation links, and first-week checkpoints.\n"
+        f"- Expected role: {request['expected_role']}."
+    )
 
 
 def insert_mock_project_documentation(
@@ -310,18 +414,22 @@ def main() -> None:
         assignment_count = insert_project_assignments(
             cursor, data["employees"], employee_ids, project_ids
         )
-        move_count = insert_move_requests(
+        move_requests = insert_move_requests(
             cursor, data["move_requests"], employee_ids, project_ids
         )
         documentation_count = insert_mock_project_documentation(
             cursor, data["projects"], project_ids
         )
+        transition_instruction_count = insert_mock_transition_instructions(
+            cursor, move_requests
+        )
         connection.commit()
         cursor.close()
         print(
             f"Inserted {len(project_ids)} projects, {len(employee_ids)} employees, "
-            f"{assignment_count} assignments, {move_count} move requests, "
-            f"{documentation_count} mock documentation rows from {args.fixture}."
+            f"{assignment_count} assignments, {len(move_requests)} move requests, "
+            f"{documentation_count} mock documentation rows, "
+            f"{transition_instruction_count} transition instructions from {args.fixture}."
         )
     except Exception:
         connection.rollback()

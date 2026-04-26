@@ -448,8 +448,16 @@ class InMemoryDatabase:
                 )
             elif "where mr.employee_id" in normalized:
                 employee_id = params[0]
-                instruction_type = params[1] if "instruction.instruction_type" in normalized else None
-                limit_params = params[2:] if instruction_type is not None else params[1:]
+                param_index = 1
+                instruction_type = None
+                if "instruction.instruction_type" in normalized:
+                    instruction_type = params[param_index]
+                    param_index += 1
+                excluded_status = None
+                if "mr.status !=" in normalized:
+                    excluded_status = params[param_index]
+                    param_index += 1
+                limit_params = params[param_index:]
                 rows = [
                     row
                     for row in (
@@ -461,6 +469,11 @@ class InMemoryDatabase:
                     and (
                         instruction_type is None
                         or row["instruction_type"] == instruction_type
+                    )
+                    and (
+                        excluded_status is None
+                        or self._find(self.move_requests, row["move_request_id"])["status"]
+                        != excluded_status
                     )
                 ]
                 cursor._many = self._limited(rows, limit_params)
@@ -1356,10 +1369,14 @@ def test_move_request_rejects_missing_foreign_keys(client: TestClient) -> None:
 
 def test_transition_instruction_crud_solve_and_completion(client: TestClient) -> None:
     employee_id = client.post("/employees", json=employee_payload()).json()["id"]
+    source_project_id = client.post("/projects", json=project_payload("Source")).json()["id"]
     project_id = client.post("/projects", json=project_payload()).json()["id"]
+    client.put(f"/employees/{employee_id}", json={"current_project_ids": [source_project_id]})
+    request_payload = move_request_payload(employee_id, project_id)
+    request_payload["from_project_id"] = source_project_id
     request_id = client.post(
         "/move-requests",
-        json=move_request_payload(employee_id, project_id),
+        json=request_payload,
     ).json()["id"]
 
     create_response = client.post(
@@ -1433,6 +1450,18 @@ def test_transition_instruction_crud_solve_and_completion(client: TestClient) ->
     )
     assert solve_offboarding.status_code == 200
     assert client.get(f"/move-requests/{request_id}").json()["status"] == "completed"
+    assert client.get(f"/employees/{employee_id}").json()["current_project_ids"] == [project_id]
+    assert (
+        client.get(
+            f"/employees/{employee_id}/transition-instructions",
+            params={"instruction_type": "onboarding"},
+        ).json()
+        == []
+    )
+    assert client.get(
+        f"/employees/{employee_id}/transition-instructions",
+        params={"instruction_type": "onboarding", "include_completed": True},
+    ).json() == [solve_onboarding.json()]
 
     delete_response = client.delete("/move-request-transition-instructions/2")
     assert delete_response.status_code == 204

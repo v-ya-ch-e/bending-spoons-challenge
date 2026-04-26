@@ -211,6 +211,14 @@ def test_start_generation_requires_approved_move_request() -> None:
         start_transition_instruction_generation(7, "onboarding", db_client=db)
 
 
+def test_start_generation_rejects_completed_move_request() -> None:
+    db = FakeDbClient()
+    db.move_request["status"] = "completed"
+
+    with pytest.raises(ValueError, match="transition started"):
+        start_transition_instruction_generation(7, "onboarding", db_client=db)
+
+
 def test_start_generation_stores_running_instruction_with_documentation_source() -> None:
     db = FakeDbClient()
 

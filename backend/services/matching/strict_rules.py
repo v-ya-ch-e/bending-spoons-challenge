@@ -22,7 +22,12 @@ from services.matching.models import (
     StrictRulesResult,
 )
 
-OPEN_MOVE_REQUEST_STATUSES = {"pending", "clarification_requested"}
+OPEN_MOVE_REQUEST_STATUSES = {
+    "pending",
+    "accepted",
+    "clarification_requested",
+    "transition_started",
+}
 
 
 def normalize_snapshot(

@@ -1,13 +1,15 @@
 import asyncio
 import os
 from pathlib import Path
+from typing import Any, Literal
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
-from clients import DbApiError
+from clients import DbApiClient, DbApiError
 from schemas import (
     MatchingRunRequest,
     MatchingRunResponse,
@@ -47,6 +49,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class MoveRequestApprovalRequest(BaseModel):
+    approver: Literal["cto", "employee"]
+    approval_status: Literal["pending", "approved", "rejected"]
 
 
 @app.get("/health")
@@ -146,6 +153,71 @@ async def generate_move_request_transition_instruction(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/move-requests/{request_id}/approval")
+async def approve_move_request(
+    request_id: int,
+    payload: MoveRequestApprovalRequest,
+    background_tasks: BackgroundTasks,
+) -> dict[str, Any]:
+    try:
+        move_request, running_instruction_types = await asyncio.to_thread(
+            _approve_move_request_and_start_transition,
+            request_id,
+            payload.model_dump(),
+        )
+        for instruction_type in running_instruction_types:
+            background_tasks.add_task(
+                transition_instruction_service.generate_transition_instruction,
+                request_id,
+                instruction_type,
+            )
+        return move_request
+    except DbApiError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+def _approve_move_request_and_start_transition(
+    request_id: int,
+    payload: dict[str, str],
+) -> tuple[dict[str, Any], list[str]]:
+    client = DbApiClient()
+    try:
+        move_request = client.update_move_request_approval(request_id, payload)
+        running_instruction_types: list[str] = []
+        if _move_request_transition_started(move_request):
+            for instruction_type in ("onboarding", "offboarding"):
+                try:
+                    instruction = transition_instruction_service.start_transition_instruction_generation(
+                        request_id,
+                        instruction_type,
+                        db_client=client,
+                    )
+                except Exception as exc:
+                    client.upsert_transition_instruction_by_move_request(
+                        request_id,
+                        instruction_type,
+                        {
+                            "status": "failed",
+                            "content_markdown": "",
+                            "last_error": str(exc),
+                        },
+                    )
+                    continue
+                if instruction.get("status") == "running":
+                    running_instruction_types.append(instruction_type)
+        return move_request, running_instruction_types
+    finally:
+        client.close()
+
+
+def _move_request_transition_started(move_request: dict[str, Any]) -> bool:
+    return (
+        move_request.get("status") == "transition_started"
+        and move_request.get("cto_approval_status") == "approved"
+        and move_request.get("employee_approval_status") == "approved"
+    )
 
 
 @app.post("/projects/{project_id}/matching:run", response_model=MatchingRunResponse)

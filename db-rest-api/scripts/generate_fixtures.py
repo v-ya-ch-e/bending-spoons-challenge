@@ -23,7 +23,15 @@ DEFAULT_ATTEMPTS = 3
 DEFAULT_MODEL = "gpt-4o-mini"
 DEFAULT_TIMEOUT_SECONDS = 90.0
 PROJECT_PHASES = ("new acquisition", "growth", "maintenance")
-MOVE_STATUSES = ("pending", "accepted", "rejected", "clarification_requested")
+MOVE_STATUSES = (
+    "pending",
+    "accepted",
+    "rejected",
+    "clarification_requested",
+    "transition_started",
+    "completed",
+)
+APPROVAL_STATUSES = ("pending", "approved", "rejected")
 
 
 class StrictBaseModel(BaseModel):
@@ -83,7 +91,16 @@ class MoveRequest(StrictBaseModel):
     reason: str
     expected_role: str
     current_project_impact: Literal["low", "medium", "high"]
-    status: Literal["pending", "accepted", "rejected", "clarification_requested"]
+    status: Literal[
+        "pending",
+        "accepted",
+        "rejected",
+        "clarification_requested",
+        "transition_started",
+        "completed",
+    ]
+    cto_approval_status: Literal["pending", "approved", "rejected"] = "pending"
+    employee_approval_status: Literal["pending", "approved", "rejected"] = "pending"
 
 
 class SeedData(StrictBaseModel):
@@ -107,11 +124,12 @@ Hard requirements:
 - Skill levels are integers from 0 to 3, where 0 means no experience and 3 means expert. Use the keys android, ios, web, backend, infrastructure, ai exactly.
 - project_phase must be one of: "new acquisition", "growth", "maintenance", and the dataset must include every phase at least once.
 - move_requests current_project_impact must be one of: "low", "medium", "high".
-- move_requests status must cover all four values: "pending", "accepted", "rejected", "clarification_requested".
+- move_requests status must cover all six values: "pending", "accepted", "rejected", "clarification_requested", "transition_started", "completed".
+- move_requests approval fields must match the status: pending/clarification_requested use pending approvals; accepted has exactly one approved side; rejected has at least one rejected side; transition_started/completed have both sides approved.
 - Every employee.current_projects entry must match a project_name from projects.
 - Every employee.preferences entry must match a project_name from projects.
 - Every move_request.employee_name must match an employee name; from_project_name (if not null) and to_project_name must match a project_name.
-- A move request's from_project_name must be one of that employee's current_projects, and to_project_name must be different from from_project_name.
+- A non-completed move request's from_project_name must be one of that employee's current_projects, and to_project_name must be different from from_project_name. A completed request should reflect the already-migrated assignment, so the employee should be assigned to to_project_name.
 - Every employee.github_username must be a unique, realistic mock GitHub username using only letters, numbers, and hyphens.
 - Vary roles, seniority, skill profiles, project mixes, and staffing gaps.
 """
@@ -348,8 +366,9 @@ Available employees:
 Move-request guidance:
 - Use only employee names from the available employees list.
 - Use only project names from the available projects list.
-- Cover all four status values: "pending", "accepted", "rejected", "clarification_requested".
-- For each request, from_project_name must be one of the employee's current_projects. If current_projects is empty, from_project_name must be null.
+- Cover all six status values: "pending", "accepted", "rejected", "clarification_requested", "transition_started", "completed".
+- Include cto_approval_status and employee_approval_status for every move request.
+- For each non-completed request, from_project_name must be one of the employee's current_projects. If current_projects is empty, from_project_name must be null. For completed requests, the employee's current_projects should include to_project_name because the migration has already happened.
 - to_project_name must be different from from_project_name.
 - Make reasons specific and grounded in the employee's skills, preferences, and the target project's needs.
 - Make some requests low impact because the source project is stable, and some medium/high impact because a key skill would leave."""
@@ -393,7 +412,7 @@ def normalize_seed_data(data: SeedData) -> None:
         assigned_projects = employee_projects.get(request.employee_name, set())
         if not assigned_projects:
             request.from_project_name = None
-        elif request.from_project_name not in assigned_projects:
+        elif request.status != "completed" and request.from_project_name not in assigned_projects:
             request.from_project_name = sorted(assigned_projects)[0]
 
 
@@ -519,6 +538,7 @@ def validate_seed_data(
             request.employee_name in employee_name_set
             and request.from_project_name is not None
             and request.from_project_name not in assigned_projects
+            and request.status != "completed"
         ):
             errors.append(
                 f"Move request for {request.employee_name!r} has from_project_name "
@@ -534,6 +554,44 @@ def validate_seed_data(
             errors.append(
                 f"Move request for {request.employee_name!r} targets the same project "
                 f"{request.to_project_name!r}"
+            )
+        if (
+            request.status == "completed"
+            and request.employee_name in employee_name_set
+            and request.to_project_name not in assigned_projects
+        ):
+            errors.append(
+                f"Completed move request for {request.employee_name!r} targets "
+                f"{request.to_project_name!r}, but employee is not assigned there"
+            )
+        approvals = {
+            request.cto_approval_status,
+            request.employee_approval_status,
+        }
+        if request.status in {"pending", "clarification_requested"} and approvals != {"pending"}:
+            errors.append(
+                f"Move request for {request.employee_name!r} has status "
+                f"{request.status!r} but non-pending approvals"
+            )
+        if request.status == "accepted":
+            approved_count = [
+                request.cto_approval_status,
+                request.employee_approval_status,
+            ].count("approved")
+            if approved_count != 1 or "rejected" in approvals:
+                errors.append(
+                    f"Accepted move request for {request.employee_name!r} must have exactly one approval"
+                )
+        if request.status == "rejected" and "rejected" not in approvals:
+            errors.append(
+                f"Rejected move request for {request.employee_name!r} must include a rejected approval"
+            )
+        if (
+            request.status in {"transition_started", "completed"}
+            and approvals != {"approved"}
+        ):
+            errors.append(
+                f"{request.status!r} move request for {request.employee_name!r} must have both approvals"
             )
 
     missing_statuses = set(MOVE_STATUSES) - statuses_seen

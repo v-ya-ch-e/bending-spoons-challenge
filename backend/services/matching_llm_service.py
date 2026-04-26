@@ -60,17 +60,18 @@ class MatchingLlmError(RuntimeError):
 
 
 def _matching_llm_timeout_seconds() -> float:
-    raw_value = os.environ.get("OPENAI_MATCHING_TIMEOUT_SECONDS", "20")
+    raw_value = os.environ.get("OPENAI_MATCHING_TIMEOUT_SECONDS", "60")
     try:
         return max(1.0, float(raw_value))
     except ValueError:
-        return 20.0
+        return 60.0
 
 
 async def evaluate_matching(payload: MatchingLlmRequest) -> MatchingLlmResponse:
     """Run step 2 (LLM refinement) over algorithm-produced candidate plans."""
 
     client = get_openai_client()
+    parse_kwargs = _responses_parse_kwargs(payload)
     request_client = (
         client.with_options(
             timeout=_matching_llm_timeout_seconds(),
@@ -80,13 +81,7 @@ async def evaluate_matching(payload: MatchingLlmRequest) -> MatchingLlmResponse:
         else client
     )
     try:
-        response = request_client.responses.parse(
-            model=get_openai_model(),
-            temperature=0.2,
-            instructions=SYSTEM_PROMPT,
-            input=payload.model_dump_json(indent=2),
-            text_format=MatchingLlmResponse,
-        )
+        response = request_client.responses.parse(**parse_kwargs)
     except ValidationError as exc:
         raise MatchingLlmError(f"LLM returned invalid response: {exc}") from exc
     except Exception as exc:
@@ -98,6 +93,29 @@ async def evaluate_matching(payload: MatchingLlmRequest) -> MatchingLlmResponse:
         raise MatchingLlmError(f"LLM produced no parsed output: {refusal}")
 
     return _validate_against_input(parsed, payload)
+
+
+def _responses_parse_kwargs(payload: MatchingLlmRequest) -> dict[str, object]:
+    model = get_openai_model()
+    kwargs: dict[str, object] = {
+        "model": model,
+        "instructions": SYSTEM_PROMPT,
+        "input": payload.model_dump_json(indent=2),
+        "text_format": MatchingLlmResponse,
+    }
+    if _supports_custom_temperature(model):
+        kwargs["temperature"] = 0.2
+    return kwargs
+
+
+def _supports_custom_temperature(model: str) -> bool:
+    normalized = model.strip().lower()
+    return not (
+        normalized.startswith("gpt-5")
+        or normalized.startswith("o1")
+        or normalized.startswith("o3")
+        or normalized.startswith("o4")
+    )
 
 
 def _public_openai_error(exc: Exception) -> str:
