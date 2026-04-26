@@ -347,6 +347,8 @@ export type MatchingRunEvent = {
   created_at: string
 }
 
+import { seedNewEmployeeMaleAvatar, syncEmployeeAvatarFaceAssignments } from "@/lib/employee-avatars"
+
 const dbApiBasePath = process.env.NEXT_PUBLIC_DB_API_BASE_URL?.trim() || "/db-api"
 const listCacheTtlMs = 5 * 60 * 1000
 
@@ -387,6 +389,10 @@ export function normalizeGithubUsername(value: string | null | undefined) {
 
 export function getGithubProfileUrl(username: string) {
   return `https://github.com/${username}`
+}
+
+function refreshEmployeeAvatarAssignments(employees: Employee[]) {
+  syncEmployeeAvatarFaceAssignments(employees)
 }
 
 async function fetchDbApi<T>(
@@ -556,6 +562,7 @@ export function getCachedMatchingRuns() {
 
 export async function listEmployees() {
   if (isCacheFresh(employeesCache)) {
+    refreshEmployeeAvatarAssignments(employeesCache!.data)
     return employeesCache!.data
   }
 
@@ -576,6 +583,7 @@ export async function listEmployees() {
       data: employees,
       fetchedAt: Date.now(),
     }
+    refreshEmployeeAvatarAssignments(employees)
     return employees
   } catch (error) {
     employeesCache =
@@ -750,6 +758,8 @@ export function createEmployee(employee: EmployeeCreateInput) {
       data: upsertById(employeesCache?.data, savedEmployee),
       fetchedAt: Date.now(),
     }
+    seedNewEmployeeMaleAvatar(savedEmployee.id)
+    refreshEmployeeAvatarAssignments(employeesCache.data)
     projectsCache = null
     return savedEmployee
   })
@@ -767,6 +777,7 @@ export function updateEmployee(employeeId: number, employee: EmployeeUpdateInput
       data: upsertById(employeesCache?.data, savedEmployee),
       fetchedAt: Date.now(),
     }
+    refreshEmployeeAvatarAssignments(employeesCache.data)
     projectsCache = null
     return savedEmployee
   })

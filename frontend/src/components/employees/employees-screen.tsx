@@ -20,7 +20,7 @@ import {
 import type { EmployeesInitialData } from "@/lib/server/db-api"
 import { CreateEmployeeDialog } from "@/components/employees/create-employee-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -48,6 +48,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { getEmployeeAvatarSrc } from "@/lib/employee-avatars"
 import { cn } from "@/lib/utils"
 
 type EmployeesScreenProps = {
@@ -479,6 +480,7 @@ function EmployeesTable({
               <TableCell>
                 <div className="flex min-w-0 items-center gap-3">
                   <Avatar>
+                    <AvatarImage src={getEmployeeAvatarSrc(employee)} alt="" />
                     <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
                   </Avatar>
                   <div className="min-w-0">
@@ -591,6 +593,7 @@ function EmployeeDetailPanel({
           <div className="flex flex-col gap-5 px-6 pt-5 pb-8">
             <div className="flex items-center gap-3">
               <Avatar size="lg">
+                <AvatarImage src={getEmployeeAvatarSrc(employee)} alt="" />
                 <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
               </Avatar>
               <div className="min-w-0">

@@ -44,6 +44,7 @@ import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { getEmployeeAvatarSrc } from "@/lib/employee-avatars"
 import { cn } from "@/lib/utils"
 
 type EmployeeMyProjectScreenProps = {
@@ -460,17 +461,29 @@ function TeamCard({ project }: { project: Project }) {
       <p className="mb-2 text-sm font-medium">Current team</p>
       {project.current_team_members.length ? (
         <div className="space-y-2">
-          {project.current_team_members.slice(0, 4).map((member, index) => (
-            <div
-              key={`${member}-${project.current_team_member_ids[index] ?? index}`}
-              className="flex items-center gap-3 rounded-2xl bg-muted px-3 py-2"
-            >
-              <Avatar size="sm">
-                <AvatarFallback>{getInitials(member)}</AvatarFallback>
-              </Avatar>
-              <span className="min-w-0 truncate text-sm font-medium">{member}</span>
-            </div>
-          ))}
+          {project.current_team_members.slice(0, 4).map((member, index) => {
+            const teammateId = project.current_team_member_ids[index]
+
+            return (
+              <div
+                key={`${member}-${teammateId ?? index}`}
+                className="flex items-center gap-3 rounded-2xl bg-muted px-3 py-2"
+              >
+                <Avatar size="sm">
+                  <AvatarImage
+                    src={getEmployeeAvatarSrc(
+                      typeof teammateId === "number"
+                        ? { id: teammateId, name: member }
+                        : { name: member }
+                    )}
+                    alt=""
+                  />
+                  <AvatarFallback>{getInitials(member)}</AvatarFallback>
+                </Avatar>
+                <span className="min-w-0 truncate text-sm font-medium">{member}</span>
+              </div>
+            )
+          })}
           {project.current_team_members.length > 4 ? (
             <p className="text-xs text-muted-foreground">
               +{project.current_team_members.length - 4} more teammates.

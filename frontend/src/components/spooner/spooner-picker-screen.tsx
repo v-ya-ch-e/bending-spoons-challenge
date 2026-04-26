@@ -5,7 +5,7 @@ import Link from "next/link"
 
 import { getCachedEmployees, listEmployees, type Employee } from "@/lib/db-api"
 import type { SpoonerPickerInitialData } from "@/lib/server/db-api"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/input-group"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { SearchIcon } from "@hugeicons/core-free-icons"
+import { getEmployeeAvatarSrc } from "@/lib/employee-avatars"
 
 const defaultSection = "my-project"
 
@@ -126,6 +127,7 @@ export function SpoonerPickerScreen({
                 className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left transition-colors hover:bg-muted"
               >
                 <Avatar size="lg">
+                  <AvatarImage src={getEmployeeAvatarSrc(employee)} alt="" />
                   <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
                 </Avatar>
                 <span className="min-w-0 flex-1">

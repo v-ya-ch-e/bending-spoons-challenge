@@ -79,6 +79,8 @@ const screenCopy = {
   }
 >
 
+const transitionCardClass = "border border-border shadow-none ring-0"
+
 export function TransitionInstructionScreen({
   employeeId,
   instructionType,
@@ -220,7 +222,7 @@ export function TransitionInstructionScreen({
               progressValue={progressValue}
             />
 
-            <Card className="min-h-[calc(100vh-16rem)]">
+            <Card className={cn(transitionCardClass, "min-h-[calc(100vh-16rem)]")}>
               <CardHeader>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -271,7 +273,7 @@ function TransitionSummaryCard({
   progressValue: number
 }) {
   return (
-    <Card className="h-fit">
+    <Card className={cn(transitionCardClass, "h-fit")}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <HugeiconsIcon
@@ -431,7 +433,7 @@ function EmptyTransitionState({
   instructionType: TransitionInstructionType
 }) {
   return (
-    <Card className="border-dashed">
+    <Card className={cn(transitionCardClass, "border-dashed")}>
       <CardContent className="flex min-h-72 flex-col items-center justify-center p-8 text-center">
         <HugeiconsIcon
           icon={instructionType === "onboarding" ? CheckListIcon : Task01Icon}
