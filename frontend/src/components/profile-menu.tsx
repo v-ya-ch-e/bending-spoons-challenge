@@ -4,14 +4,13 @@ import { useState, type ReactNode } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
   Logout03Icon,
-  Settings01Icon,
   UnfoldMoreIcon,
 } from "@hugeicons/core-free-icons"
 
 import type { AppRole } from "@/data/mock-navigation"
 import type { Employee } from "@/lib/db-api"
 import type { ThemeMode } from "@/lib/ui-preferences"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
   Command,
@@ -34,6 +33,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { getEmployeeAvatarSrc } from "@/lib/employee-avatars"
 import { cn } from "@/lib/utils"
 
 type ProfileMenuProps = {
@@ -86,6 +86,12 @@ export function ProfileMenu({
   onSpoonerChange,
   compact,
 }: ProfileMenuProps) {
+  const selectedSpooner =
+    role === "spooner"
+      ? spoonerOptions.find((employee) => employee.id === spoonerId) ?? null
+      : null
+  const profileAvatar = selectedSpooner ?? { name: user.name }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -101,6 +107,7 @@ export function ProfileMenu({
         >
           <span className="flex min-w-0 items-center gap-3">
             <Avatar size={compact ? "default" : "lg"}>
+              <AvatarImage src={getEmployeeAvatarSrc(profileAvatar)} alt="" />
               <AvatarFallback>{user.initials}</AvatarFallback>
             </Avatar>
             {!compact && (
@@ -166,11 +173,6 @@ export function ProfileMenu({
             ))}
           </SegmentedControl>
         </SwitchRow>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem>
-          <HugeiconsIcon icon={Settings01Icon} strokeWidth={2} />
-          Settings
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive">
           <HugeiconsIcon icon={Logout03Icon} strokeWidth={2} />
@@ -292,6 +294,7 @@ function SpoonerPicker({
                     }}
                   >
                     <Avatar size="sm">
+                      <AvatarImage src={getEmployeeAvatarSrc(employee)} alt="" />
                       <AvatarFallback>
                         {getInitials(employee.name)}
                       </AvatarFallback>
