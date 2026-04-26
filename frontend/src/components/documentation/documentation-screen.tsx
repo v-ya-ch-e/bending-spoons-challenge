@@ -44,6 +44,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { createTextRevealer } from "@/lib/streaming-text"
 
+const documentationCardClass = "border border-border shadow-none ring-0"
+
 export function DocumentationScreen() {
   const cachedProjects = getCachedProjects()
   const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
@@ -298,7 +300,7 @@ export function DocumentationScreen() {
       ) : null}
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)]">
-        <Card className="flex min-h-0 flex-col overflow-hidden">
+        <Card className={cn(documentationCardClass, "flex min-h-0 flex-col overflow-hidden")}>
           <CardHeader>
             <CardTitle>Projects</CardTitle>
             <CardDescription>Select a project to inspect its generated docs.</CardDescription>
@@ -351,7 +353,7 @@ export function DocumentationScreen() {
         </Card>
 
         <div className="grid min-h-0 gap-4 overflow-hidden xl:grid-cols-[minmax(0,1fr)_360px]">
-          <Card className="flex min-h-0 flex-col overflow-hidden">
+          <Card className={cn(documentationCardClass, "flex min-h-0 flex-col overflow-hidden")}>
             <CardHeader className="gap-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -422,6 +424,7 @@ export function DocumentationScreen() {
             project={selectedProject}
             documentation={selectedDocumentation}
             allowEditMode
+            className={documentationCardClass}
             onDraftChange={setDraft}
             onEditingChange={setIsEditing}
             onError={(message) => setError(message || null)}
@@ -440,7 +443,7 @@ export function DocumentationScreen() {
 function DocumentationLoadingState() {
   return (
     <div className="grid h-full gap-4 p-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:p-6">
-      <Card>
+      <Card className={documentationCardClass}>
         <CardHeader>
           <Skeleton className="h-5 w-28" />
           <Skeleton className="h-4 w-44" />
@@ -451,7 +454,7 @@ function DocumentationLoadingState() {
           ))}
         </CardContent>
       </Card>
-      <Card>
+      <Card className={documentationCardClass}>
         <CardHeader>
           <Skeleton className="h-6 w-56" />
           <Skeleton className="h-4 w-80" />

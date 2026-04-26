@@ -121,7 +121,7 @@ export type MatchingRunResponse = {
 type StreamEventHandler = (event: string, data: Record<string, unknown>) => void
 
 const backendApiBasePath =
-  process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL ?? "/api"
+  process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL?.trim() || "/api"
 const backendSkillKeys: SkillKey[] = [
   "android",
   "ios",
