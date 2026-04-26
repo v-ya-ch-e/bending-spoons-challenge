@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react"
 
 import { getCachedEmployees, listEmployees, type Employee } from "@/lib/db-api"
+import { EmployeeMyProjectScreen } from "@/components/spooner/employee-my-project-screen"
 import { Skeleton } from "@/components/ui/skeleton"
 
 type SpoonerWorkspaceProps = {
   spoonerId: number
+  section: string
   sectionLabel: string
 }
 
@@ -17,6 +19,7 @@ type ResolutionState =
 
 export function SpoonerWorkspace({
   spoonerId,
+  section,
   sectionLabel,
 }: SpoonerWorkspaceProps) {
   const cachedEmployees = getCachedEmployees()
@@ -34,8 +37,6 @@ export function SpoonerWorkspace({
   })
 
   useEffect(() => {
-    if (resolution.status !== "loading") return
-
     let isMounted = true
 
     listEmployees()
@@ -56,9 +57,12 @@ export function SpoonerWorkspace({
     return () => {
       isMounted = false
     }
-  }, [resolution.status, spoonerId])
+  }, [spoonerId])
 
-  if (resolution.status === "loading") {
+  if (
+    resolution.status === "loading" ||
+    (resolution.status === "found" && resolution.employee.id !== spoonerId)
+  ) {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <div className="w-full max-w-md space-y-4">
@@ -89,6 +93,10 @@ export function SpoonerWorkspace({
   }
 
   const { employee } = resolution
+
+  if (section === "my-project") {
+    return <EmployeeMyProjectScreen employee={employee} />
+  }
 
   return (
     <div className="flex h-full items-center justify-center p-6">
