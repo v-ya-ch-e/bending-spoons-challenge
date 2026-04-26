@@ -104,7 +104,7 @@ const steps: Array<{
   {
     id: "assignment",
     label: "Assignment",
-    description: "Current project and project preferences.",
+    description: "Current company and company preferences.",
   },
   {
     id: "summary",
@@ -643,18 +643,18 @@ function AssignmentStep({
     <section className="animate-in fade-in-0 slide-in-from-right-2 flex flex-col gap-6 duration-200">
       <StepHeading
         title="Assignment"
-        description="Assign a current project and capture projects the employee would prefer to work on."
+        description="Assign a current company and capture companies the employee would prefer to work on."
       />
       <div className="flex flex-col gap-4">
-        <Field label="Current project">
+        <Field label="Current company">
           <Select
             value={formState.currentProject || "none"}
             onValueChange={(value) =>
               onChange({ currentProject: value === "none" ? "" : value })
             }
           >
-            <SelectTrigger aria-label="Current project" className="w-full">
-              <SelectValue placeholder="Select current project" />
+            <SelectTrigger aria-label="Current company" className="w-full">
+              <SelectValue placeholder="Select current company" />
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
@@ -674,7 +674,7 @@ function AssignmentStep({
         </Field>
         <Field
           label="Preferences"
-          description="Optional. Use project names, separated with commas or new lines."
+          description="Optional. Use company names, separated with commas or new lines."
         >
           <Textarea
             value={formState.preferencesText}
@@ -687,7 +687,7 @@ function AssignmentStep({
         {projects.length > 0 && (
           <div className="flex flex-col gap-2">
             <p className="text-xs font-medium text-muted-foreground">
-              Add from current projects
+              Add from current companies
             </p>
             <div className="flex flex-wrap gap-2">
               {projects.slice(0, 8).map((project) => (
@@ -767,7 +767,7 @@ function SummaryStep({
       </SummaryCard>
       <SummaryCard title="Assignment" onEdit={() => onEditStep(2)}>
         <SummaryRow
-          label="Current project"
+          label="Current company"
           value={formState.currentProject || "Unassigned"}
         />
         <SummaryTokenRow

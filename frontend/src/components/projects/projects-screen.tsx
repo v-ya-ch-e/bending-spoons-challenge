@@ -107,7 +107,7 @@ const tooltipPlannedHeadcount =
   "Planned headcount is the minimum number of distinct people implied by staffing roles (from extraction or your edits). It is not the sum of every per-skill line below: one engineer can satisfy several skill dimensions, so overlap is normal."
 
 const tooltipCurrentTeam =
-  "People currently assigned to this project in internal records. Coverage compares this count to planned headcount."
+  "People currently assigned to this company in internal records. Coverage compares this count to planned headcount."
 
 const tooltipCoverage =
   "Coverage is current team size divided by planned headcount. It does not check each per-skill row separately — only how many assigned people you have versus the planned minimum team."
@@ -189,7 +189,7 @@ export function ProjectsScreen({
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Unable to load project data."
+            : "Unable to load company data."
         )
       } finally {
         if (isMounted) {
@@ -286,7 +286,7 @@ export function ProjectsScreen({
 
     return [
       {
-        label: "Total projects",
+        label: "Total companies",
         value: projects.length,
       },
       {
@@ -407,9 +407,9 @@ export function ProjectsScreen({
       <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Companies</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Manage acquired products, staffing needs, required skills, and
+              Manage acquired companies, staffing needs, required skills, and
               repositories in one place.
             </p>
           </div>
@@ -422,8 +422,8 @@ export function ProjectsScreen({
               <InputGroupInput
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Product, phase, skill, team..."
-                aria-label="Search projects"
+                placeholder="Company, phase, skill, team..."
+                aria-label="Search companies"
               />
             </InputGroup>
 
@@ -433,7 +433,7 @@ export function ProjectsScreen({
             >
               <SelectTrigger
                 size="sm"
-                aria-label="Sort projects"
+                aria-label="Sort companies"
                 className="min-w-36"
               >
                 <SelectValue placeholder="Sort" />
@@ -504,14 +504,14 @@ export function ProjectsScreen({
           </Tabs>
           {!isLoading && filteredProjects.length > 0 && (
             <span className="shrink-0 text-sm text-muted-foreground">
-              Showing {filteredProjects.length} of {projects.length} projects
+              Showing {filteredProjects.length} of {projects.length} companies
             </span>
           )}
         </div>
 
         {error ? (
           <Alert variant="destructive">
-            <AlertTitle>Could not load projects</AlertTitle>
+            <AlertTitle>Could not load companies</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : (
@@ -584,7 +584,7 @@ function ProjectsTable({
     <Table className="table-fixed">
       <TableHeader>
         <TableRow>
-          <TableHead className="w-[20%]">Project</TableHead>
+          <TableHead className="w-[20%]">Company</TableHead>
           <TableHead className="w-[14%]">Phase</TableHead>
           <TableHead className="w-[24%]">Required skills</TableHead>
           <TableHead className="w-[20%]">Team</TableHead>
@@ -763,7 +763,7 @@ function ProjectDetailPanel({
       <div className="flex items-center justify-between gap-3 border-b border-border px-6 py-5">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Project detail
+            Company detail
           </p>
           <h2 className="mt-1 font-semibold">Company workspace</h2>
         </div>
@@ -779,7 +779,7 @@ function ProjectDetailPanel({
             variant="ghost"
             size="icon-sm"
             onClick={onClose}
-            aria-label="Close project detail"
+            aria-label="Close company detail"
           >
             <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} />
           </Button>
@@ -916,9 +916,9 @@ function ProjectDetailPanel({
       ) : (
         <div className="px-6 pt-5 pb-8">
           <Alert>
-            <AlertTitle>Project not found</AlertTitle>
+            <AlertTitle>Company not found</AlertTitle>
             <AlertDescription>
-              The selected project is not present in the current backend response.
+              The selected company is not present in the current backend response.
             </AlertDescription>
           </Alert>
         </div>
@@ -1047,7 +1047,7 @@ function ProjectEmployeeDetailPanel({
                     <p className="font-medium">{employee.current_project}</p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {project?.project_description ??
-                        "Project details are not available from the current API response."}
+                        "Company details are not available from the current API response."}
                     </p>
                   </div>
                   {project && (
@@ -1062,7 +1062,7 @@ function ProjectEmployeeDetailPanel({
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  This employee is not assigned to a current project.
+                  This employee is not assigned to a current company.
                 </p>
               )}
             </DetailSection>
@@ -1121,7 +1121,7 @@ function ProjectsEmptyState() {
   return (
     <div className="flex min-h-80 items-center justify-center p-8 text-center">
       <div className="max-w-sm">
-        <h2 className="text-lg font-semibold">No projects found</h2>
+        <h2 className="text-lg font-semibold">No companies found</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Try adjusting the search query or selected filter.
         </p>

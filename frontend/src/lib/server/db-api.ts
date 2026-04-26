@@ -45,6 +45,15 @@ export type MatchingInitialData = {
   runBundles: MatchingRunBundle[]
 }
 
+export type OverviewInitialData = {
+  employees: Employee[]
+  projects: Project[]
+  documentation: ProjectDocumentation[]
+  moveRequests: MoveRequest[]
+  policies: MatchingPolicy[]
+  runBundles: MatchingRunBundle[]
+}
+
 export type SpoonerPickerInitialData = {
   employees: Employee[]
 }
@@ -137,6 +146,27 @@ async function loadMatchingPlanCount() {
   return buildMovePlans(initialData).length
 }
 
+async function loadRecentMatchingRunBundles(matchingRuns: MatchingRun[]) {
+  const recentRuns = matchingRuns
+    .filter((run) => run.use_case === "project_rebalance")
+    .sort(
+      (left, right) =>
+        new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+    )
+    .slice(0, 24)
+
+  return Promise.all(
+    recentRuns.map(async (run) => {
+      const [recommendations, candidates] = await Promise.all([
+        listServerMatchingRecommendations(run.id),
+        listServerMatchingCandidates(run.id),
+      ])
+
+      return { run, recommendations, candidates }
+    })
+  )
+}
+
 export async function loadAppShellInitialData(): Promise<AppShellInitialData | null> {
   const [employeesResult, projectsResult, matchingPlanCountResult] = await Promise.allSettled([
     listServerEmployees(),
@@ -163,6 +193,51 @@ export async function loadAppShellInitialData(): Promise<AppShellInitialData | n
     projectCount: projects.length,
     employeeCount: employees.length,
     matchingPlanCount,
+  }
+}
+
+export async function loadOverviewInitialData(): Promise<OverviewInitialData | null> {
+  const [
+    employeesResult,
+    projectsResult,
+    documentationResult,
+    moveRequestsResult,
+    policiesResult,
+    matchingRunsResult,
+  ] = await Promise.allSettled([
+    listServerEmployees(),
+    listServerProjects(),
+    listServerProjectDocumentation(),
+    listServerMoveRequests(),
+    listServerMatchingPolicies(),
+    listServerMatchingRuns(),
+  ])
+
+  if (
+    employeesResult.status === "rejected" &&
+    projectsResult.status === "rejected" &&
+    documentationResult.status === "rejected" &&
+    moveRequestsResult.status === "rejected" &&
+    policiesResult.status === "rejected" &&
+    matchingRunsResult.status === "rejected"
+  ) {
+    return null
+  }
+
+  const runBundles =
+    matchingRunsResult.status === "fulfilled"
+      ? await loadRecentMatchingRunBundles(matchingRunsResult.value).catch(() => [])
+      : []
+
+  return {
+    employees: employeesResult.status === "fulfilled" ? employeesResult.value : [],
+    projects: projectsResult.status === "fulfilled" ? projectsResult.value : [],
+    documentation:
+      documentationResult.status === "fulfilled" ? documentationResult.value : [],
+    moveRequests:
+      moveRequestsResult.status === "fulfilled" ? moveRequestsResult.value : [],
+    policies: policiesResult.status === "fulfilled" ? policiesResult.value : [],
+    runBundles,
   }
 }
 
@@ -222,23 +297,7 @@ export async function loadMatchingInitialData(): Promise<MatchingInitialData | n
       listServerMatchingPolicies(),
       listServerMatchingRuns(),
     ])
-    const recentRuns = matchingRuns
-      .filter((run) => run.use_case === "project_rebalance")
-      .sort(
-        (left, right) =>
-          new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
-      )
-      .slice(0, 24)
-    const runBundles = await Promise.all(
-      recentRuns.map(async (run) => {
-        const [recommendations, candidates] = await Promise.all([
-          listServerMatchingRecommendations(run.id),
-          listServerMatchingCandidates(run.id),
-        ])
-
-        return { run, recommendations, candidates }
-      })
-    )
+    const runBundles = await loadRecentMatchingRunBundles(matchingRuns)
 
     return {
       employees,

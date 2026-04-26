@@ -25,7 +25,7 @@ export const currentUser = {
 export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
   cto: {
     label: "CTO",
-    primaryAction: "Create project",
+    primaryAction: "Create company",
     navItems: [
       {
         label: "Overview",
@@ -33,7 +33,7 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
         href: "/cto/overview",
       },
       {
-        label: "Projects",
+        label: "Companies",
         value: "projects",
         href: "/cto/projects",
         primaryAction: "Add company",
@@ -66,7 +66,7 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
     primaryAction: "Review request",
     navItems: [
       {
-        label: "My Projects",
+        label: "My Companies",
         value: "my-project",
         href: "/spooner/my-project",
       },

@@ -334,7 +334,7 @@ export function CreateProjectDialog({
   function validateStep(step: StepId): string | null {
     if (step === "company") {
       if (!formState.projectName.trim()) {
-        return "Enter the company or product name."
+        return "Enter the company name."
       }
 
       if (!normalizeDomain(formState.websiteUrl)) {
@@ -509,12 +509,12 @@ export function CreateProjectDialog({
       onCreated(savedProject)
     } catch (error) {
       if (error instanceof DbApiError && error.status === 409) {
-        setSubmitError("A project with this name already exists.")
+        setSubmitError("A company with this name already exists.")
       } else {
         setSubmitError(
           error instanceof Error
             ? error.message
-            : `Unable to ${isEditMode ? "save" : "create"} the project.`
+            : `Unable to ${isEditMode ? "save" : "create"} the company.`
         )
       }
     } finally {
@@ -531,8 +531,8 @@ export function CreateProjectDialog({
           </DialogTitle>
           <DialogDescription className="sr-only">
             {isEditMode
-              ? "Edit a project workspace and its staffing requirements."
-              : "Create a project workspace and extract initial staffing requirements."}
+              ? "Edit a company workspace and its staffing requirements."
+              : "Create a company workspace and extract initial staffing requirements."}
           </DialogDescription>
         </DialogHeader>
 
@@ -747,7 +747,7 @@ function CompanyStep({
             <div className="mb-4">
               <h3 className="font-medium">Company identity</h3>
               <p className="mt-1 text-sm text-muted-foreground">
-                This becomes the workspace name, product context, and acquisition phase.
+                This becomes the workspace name, company context, and acquisition phase.
               </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -1006,7 +1006,7 @@ function SourcesStep({
       <Alert>
         <AlertTitle>GitHub drives extraction</AlertTitle>
         <AlertDescription>
-          The current backend analyzes GitHub repositories, project phase, and
+          The current backend analyzes GitHub repositories, company phase, and
           description. Notion and Slack are kept as review context until backend
           support is added.
         </AlertDescription>
@@ -1318,7 +1318,7 @@ function ReviewStep({
         <AlertTitle>What happens next</AlertTitle>
         <AlertDescription>
           The company workspace, repositories, generated logo, and minimum staffing
-          requirements will be saved to the current projects API.
+          requirements will be saved to the current companies API.
         </AlertDescription>
       </Alert>
     </section>
@@ -1959,7 +1959,7 @@ function formatExtractionError(error: unknown, repositoryUrls: string[]) {
   }
 
   return [
-    "Unable to extract project requirements.",
+    "Unable to extract company requirements.",
     repositories,
     error instanceof Error ? `Details: ${error.message}` : "",
   ]

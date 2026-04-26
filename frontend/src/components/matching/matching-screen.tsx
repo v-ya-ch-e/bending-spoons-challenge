@@ -2299,7 +2299,7 @@ function DeletePlanDialog({
           <DialogTitle>Delete this plan?</DialogTitle>
           <DialogDescription>
             {plan?.lifecycle === "completed"
-              ? "This removes stored matching data and related move requests. It does not revert project assignments that were already applied."
+              ? "This removes stored matching data and related move requests. It does not revert company assignments that were already applied."
               : "This permanently deletes the move requests for this plan and removes the matching run (draft recommendations and audit events)."}
           </DialogDescription>
         </DialogHeader>
@@ -2462,7 +2462,7 @@ function EditMoveRequestFormBody({
           <span className="text-sm font-medium">From company</span>
           <Select value={fromProjectId} onValueChange={setFromProjectId}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Source project" />
+              <SelectValue placeholder="Source company" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={BENCH_SELECT_VALUE}>Bench (unassigned)</SelectItem>
@@ -2478,7 +2478,7 @@ function EditMoveRequestFormBody({
           <span className="text-sm font-medium">To company</span>
           <Select value={toProjectId} onValueChange={setToProjectId}>
             <SelectTrigger className="w-full">
-              <SelectValue placeholder="Target project" />
+              <SelectValue placeholder="Target company" />
             </SelectTrigger>
             <SelectContent>
               {projects.map((project) => (
@@ -2501,7 +2501,7 @@ function EditMoveRequestFormBody({
           />
         </div>
         <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium">Current project impact</span>
+          <span className="text-sm font-medium">Current company impact</span>
           <Select
             value={impact}
             onValueChange={(value) => setImpact(value as ImpactLevel)}
@@ -2576,7 +2576,7 @@ function EditMoveRequestDialog({
         <DialogHeader>
           <DialogTitle>Edit move request</DialogTitle>
           <DialogDescription>
-            Changes are saved to the move request record only; project assignments are
+            Changes are saved to the move request record only; company assignments are
             not updated automatically.
           </DialogDescription>
         </DialogHeader>
@@ -2666,7 +2666,7 @@ function ForceOverrideDialog({
           <DialogTitle>Force approve and execute</DialogTitle>
           <DialogDescription>
             This bypasses employee confirmation, marks unresolved requests accepted,
-            and immediately applies project assignments.
+            and immediately applies company assignments.
           </DialogDescription>
         </DialogHeader>
 

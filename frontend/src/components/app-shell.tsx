@@ -316,6 +316,7 @@ export function AppShell({
               activeLabel={activeNavItem.label}
               primaryAction={activeNavItem.primaryAction ?? workspace.primaryAction}
               primaryActionHref={activeNavItem.primaryActionHref}
+              showPrimaryAction={activeNavItem.value !== "overview"}
               sidebarCollapsed={sidebarCollapsed}
               onSidebarCollapsedChange={handleSidebarCollapsedChange}
             />

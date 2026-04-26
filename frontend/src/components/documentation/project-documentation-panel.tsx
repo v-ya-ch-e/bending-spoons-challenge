@@ -74,7 +74,7 @@ export function ProjectDocumentationViewer({
   documentation,
   markdown,
   generationStatus,
-  noProjectDescription = "Create a project first.",
+  noProjectDescription = "Create a company first.",
   noRepositoriesDescription = "Add at least one GitHub repository to generate documentation.",
   noDocumentationDescription = "Fetch from GitHub to generate the first version.",
 }: {
@@ -87,7 +87,7 @@ export function ProjectDocumentationViewer({
   noDocumentationDescription?: string
 }) {
   if (!project) {
-    return <EmptyDocumentationState title="No projects" description={noProjectDescription} />
+    return <EmptyDocumentationState title="No companies" description={noProjectDescription} />
   }
 
   if (markdown) {
@@ -144,7 +144,7 @@ export function ProjectDocumentationChat({
   onEditingChange,
   onError,
   starterPrompts = defaultStarterPrompts,
-  description = "Ask questions about the generated project documentation.",
+  description = "Ask questions about the generated company documentation.",
   className,
 }: {
   project?: Project | null

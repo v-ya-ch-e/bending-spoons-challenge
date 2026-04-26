@@ -126,7 +126,7 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
         setError(
           loadError instanceof Error
             ? loadError.message
-            : "Unable to load assigned projects."
+            : "Unable to load assigned companies."
         )
       } finally {
         if (isMounted) {
@@ -168,7 +168,7 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
         <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-sm text-muted-foreground">Employee workspace</p>
-            <h1 className="text-2xl font-semibold tracking-tight">My Projects</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">My Companies</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Assigned projects, source documentation, and project-specific guidance
               for {employee.name}.
@@ -186,7 +186,7 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
 
         {error ? (
           <Alert variant="destructive">
-            <AlertTitle>Could not load My Projects</AlertTitle>
+            <AlertTitle>Could not load My Companies</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
@@ -199,7 +199,7 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
           <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
             <Card className="h-fit xl:sticky xl:top-6">
               <CardHeader>
-                <CardTitle>Assigned projects</CardTitle>
+                <CardTitle>Assigned companies</CardTitle>
                 <CardDescription>
                   Switch between every project currently linked to you.
                 </CardDescription>
@@ -232,7 +232,7 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
               <Tabs defaultValue="documentation" className="gap-4">
                 <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="px-1">
-                    <p className="text-sm font-medium">Project knowledge</p>
+                    <p className="text-sm font-medium">Company knowledge</p>
                     <p className="text-xs text-muted-foreground">
                       Switch between full documentation and the interactive assistant.
                     </p>
@@ -295,7 +295,7 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
                     project={selectedProject}
                     documentation={selectedDocumentation}
                     starterPrompts={chatPrompts}
-                    description="Ask about this project's docs from your employee perspective."
+                    description="Ask about this company's docs from your employee perspective."
                     className="min-h-[32rem]"
                   />
                 </TabsContent>
@@ -471,7 +471,7 @@ function ProjectLinks({ project }: { project: Project }) {
         )}
       </div>
       <div>
-        <p className="mb-2 text-sm font-medium">Project focus</p>
+        <p className="mb-2 text-sm font-medium">Company focus</p>
         <div className="rounded-2xl bg-muted p-3 text-sm text-muted-foreground">
           <p>
             This project is in <span className="font-medium text-foreground">{formatPhase(project.project_phase)}</span>
@@ -567,10 +567,10 @@ function EmptyAssignedProjects({ employee }: { employee: Employee }) {
     <Card className="border-dashed">
       <CardContent className="flex min-h-[420px] flex-col items-center justify-center p-8 text-center">
         <HugeiconsIcon icon={Briefcase01Icon} className="mb-3 size-9 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">No assigned projects</h2>
+        <h2 className="text-lg font-semibold">No assigned companies</h2>
         <p className="mt-2 max-w-md text-sm text-muted-foreground">
-          {employee.name} is not assigned to a project in the current staffing data.
-          Approved move requests will surface onboarding and project context here.
+          {employee.name} is not assigned to a company in the current staffing data.
+          Approved move requests will surface onboarding and company context here.
         </p>
         <Button type="button" variant="outline" className="mt-5" asChild>
           <Link href={`/spooner/${employee.id}/requests`}>Review requests</Link>

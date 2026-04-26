@@ -243,7 +243,7 @@ export function EmployeesScreen({
         value: employees.length - assignedCount,
       },
       {
-        label: "Projects represented",
+        label: "Companies represented",
         value: representedProjects.size,
       },
     ]
@@ -333,7 +333,7 @@ export function EmployeesScreen({
           <div className="max-w-2xl">
             <h1 className="text-2xl font-semibold tracking-tight">Employees</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Manage internal talent and understand current project allocation.
+              Manage internal talent and understand current company allocation.
             </p>
           </div>
 
@@ -345,7 +345,7 @@ export function EmployeesScreen({
               <InputGroupInput
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Name, role, project, interest..."
+                placeholder="Name, role, company, interest..."
                 aria-label="Search employees"
               />
             </InputGroup>
@@ -362,7 +362,7 @@ export function EmployeesScreen({
                 <SelectGroup>
                   <SelectItem value="name">Sort: Name</SelectItem>
                   <SelectItem value="role">Sort: Role</SelectItem>
-                  <SelectItem value="project">Sort: Project</SelectItem>
+                  <SelectItem value="project">Sort: Company</SelectItem>
                 </SelectGroup>
               </SelectContent>
             </Select>
@@ -459,7 +459,7 @@ function EmployeesTable({
         <TableRow>
           <TableHead className="w-[14%]">Employee</TableHead>
           <TableHead>Role</TableHead>
-          <TableHead>Current project</TableHead>
+          <TableHead>Current company</TableHead>
           <TableHead>Top skills</TableHead>
           <TableHead>Preferences</TableHead>
           <TableHead className="w-24 text-right">Action</TableHead>
@@ -628,7 +628,7 @@ function EmployeeDetailPanel({
                     <p className="font-medium">{employee.current_project}</p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {project?.project_description ??
-                        "Project details are not available from the current API response."}
+                        "Company details are not available from the current API response."}
                     </p>
                   </div>
                   {project && (
@@ -643,7 +643,7 @@ function EmployeeDetailPanel({
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  This employee is not assigned to a current project.
+                  This employee is not assigned to a current company.
                 </p>
               )}
             </DetailSection>
@@ -654,7 +654,7 @@ function EmployeeDetailPanel({
             </DetailSection>
 
             {project && (
-              <DetailSection title="Project context">
+              <DetailSection title="Company context">
                 <div className="flex flex-col gap-3">
                   <div>
                     <p className="text-xs font-medium text-muted-foreground">

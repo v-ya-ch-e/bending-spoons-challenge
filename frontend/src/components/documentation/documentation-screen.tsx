@@ -292,7 +292,7 @@ export function DocumentationScreen({
           <p className="text-sm text-muted-foreground">CTO workspace</p>
           <h1 className="text-2xl font-semibold tracking-tight">Documentation</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">
-            Generate, review, and tune project documentation from GitHub before it is
+            Generate, review, and tune company documentation from GitHub before it is
             reused for onboarding and offboarding.
           </p>
         </div>
@@ -306,7 +306,7 @@ export function DocumentationScreen({
           }
           title={
             selectedDocumentationIsMock
-              ? "This project uses seeded mock documentation, so GitHub refresh is disabled."
+              ? "This company uses seeded mock documentation, so GitHub refresh is disabled."
               : undefined
           }
         >
@@ -329,8 +329,8 @@ export function DocumentationScreen({
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)]">
         <Card className={cn(documentationCardClass, "flex min-h-0 flex-col overflow-hidden")}>
           <CardHeader>
-            <CardTitle>Projects</CardTitle>
-            <CardDescription>Select a project to inspect its generated docs.</CardDescription>
+            <CardTitle>Companies</CardTitle>
+            <CardDescription>Select a company to inspect its generated docs.</CardDescription>
           </CardHeader>
           <CardContent className="min-h-0 flex-1">
             <ScrollArea className="h-full pr-3">
@@ -400,7 +400,7 @@ export function DocumentationScreen({
                   ) : null}
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <CardTitle>{selectedProject?.project_name ?? "No project selected"}</CardTitle>
+                      <CardTitle>{selectedProject?.project_name ?? "No company selected"}</CardTitle>
                       {selectedDocumentation ? (
                         <DocumentationStatusBadge status={selectedDocumentation.status} />
                       ) : null}
@@ -450,7 +450,7 @@ export function DocumentationScreen({
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   className="h-full min-h-[360px] resize-none font-mono text-sm"
-                  placeholder="Write or paste project documentation in Markdown..."
+                  placeholder="Write or paste company documentation in Markdown..."
                 />
               ) : (
                 <ProjectDocumentationViewer
