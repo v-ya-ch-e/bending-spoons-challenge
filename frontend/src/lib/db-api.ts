@@ -620,12 +620,12 @@ export async function listProjects() {
   }
 }
 
-export async function listMatchingRuns() {
-  if (isCacheFresh(matchingRunsCache)) {
+export async function listMatchingRuns({ force = false }: { force?: boolean } = {}) {
+  if (!force && isCacheFresh(matchingRunsCache)) {
     return matchingRunsCache!.data
   }
 
-  if (matchingRunsCache?.promise) {
+  if (!force && matchingRunsCache?.promise) {
     return matchingRunsCache.promise
   }
 
