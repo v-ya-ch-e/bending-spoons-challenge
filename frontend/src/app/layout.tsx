@@ -23,11 +23,19 @@ export const metadata: Metadata = {
     "Internal platform for staffing decisions, transitions, and company documentation.",
   icons: {
     icon: [
-      { url: "/favicon.svg", type: "image/svg+xml" },
-      { url: "/favicon.png", type: "image/png" },
+      {
+        url: "/icon_light.png",
+        type: "image/png",
+        media: "(prefers-color-scheme: light)",
+      },
+      {
+        url: "/icon_dark.png",
+        type: "image/png",
+        media: "(prefers-color-scheme: dark)",
+      },
     ],
-    shortcut: "/favicon.svg",
-    apple: "/favicon.png",
+    shortcut: "/icon_light.png",
+    apple: "/icon_light.png",
   },
 };
 

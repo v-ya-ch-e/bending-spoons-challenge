@@ -81,41 +81,41 @@ export function SidebarNav({
     >
       <div
         className={cn(
-          "relative flex h-12 items-center overflow-hidden transition-all duration-300 ease-out",
+          "relative flex h-16 items-center overflow-hidden transition-all duration-300 ease-out",
           collapsed ? "justify-center" : "justify-start"
         )}
       >
         <Image
-          src="/logo_bending_spoons.svg"
+          src="/logo_light.png"
           alt="Mixing Spooners"
-          width={410}
-          height={190}
+          width={2528}
+          height={1686}
           priority
           className={cn(
-            "h-20 w-auto max-w-[14.5rem] origin-left transition-[opacity,transform] duration-300 ease-out dark:hidden",
+            "h-28 w-auto max-w-[14.5rem] origin-left transition-[opacity,transform] duration-300 ease-out dark:hidden",
             collapsed
               ? "pointer-events-none scale-95 opacity-0"
               : "scale-100 opacity-100"
           )}
         />
         <Image
-          src="/logo_bending_spoons_dark.svg"
+          src="/logo_dark.png"
           alt="Mixing Spooners"
-          width={410}
-          height={190}
+          width={2528}
+          height={1686}
           priority
           className={cn(
-            "hidden h-20 w-auto max-w-[14.5rem] origin-left transition-[opacity,transform] duration-300 ease-out dark:block",
+            "hidden h-28 w-auto max-w-[14.5rem] origin-left transition-[opacity,transform] duration-300 ease-out dark:block",
             collapsed
               ? "pointer-events-none scale-95 opacity-0"
               : "scale-100 opacity-100"
           )}
         />
         <Image
-          src="/logo_bending_spoons_icon.svg"
+          src="/icon_light.png"
           alt="Mixing Spooners"
-          width={107}
-          height={57}
+          width={320}
+          height={315}
           priority
           className={cn(
             "absolute left-1/2 h-11 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out dark:hidden",
@@ -125,10 +125,10 @@ export function SidebarNav({
           )}
         />
         <Image
-          src="/logo_bending_spoons_icon_dark.svg"
+          src="/icon_dark.png"
           alt="Mixing Spooners"
-          width={107}
-          height={57}
+          width={320}
+          height={315}
           priority
           className={cn(
             "absolute left-1/2 hidden h-11 w-auto -translate-x-1/2 origin-center transition-[opacity,transform] duration-300 ease-out dark:block",
