@@ -307,7 +307,10 @@ def insert_mock_transition_instructions(cursor, move_requests: list[dict[str, An
             continue
         instruction_status = "solved" if request["status"] == "completed" else "ready"
         solved_at = approval_timestamp(request["id"], 0) if instruction_status == "solved" else None
-        for instruction_type in ("onboarding", "offboarding"):
+        instruction_types = ["onboarding"]
+        if request.get("from_project_id") is not None:
+            instruction_types.append("offboarding")
+        for instruction_type in instruction_types:
             project_name = (
                 request["to_project_name"]
                 if instruction_type == "onboarding"

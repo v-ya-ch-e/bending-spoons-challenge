@@ -150,6 +150,7 @@ export function SidebarNav({
               href={item.href}
               className={cn(
                 "group flex h-10 items-center rounded-2xl text-left text-sm transition-[background-color,color,padding,gap,width] duration-200 ease-out",
+                "relative",
                 collapsed ? "w-10 justify-center gap-0 px-0" : "w-full gap-3 px-3",
                 isActive
                   ? "bg-muted text-foreground"
@@ -183,6 +184,11 @@ export function SidebarNav({
                     isActive ? "bg-background text-foreground" : "text-muted-foreground"
                   )}
                 >
+                  {item.count}
+                </span>
+              )}
+              {item.count && collapsed && (
+                <span className="absolute right-0.5 top-0.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-4 text-primary-foreground">
                   {item.count}
                 </span>
               )}

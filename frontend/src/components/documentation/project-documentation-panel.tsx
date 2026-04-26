@@ -359,14 +359,14 @@ function ProjectDocumentationChatContent({
                     : "Generated documentation is required before chat is available."}
                 </p>
                 {canChat ? (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex min-w-0 flex-wrap gap-2">
                     {starterPrompts.map((prompt) => (
                       <Button
                         key={prompt}
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-auto whitespace-normal rounded-2xl text-left"
+                        className="h-auto min-w-0 max-w-full shrink whitespace-normal rounded-2xl text-left break-words"
                         disabled={isChatting}
                         onClick={() => void sendMessage(prompt)}
                       >

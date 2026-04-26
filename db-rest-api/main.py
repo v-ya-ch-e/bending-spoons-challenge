@@ -1192,6 +1192,7 @@ def validate_move_request_can_start(move_request: dict[str, Any]) -> None:
 
 
 def transition_instructions_solved(cursor: DictCursor, request_id: int) -> bool:
+    move_request = fetch_move_request(cursor, request_id)
     execute_or_raise(
         cursor,
         """
@@ -1202,11 +1203,12 @@ def transition_instructions_solved(cursor: DictCursor, request_id: int) -> bool:
         (request_id,),
     )
     statuses = {row["instruction_type"]: row["status"] for row in cursor.fetchall()}
-    return (
-        statuses.get(TransitionInstructionType.onboarding.value)
-        == TransitionInstructionStatus.solved.value
-        and statuses.get(TransitionInstructionType.offboarding.value)
-        == TransitionInstructionStatus.solved.value
+    required_types = [TransitionInstructionType.onboarding.value]
+    if move_request["from_project_id"] is not None:
+        required_types.append(TransitionInstructionType.offboarding.value)
+    return all(
+        statuses.get(instruction_type) == TransitionInstructionStatus.solved.value
+        for instruction_type in required_types
     )
 
 

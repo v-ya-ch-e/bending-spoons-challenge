@@ -110,6 +110,8 @@ def _load_transition_context(
     _validate_move_request_active(move_request)
     employee = client.get_employee(move_request["employee_id"])
     target_project = client.get_project(move_request["to_project_id"])
+    if instruction_type == "offboarding" and move_request.get("from_project_id") is None:
+        raise ValueError("Bench-to-project moves do not require offboarding instructions.")
     source_project = (
         client.get_project(move_request["from_project_id"])
         if move_request.get("from_project_id") is not None
