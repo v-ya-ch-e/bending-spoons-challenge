@@ -24,6 +24,7 @@ import {
   type ProjectSkillRequirements,
   type SkillKey,
 } from "@/lib/db-api"
+import type { ProjectsInitialData } from "@/lib/server/db-api"
 import { CreateProjectDialog } from "@/components/projects/create-project-dialog"
 import {
   Accordion,
@@ -131,14 +132,22 @@ const filterItems: Array<{
   { value: "needs-staffing", label: "Needs staffing" },
 ]
 
-export function ProjectsScreen() {
+export function ProjectsScreen({
+  initialData,
+}: {
+  initialData?: ProjectsInitialData | null
+}) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const cachedEmployees = getCachedEmployees()
   const cachedProjects = getCachedProjects()
-  const [employees, setEmployees] = useState<Employee[]>(() => cachedEmployees ?? [])
-  const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
+  const [employees, setEmployees] = useState<Employee[]>(
+    () => initialData?.employees ?? cachedEmployees ?? []
+  )
+  const [projects, setProjects] = useState<Project[]>(
+    () => initialData?.projects ?? cachedProjects ?? []
+  )
   const [searchQuery, setSearchQuery] = useState("")
   const [filter, setFilter] = useState<FilterKey>("all")
   const [sort, setSort] = useState<SortKey>("name")
@@ -147,12 +156,16 @@ export function ProjectsScreen() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | undefined>()
   const [editingProject, setEditingProject] = useState<Project | null>(null)
   const [isEmployeeLoading, setIsEmployeeLoading] = useState(false)
-  const [isLoading, setIsLoading] = useState(() => !cachedProjects)
+  const [isLoading, setIsLoading] = useState(() => !initialData && !cachedProjects)
   const [employeeError, setEmployeeError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const createDialogOpen = searchParams.get("create") === "1"
 
   useEffect(() => {
+    if (initialData) {
+      return
+    }
+
     let isMounted = true
 
     async function loadProjectsWorkspace() {
@@ -190,7 +203,7 @@ export function ProjectsScreen() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [initialData])
 
   const filteredProjects = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase()

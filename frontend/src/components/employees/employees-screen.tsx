@@ -17,6 +17,7 @@ import {
   type SkillKey,
   type Skills,
 } from "@/lib/db-api"
+import type { EmployeesInitialData } from "@/lib/server/db-api"
 import { CreateEmployeeDialog } from "@/components/employees/create-employee-dialog"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -51,6 +52,7 @@ import { cn } from "@/lib/utils"
 
 type EmployeesScreenProps = {
   selectedEmployeeId?: string
+  initialData?: EmployeesInitialData | null
 }
 
 type FilterKey = "all" | "assigned" | "unassigned"
@@ -77,19 +79,26 @@ const filterItems: Array<{
   { value: "unassigned", label: "Unassigned" },
 ]
 
-export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
+export function EmployeesScreen({
+  selectedEmployeeId,
+  initialData,
+}: EmployeesScreenProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const cachedEmployees = getCachedEmployees()
   const cachedProjects = getCachedProjects()
-  const [employees, setEmployees] = useState<Employee[]>(() => cachedEmployees ?? [])
-  const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
+  const [employees, setEmployees] = useState<Employee[]>(
+    () => initialData?.employees ?? cachedEmployees ?? []
+  )
+  const [projects, setProjects] = useState<Project[]>(
+    () => initialData?.projects ?? cachedProjects ?? []
+  )
   const [searchQuery, setSearchQuery] = useState("")
   const [filter, setFilter] = useState<FilterKey>("all")
   const [sort, setSort] = useState<SortKey>("name")
   const [isLoading, setIsLoading] = useState(
-    () => !cachedEmployees || !cachedProjects
+    () => !initialData && (!cachedEmployees || !cachedProjects)
   )
   const [error, setError] = useState<string | null>(null)
   const [activeEmployeeId, setActiveEmployeeId] = useState(selectedEmployeeId)
@@ -97,6 +106,10 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
   const createDialogOpen = searchParams.get("create") === "1"
 
   useEffect(() => {
+    if (initialData) {
+      return
+    }
+
     let isMounted = true
 
     async function loadEmployeesWorkspace() {
@@ -138,7 +151,7 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [initialData])
 
   useEffect(() => {
     function handlePopState() {

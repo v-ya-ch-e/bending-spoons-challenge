@@ -21,6 +21,7 @@ import {
   listProjects,
   type Employee,
 } from "@/lib/db-api"
+import type { AppShellInitialData } from "@/lib/server/db-api"
 import {
   preferenceCookieMaxAge,
   sidebarCollapsedCookieName,
@@ -34,6 +35,7 @@ type AppShellProps = {
   initialThemeMode: ThemeMode
   initialRole?: AppRole
   initialSpoonerId?: number | null
+  initialData?: AppShellInitialData | null
   children: ReactNode
 }
 
@@ -74,6 +76,7 @@ export function AppShell({
   initialThemeMode,
   initialRole = "cto",
   initialSpoonerId = null,
+  initialData,
   children,
 }: AppShellProps) {
   const pathname = usePathname()
@@ -85,17 +88,18 @@ export function AppShell({
   )
   const savedSpoonerIdRef = useRef(savedSpoonerId)
   const [employees, setEmployees] = useState<Employee[]>(
-    () => getCachedEmployees() ?? []
+    () => initialData?.employees ?? getCachedEmployees() ?? []
   )
   const [projectCount, setProjectCount] = useState<number | undefined>(
-    () => getCachedProjects()?.length
+    () => initialData?.projectCount ?? getCachedProjects()?.length
   )
   const [employeeCount, setEmployeeCount] = useState<number | undefined>(
-    () => getCachedEmployees()?.length
+    () => initialData?.employeeCount ?? getCachedEmployees()?.length
   )
   const [matchingRunCount, setMatchingRunCount] = useState<number | undefined>(
-    () => getCachedMatchingRuns()?.length
+    () => initialData?.matchingRunCount ?? getCachedMatchingRuns()?.length
   )
+  const shouldSkipInitialRefreshRef = useRef(Boolean(initialData))
 
   const role: AppRole = pathname.startsWith("/spooner")
     ? "spooner"
@@ -161,6 +165,11 @@ export function AppShell({
   }, [pathname, workspace.navItems])
 
   useEffect(() => {
+    if (shouldSkipInitialRefreshRef.current) {
+      shouldSkipInitialRefreshRef.current = false
+      return
+    }
+
     let isMounted = true
 
     listProjects()

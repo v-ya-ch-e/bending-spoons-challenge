@@ -537,7 +537,7 @@ export function isProjectDocumentation(value: unknown): value is ProjectDocument
 
 export function formatGeneratedAt(documentation: ProjectDocumentation) {
   if (documentation.status === "ready" && documentation.last_generated_at) {
-    return `Last generated ${new Intl.DateTimeFormat(undefined, {
+    return `Last generated ${new Intl.DateTimeFormat("en-GB", {
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(documentation.last_generated_at))}`

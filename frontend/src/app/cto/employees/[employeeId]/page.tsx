@@ -1,4 +1,5 @@
 import { EmployeesScreen } from "@/components/employees/employees-screen"
+import { loadEmployeesInitialData } from "@/lib/server/db-api"
 
 type EmployeeDetailPageProps = {
   params: Promise<{
@@ -9,7 +10,10 @@ type EmployeeDetailPageProps = {
 export default async function EmployeeDetailPage({
   params,
 }: EmployeeDetailPageProps) {
-  const { employeeId } = await params
+  const [{ employeeId }, initialData] = await Promise.all([
+    params,
+    loadEmployeesInitialData(),
+  ])
 
-  return <EmployeesScreen selectedEmployeeId={employeeId} />
+  return <EmployeesScreen selectedEmployeeId={employeeId} initialData={initialData} />
 }

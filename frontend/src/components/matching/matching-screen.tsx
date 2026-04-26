@@ -35,6 +35,7 @@ import {
   type MoveRequestUpdateInput,
   type Project,
 } from "@/lib/db-api"
+import type { MatchingInitialData } from "@/lib/server/db-api"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -117,22 +118,36 @@ const lifecycleTabs: Array<{
   { value: "completed", label: "Completed" },
 ]
 
-export function MatchingScreen() {
+export function MatchingScreen({
+  initialData,
+}: {
+  initialData?: MatchingInitialData | null
+}) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const cachedEmployees = getCachedEmployees()
   const cachedProjects = getCachedProjects()
-  const [employees, setEmployees] = useState(() => cachedEmployees ?? [])
-  const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
-  const [moveRequests, setMoveRequests] = useState<MoveRequest[]>([])
-  const [policies, setPolicies] = useState<MatchingPolicy[]>([])
-  const [runBundles, setRunBundles] = useState<MatchingRunBundle[]>([])
+  const [employees, setEmployees] = useState(
+    () => initialData?.employees ?? cachedEmployees ?? []
+  )
+  const [projects, setProjects] = useState<Project[]>(
+    () => initialData?.projects ?? cachedProjects ?? []
+  )
+  const [moveRequests, setMoveRequests] = useState<MoveRequest[]>(
+    () => initialData?.moveRequests ?? []
+  )
+  const [policies, setPolicies] = useState<MatchingPolicy[]>(
+    () => initialData?.policies ?? []
+  )
+  const [runBundles, setRunBundles] = useState<MatchingRunBundle[]>(
+    () => initialData?.runBundles ?? []
+  )
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<MatchingLifecycleState>("draft")
   const [createTargetProjectId, setCreateTargetProjectId] = useState("")
   const [detail, setDetail] = useState<DetailSelection>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(() => !initialData)
   const [actionPlanId, setActionPlanId] = useState<string | null>(null)
   const [overridePlan, setOverridePlan] = useState<MovePlan | null>(null)
   const [overrideReason, setOverrideReason] = useState("")
@@ -211,12 +226,16 @@ export function MatchingScreen() {
   }, [])
 
   useEffect(() => {
+    if (initialData) {
+      return
+    }
+
     const timeout = window.setTimeout(() => {
       loadWorkspace()
     }, 0)
 
     return () => window.clearTimeout(timeout)
-  }, [loadWorkspace])
+  }, [initialData, loadWorkspace])
 
   const plans = useMemo(
     () =>

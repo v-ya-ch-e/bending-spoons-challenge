@@ -20,6 +20,7 @@ import {
   type Project,
   type ProjectDocumentation,
 } from "@/lib/db-api"
+import type { DocumentationInitialData } from "@/lib/server/db-api"
 import {
   DocumentationStatusBadge,
   ProjectDocumentationChat,
@@ -51,16 +52,33 @@ import { createTextRevealer } from "@/lib/streaming-text"
 
 const documentationCardClass = "border border-border shadow-none ring-0"
 
-export function DocumentationScreen() {
+export function DocumentationScreen({
+  initialData,
+}: {
+  initialData?: DocumentationInitialData | null
+}) {
   const cachedProjects = getCachedProjects()
-  const [projects, setProjects] = useState<Project[]>(() => cachedProjects ?? [])
+  const initialDocumentationByProject = initialData
+    ? indexDocumentation(initialData.documentation)
+    : {}
+  const initialSelectedProjectId = initialData?.projects[0]?.id ?? null
+  const [projects, setProjects] = useState<Project[]>(
+    () => initialData?.projects ?? cachedProjects ?? []
+  )
   const [documentationByProject, setDocumentationByProject] = useState<
     Record<number, ProjectDocumentation | undefined>
-  >({})
-  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
-  const [draft, setDraft] = useState("")
+  >(() => initialDocumentationByProject)
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(
+    initialSelectedProjectId
+  )
+  const [draft, setDraft] = useState(
+    () =>
+      (initialSelectedProjectId
+        ? initialDocumentationByProject[initialSelectedProjectId]?.content_markdown
+        : "") ?? ""
+  )
   const [isEditing, setIsEditing] = useState(false)
-  const [isLoading, setIsLoading] = useState(() => !cachedProjects)
+  const [isLoading, setIsLoading] = useState(() => !initialData && !cachedProjects)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [generationStatus, setGenerationStatus] = useState<string | null>(null)
@@ -76,6 +94,10 @@ export function DocumentationScreen() {
   const selectedDocumentationIsMock = isMockProjectDocumentation(selectedDocumentation)
 
   useEffect(() => {
+    if (initialData) {
+      return
+    }
+
     let isMounted = true
 
     async function loadWorkspace() {
@@ -121,7 +143,7 @@ export function DocumentationScreen() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [initialData])
 
   useEffect(() => {
     if (!selectedProject || !selectedDocumentation) {
