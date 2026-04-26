@@ -1,6 +1,8 @@
 "use client"
 
 import {
+  useEffect,
+  useRef,
   useState,
   type ComponentProps,
   type FormEvent,
@@ -199,7 +201,22 @@ function ProjectDocumentationChatContent({
   const [chatMode, setChatMode] = useState<ChatMode>("ask")
   const [isChatting, setIsChatting] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
+  const chatScrollAreaRef = useRef<HTMLDivElement | null>(null)
   const canChat = Boolean(project && documentation?.content_markdown?.trim())
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = chatScrollAreaRef.current?.querySelector<HTMLElement>(
+        "[data-slot='scroll-area-viewport']"
+      )
+
+      if (viewport) {
+        viewport.scrollTop = viewport.scrollHeight
+      }
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [messages, isChatting])
 
   async function sendMessage(message: string) {
     const trimmedMessage = message.trim()
@@ -317,14 +334,14 @@ function ProjectDocumentationChatContent({
         className
       )}
     >
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+      <CardHeader className="shrink-0">
+        <CardTitle className="flex min-w-0 items-center gap-2">
           <HugeiconsIcon icon={AiBrainIcon} className="size-4" />
           Chat with docs
         </CardTitle>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
+      <CardContent className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden">
         {chatError ? (
           <Alert variant="destructive">
             <AlertTitle>Documentation chat failed</AlertTitle>
@@ -354,10 +371,13 @@ function ProjectDocumentationChatContent({
         ) : null}
 
         <Separator />
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-3 pr-4">
+        <ScrollArea
+          ref={chatScrollAreaRef}
+          className="min-h-0 min-w-0 flex-1 overscroll-contain"
+        >
+          <div className="min-w-0 space-y-3 pr-4">
             {messages.length === 0 ? (
-              <div className="space-y-3 rounded-3xl border border-dashed p-4 text-sm text-muted-foreground">
+                  <div className="min-w-0 space-y-3 overflow-hidden rounded-3xl border border-dashed p-4 text-sm text-muted-foreground">
                 <p>
                   {canChat
                     ? "Start with one of these prompts or ask your own question."
@@ -386,7 +406,7 @@ function ProjectDocumentationChatContent({
                 <div
                   key={`${message.role}-${index}`}
                   className={cn(
-                    "w-fit max-w-[calc(100%-2rem)] whitespace-pre-wrap break-words rounded-3xl px-4 py-3 text-sm leading-6",
+                    "w-fit min-w-0 max-w-[calc(100%-2rem)] overflow-hidden whitespace-pre-wrap break-words rounded-3xl px-4 py-3 text-sm leading-6 [overflow-wrap:anywhere]",
                     message.role === "user"
                       ? "ml-auto bg-primary text-primary-foreground"
                       : "mr-auto bg-muted"
@@ -401,7 +421,7 @@ function ProjectDocumentationChatContent({
           </div>
         </ScrollArea>
 
-        <form className="flex gap-2" onSubmit={handleChatSubmit}>
+        <form className="flex min-w-0 shrink-0 gap-2" onSubmit={handleChatSubmit}>
           <Input
             value={chatInput}
             onChange={(event) => setChatInput(event.target.value)}
