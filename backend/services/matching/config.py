@@ -4,6 +4,9 @@ from dataclasses import asdict, dataclass, fields, replace
 from typing import Any
 
 
+MAX_MOVES = 5
+
+
 @dataclass(frozen=True)
 class StrictRuleConfig:
     max_candidate_plans: int = 25
@@ -52,8 +55,8 @@ def _config_data(value: Any) -> dict[str, Any]:
 
 
 def _validate_config(config: StrictRuleConfig) -> None:
-    if config.max_moves < 1 or config.max_moves > 3:
-        raise ValueError("max_moves must be between 1 and 3")
+    if config.max_moves < 1 or config.max_moves > MAX_MOVES:
+        raise ValueError(f"max_moves must be between 1 and {MAX_MOVES}")
     if config.max_candidate_plans < 1:
         raise ValueError("max_candidate_plans must be positive")
     if config.max_projects_in_scope < 1:
