@@ -653,6 +653,7 @@ export function MatchingScreen() {
       {createDialogOpen && (
         <CreateMatchingDialog
           open={createDialogOpen}
+          employees={employees}
           projects={projects}
           policies={policies}
           initialTargetProjectId={effectiveCreateTargetProjectId}
@@ -662,12 +663,30 @@ export function MatchingScreen() {
             if (!open) closeCreateDialog()
           }}
           onCreated={async ({ runId, candidatePlanId }) => {
-            await loadWorkspace()
-            if (candidatePlanId) {
-              setSelectedPlanId(`run-${runId}-${candidatePlanId}`)
+            const workspace = await loadWorkspace()
+            if (!workspace) {
+              return false
             }
+
+            const createdPlan = findCreatedDraftPlan({
+              plans: buildMovePlans({
+                employees: workspace.employees,
+                projects: workspace.projects,
+                moveRequests: workspace.moveRequests,
+                runBundles: workspace.runBundles,
+              }),
+              runId,
+              candidatePlanId,
+            })
+            if (!createdPlan) {
+              setError("The matching run completed, but no draft plan was created.")
+              return false
+            }
+
+            setSelectedPlanId(createdPlan.id)
             setActiveTab("draft")
             closeCreateDialog()
+            return true
           }}
         />
       )}
@@ -869,6 +888,31 @@ function MovePlanList({
         </ScrollArea>
       </CardContent>
     </Card>
+  )
+}
+
+function findCreatedDraftPlan({
+  plans,
+  runId,
+  candidatePlanId,
+}: {
+  plans: MovePlan[]
+  runId: number
+  candidatePlanId: string | null
+}) {
+  if (candidatePlanId) {
+    const exactPlan = plans.find(
+      (plan) => plan.id === `run-${runId}-${candidatePlanId}`
+    )
+    if (exactPlan) {
+      return exactPlan
+    }
+  }
+
+  return (
+    plans.find(
+      (plan) => plan.lifecycle === "draft" && plan.run?.id === runId
+    ) ?? null
   )
 }
 

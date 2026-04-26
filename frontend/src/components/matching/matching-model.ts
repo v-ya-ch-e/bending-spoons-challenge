@@ -11,6 +11,7 @@ import type {
   ProjectSkillRequirement,
   SkillKey,
 } from "@/lib/db-api"
+import type { MatchingSuggestion } from "@/lib/backend-api"
 
 export type MatchingLifecycleState = "draft" | "active" | "ready" | "completed"
 
@@ -150,27 +151,30 @@ export function buildMovePlans({
       continue
     }
 
-    for (const recommendation of bundle.recommendations) {
-      const candidate =
-        bundle.candidates.find(
-          (item) => item.candidate_plan_id === recommendation.candidate_plan_id
-        ) ?? null
-      const plan = buildPlanFromRecommendation({
-        bundle,
-        recommendation,
-        candidate,
-        targetProject,
-        moveRequests,
-        employeeById,
-        projectById,
-      })
-
-      for (const request of plan.requests) {
-        usedRequestIds.add(request.id)
-      }
-
-      recommendationPlans.push(plan)
+    const recommendation = getPrimaryRecommendation(bundle)
+    if (!recommendation) {
+      continue
     }
+
+    const candidate =
+      bundle.candidates.find(
+        (item) => item.candidate_plan_id === recommendation.candidate_plan_id
+      ) ?? null
+    const plan = buildPlanFromRecommendation({
+      bundle,
+      recommendation,
+      candidate,
+      targetProject,
+      moveRequests,
+      employeeById,
+      projectById,
+    })
+
+    for (const request of plan.requests) {
+      usedRequestIds.add(request.id)
+    }
+
+    recommendationPlans.push(plan)
   }
 
   const requestPlans = buildPlansFromUnmatchedRequests({
@@ -180,6 +184,83 @@ export function buildMovePlans({
   })
 
   return [...recommendationPlans, ...requestPlans].sort(sortPlans)
+}
+
+function getPrimaryRecommendation(bundle: MatchingRunBundle) {
+  if (bundle.recommendations.length === 0) {
+    return null
+  }
+
+  const selectedRecommendation = bundle.run.selected_candidate_plan_id
+    ? bundle.recommendations.find(
+        (recommendation) =>
+          recommendation.candidate_plan_id === bundle.run.selected_candidate_plan_id
+      )
+    : null
+
+  if (selectedRecommendation) {
+    return selectedRecommendation
+  }
+
+  return [...bundle.recommendations].sort((left, right) => {
+    if (left.rank !== right.rank) {
+      return left.rank - right.rank
+    }
+
+    return left.id - right.id
+  })[0]
+}
+
+export function buildPreviewMovePlan({
+  employees,
+  projects,
+  targetProject,
+  suggestion,
+  title,
+  summary,
+}: {
+  employees: Employee[]
+  projects: Project[]
+  targetProject: Project
+  suggestion: MatchingSuggestion
+  title: string
+  summary: string
+}) {
+  const employeeById = new Map(employees.map((employee) => [employee.id, employee]))
+  const projectById = new Map(projects.map((project) => [project.id, project]))
+  const movements = suggestion.moves.map((move, index) =>
+    buildMovement({
+      move: {
+        employee_id: move.employee_id,
+        from_project_id: move.from_project_id,
+        to_project_id: move.to_project_id,
+        action: move.action,
+        suggested_role: move.suggested_role,
+        current_project_impact: move.current_project_impact,
+        reason: move.reason,
+        move_request_reason: move.move_request_reason,
+      },
+      index,
+      targetProject,
+      matchingRequest: null,
+      employeeById,
+      projectById,
+    })
+  )
+
+  return completePlan({
+    id: `preview-${targetProject.id}-${suggestion.candidate_plan_id}`,
+    origin: "recommendation",
+    title,
+    summary,
+    targetProject,
+    run: null,
+    recommendation: null,
+    candidate: null,
+    requests: [],
+    movements,
+    employeeById,
+  })
 }
 
 export function formatLifecycle(state: MatchingLifecycleState) {

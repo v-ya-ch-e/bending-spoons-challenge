@@ -142,7 +142,7 @@ export function ProjectsScreen() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filter, setFilter] = useState<FilterKey>("all")
   const [sort, setSort] = useState<SortKey>("name")
-  const [viewMode, setViewMode] = useState<ViewMode>("list")
+  const [viewMode, setViewMode] = useState<ViewMode>("cards")
   const [selectedProjectId, setSelectedProjectId] = useState<number | undefined>()
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | undefined>()
   const [editingProject, setEditingProject] = useState<Project | null>(null)

@@ -2,7 +2,6 @@
 
 import { useMemo, useState, type ReactNode } from "react"
 import {
-  ArrowRight01Icon,
   InformationCircleIcon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons"
@@ -13,11 +12,17 @@ import {
   createMatchingPolicy,
   getMatchingRun,
   updateMatchingRun,
-  type ImpactLevel,
+  type Employee,
   type MatchingPolicy,
   type Project,
   type ProjectSkillRequirement,
 } from "@/lib/db-api"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -52,15 +57,20 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
+  buildPreviewMovePlan,
   formatImpact,
+  formatRequirement,
+  formatRequestStatus,
   getRequirementTotal,
   skillKeys,
   skillLabels,
   type MatchingCreateFlowMetadata,
+  type MovePlan,
 } from "@/components/matching/matching-model"
 
 type CreateMatchingDialogProps = {
   open: boolean
+  employees: Employee[]
   projects: Project[]
   policies: MatchingPolicy[]
   initialTargetProjectId: string
@@ -70,7 +80,7 @@ type CreateMatchingDialogProps = {
   onCreated: (createdPlan: {
     runId: number
     candidatePlanId: string | null
-  }) => void | Promise<void>
+  }) => boolean | Promise<boolean>
 }
 
 type StepId = "target" | "constraints" | "generate" | "final"
@@ -119,6 +129,7 @@ const runningGenerationStages: GenerationStage[] = [
 
 export function CreateMatchingDialog({
   open,
+  employees,
   projects,
   policies,
   initialTargetProjectId,
@@ -158,25 +169,37 @@ export function CreateMatchingDialog({
     ? undefined
     : policies.find((policy) => String(policy.id) === formState.policyId)
   const generatedSuggestion = generatedPlan?.response.suggestions[0]
+  const generatedPreviewPlan = useMemo(() => {
+    if (!generatedSuggestion || !targetProject) {
+      return null
+    }
+
+    return buildPreviewMovePlan({
+      employees,
+      projects,
+      targetProject,
+      suggestion: generatedSuggestion,
+      title: formState.planName.trim(),
+      summary: formState.goal.trim(),
+    })
+  }, [
+    employees,
+    formState.goal,
+    formState.planName,
+    generatedSuggestion,
+    projects,
+    targetProject,
+  ])
+  const hasGeneratedDraft = Boolean(generatedPreviewPlan)
   const isGenerating = runningGenerationStages.includes(generationStage)
 
   const summary = useMemo(() => {
-    const proposedMoves = generatedSuggestion?.moves.length ?? 0
-    const highestImpact = generatedSuggestion
-      ? generatedSuggestion.moves.reduce<ImpactLevel>(
-          (highest, move) =>
-            impactRank(move.current_project_impact) > impactRank(highest)
-              ? move.current_project_impact
-              : highest,
-          "low"
-        )
-      : "low"
-    const coveragePercent = generatedSuggestion
-      ? getSuggestionCoveragePercent(generatedSuggestion)
-      : 0
+    const proposedMoves = generatedPreviewPlan?.movements.length ?? 0
+    const highestImpact = generatedPreviewPlan?.highestImpact ?? "low"
+    const coveragePercent = generatedPreviewPlan?.coveragePercent ?? 0
 
     return { proposedMoves, highestImpact, coveragePercent }
-  }, [generatedSuggestion])
+  }, [generatedPreviewPlan])
 
   function updateFormState(nextState: Partial<FormState>) {
     setFormState((current) => ({ ...current, ...nextState }))
@@ -359,10 +382,14 @@ export function CreateMatchingDialog({
 
   async function handleOpenDraftPlan() {
     if (!generatedPlan) return
-    await onCreated({
+    const opened = await onCreated({
       runId: generatedPlan.response.run_id,
       candidatePlanId: generatedPlan.candidatePlanId,
     })
+
+    if (!opened) {
+      setSubmitError("The matching run completed, but no draft plan is available to open.")
+    }
   }
 
   return (
@@ -436,6 +463,8 @@ export function CreateMatchingDialog({
                     targetProject={targetProject}
                     formState={formState}
                     summary={summary}
+                    previewPlan={generatedPreviewPlan}
+                    warnings={generatedPlan.response.diagnostics.warnings}
                   />
                 )}
               </div>
@@ -471,11 +500,14 @@ export function CreateMatchingDialog({
                 }
                 disabled={isGenerating}
               >
-                {getGenerateButtonLabel(generationStage)}
+                {getGenerateButtonLabel(generationStage, hasGeneratedDraft)}
               </Button>
             ) : isFinalStep ? (
-              <Button type="button" onClick={handleOpenDraftPlan}>
-                Open draft plan
+              <Button
+                type="button"
+                onClick={hasGeneratedDraft ? handleOpenDraftPlan : () => onOpenChange(false)}
+              >
+                {hasGeneratedDraft ? "Open draft plan" : "Close"}
               </Button>
             ) : (
               <Button type="button" onClick={handleNext}>
@@ -801,6 +833,8 @@ function FinalStep({
   targetProject,
   formState,
   summary,
+  previewPlan,
+  warnings,
 }: {
   targetProject: Project
   formState: FormState
@@ -809,18 +843,31 @@ function FinalStep({
     highestImpact: "low" | "medium" | "high"
     coveragePercent: number
   }
+  previewPlan: MovePlan | null
+  warnings: string[]
 }) {
+  const hasDraftPlan = Boolean(previewPlan)
+
   return (
     <section className="animate-in fade-in-0 slide-in-from-right-2 flex flex-col gap-6 duration-200">
       <Badge
         variant="outline"
-        className="w-fit border-green-500/25 bg-green-500/10 text-green-700 dark:text-green-300"
+        className={cn(
+          "w-fit",
+          hasDraftPlan
+            ? "border-green-500/25 bg-green-500/10 text-green-700 dark:text-green-300"
+            : "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+        )}
       >
-        Plan created successfully
+        {hasDraftPlan ? "Plan created successfully" : "Matching complete"}
       </Badge>
       <StepHeading
-        title="Draft move plan ready"
-        description="Review the plan before sending requests to employees."
+        title={hasDraftPlan ? "Draft move plan ready" : "No viable draft plan found"}
+        description={
+          hasDraftPlan
+            ? "Review the plan before sending requests to employees."
+            : "Matching finished without a draft plan that can be reviewed or sent."
+        }
       />
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -847,36 +894,227 @@ function FinalStep({
         </StatCard>
       </div>
 
-      <div>
-        <h3 className="mb-3 font-medium">What&apos;s inside</h3>
-        <div className="overflow-hidden rounded-3xl border bg-muted/35">
-          {[
-            "Requirement coverage",
-            "Proposed movements",
-            "Affected companies",
-            "Employee impact",
-          ].map((item) => (
-            <div
-              key={item}
-              className="flex items-center justify-between border-b px-4 py-3 last:border-b-0"
-            >
-              <span>{item}</span>
-              <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
-            </div>
-          ))}
-        </div>
-      </div>
+      {previewPlan ? (
+        <>
+          <div>
+            <h3 className="mb-3 font-medium">What&apos;s inside</h3>
+            <DraftPreviewAccordion plan={previewPlan} />
+          </div>
 
-      <Alert>
-        <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
-        <AlertTitle>Nothing has been sent yet</AlertTitle>
-        <AlertDescription>
-          Requests will only be sent after you start the move request from the draft
-          plan page.
-        </AlertDescription>
-      </Alert>
+          <Alert>
+            <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
+            <AlertTitle>Nothing has been sent yet</AlertTitle>
+            <AlertDescription>
+              Requests will only be sent after you start the move request from the
+              draft plan page.
+            </AlertDescription>
+          </Alert>
+        </>
+      ) : (
+        <Alert>
+          <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
+          <AlertTitle>No draft plan is available</AlertTitle>
+          <AlertDescription>
+            {warnings.length > 0
+              ? warnings.join(" ")
+              : "This run finished without any viable recommendation to review."}
+          </AlertDescription>
+        </Alert>
+      )}
     </section>
   )
+}
+
+function DraftPreviewAccordion({ plan }: { plan: MovePlan }) {
+  return (
+    <Accordion
+      type="single"
+      collapsible
+      defaultValue="requirement-coverage"
+      className="rounded-3xl bg-muted/35"
+    >
+      <AccordionItem value="requirement-coverage">
+        <AccordionTrigger className="px-4 py-3 hover:no-underline">
+          <PreviewTrigger
+            label="Requirement coverage"
+            value={`${plan.coveragePercent}% covered`}
+          />
+        </AccordionTrigger>
+        <AccordionContent className="pb-4">
+          <div className="space-y-2">
+            {plan.requirementCoverage
+              .filter((row) => row.requiredSlots > 0)
+              .map((row) => (
+                <div
+                  key={row.skill}
+                  className="grid gap-2 rounded-2xl border bg-background px-3 py-3 sm:grid-cols-[minmax(0,1fr)_auto_auto]"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium">{skillLabels[row.skill]}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatRequirement(plan.targetProject.required_skills[row.skill])}
+                    </p>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {row.afterCovered} / {row.requiredSlots}
+                  </p>
+                  <PreviewStatusBadge>{formatCoverageStatus(row.status)}</PreviewStatusBadge>
+                </div>
+              ))}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="proposed-movements">
+        <AccordionTrigger className="px-4 py-3 hover:no-underline">
+          <PreviewTrigger
+            label="Proposed movements"
+            value={`${plan.movements.length} moves`}
+          />
+        </AccordionTrigger>
+        <AccordionContent className="pb-4">
+          <div className="space-y-2">
+            {plan.movements.map((movement) => (
+              <div
+                key={movement.id}
+                className="rounded-2xl border bg-background px-3 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">
+                      {movement.employee?.name ?? "Unknown employee"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {movement.sourceProject?.project_name ?? "Bench"} to{" "}
+                      {movement.targetProject.project_name}
+                    </p>
+                  </div>
+                  <PreviewStatusBadge>
+                    {formatImpact(movement.currentProjectImpact)} impact
+                  </PreviewStatusBadge>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {movement.expectedRole}
+                </p>
+              </div>
+            ))}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="affected-companies">
+        <AccordionTrigger className="px-4 py-3 hover:no-underline">
+          <PreviewTrigger
+            label="Affected companies"
+            value={
+              plan.affectedCompanies.length > 0
+                ? `${plan.affectedCompanies.length} impacted`
+                : "No source impact"
+            }
+          />
+        </AccordionTrigger>
+        <AccordionContent className="pb-4">
+          <div className="space-y-2">
+            {plan.affectedCompanies.length > 0 ? (
+              plan.affectedCompanies.map((company) => (
+                <div
+                  key={company.project?.id ?? "bench"}
+                  className="rounded-2xl border bg-background px-3 py-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium">
+                        {company.project?.project_name ?? "Bench"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {company.afterHeadcount} / {company.requiredHeadcount} people after
+                        the plan
+                      </p>
+                    </div>
+                    <PreviewStatusBadge>
+                      {formatImpact(company.risk)} risk
+                    </PreviewStatusBadge>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="rounded-2xl border bg-background px-3 py-3 text-sm text-muted-foreground">
+                No source company loses capacity.
+              </p>
+            )}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+
+      <AccordionItem value="employee-impact">
+        <AccordionTrigger className="px-4 py-3 hover:no-underline">
+          <PreviewTrigger
+            label="Employee impact"
+            value={`${plan.employeeImpacts.length} employees`}
+          />
+        </AccordionTrigger>
+        <AccordionContent className="pb-4">
+          <div className="space-y-2">
+            {plan.employeeImpacts.map((impact) => (
+              <div
+                key={impact.movement.id}
+                className="rounded-2xl border bg-background px-3 py-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">
+                      {impact.employee?.name ?? "Unknown employee"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {impact.transitionEffort} transition effort
+                    </p>
+                  </div>
+                  <PreviewStatusBadge>
+                    {formatRequestStatus(impact.status)}
+                  </PreviewStatusBadge>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {impact.handoffNeeds}
+                </p>
+              </div>
+            ))}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  )
+}
+
+function PreviewTrigger({
+  label,
+  value,
+}: {
+  label: string
+  value: string
+}) {
+  return (
+    <div className="flex min-w-0 items-center justify-between gap-3">
+      <span>{label}</span>
+      <span className="text-sm text-muted-foreground">{value}</span>
+    </div>
+  )
+}
+
+function PreviewStatusBadge({ children }: { children: ReactNode }) {
+  return (
+    <Badge variant="outline" className="shrink-0">
+      {children}
+    </Badge>
+  )
+}
+
+function formatCoverageStatus(
+  status: "covered" | "partially_covered" | "missing" | "not_required"
+) {
+  if (status === "covered") return "Covered"
+  if (status === "partially_covered") return "Partially covered"
+  if (status === "missing") return "Missing"
+  return "Not required"
 }
 
 type GenerationRowState = "pending" | "active" | "complete" | "failed" | "skipped"
@@ -1092,22 +1330,10 @@ function getRequiredSkillCount(project: Project) {
     .length
 }
 
-function getSuggestionCoveragePercent(suggestion: MatchingRunResponse["suggestions"][number]) {
-  const skillGapTotal = Object.values(suggestion.impact.target_skill_gap ?? {}).reduce(
-    (sum, gap) => sum + Math.max(0, Number(gap ?? 0)),
-    0
-  )
-
-  return suggestion.impact.target_headcount_gap === 0 && skillGapTotal === 0 ? 100 : 75
-}
-
-function impactRank(impact: "low" | "medium" | "high") {
-  const ranks = { low: 1, medium: 2, high: 3 }
-  return ranks[impact]
-}
-
-function getGenerateButtonLabel(stage: GenerationStage) {
-  if (stage === "ready") return "Review draft plan"
+function getGenerateButtonLabel(stage: GenerationStage, hasGeneratedDraft: boolean) {
+  if (stage === "ready") {
+    return hasGeneratedDraft ? "Review draft plan" : "Review result"
+  }
   if (stage === "failed") return "Retry generation"
   if (runningGenerationStages.includes(stage)) return "Generating..."
   return "Generate draft plan"
