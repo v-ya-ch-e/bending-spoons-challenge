@@ -84,7 +84,7 @@ Aggressive:
 ## Rule Guide
 
 - `max_candidate_plans`: Maximum candidate plans generated before returning results. Higher values give more options but add noise.
-- `max_moves`: Maximum people moved in one candidate plan. Valid range is `1` to `5`; `1` is conservative, while `5` allows broader reshuffles.
+- `max_moves`: Maximum people moved in one candidate plan. Valid range is `1` to `3`; `1` is conservative, while `3` allows broader reshuffles.
 - `max_projects_in_scope`: Number of nearby/relevant projects considered as possible source projects.
 - `max_employees_in_scope`: Number of employees considered by strict rules.
 - `max_employee_project_count`: Maximum simultaneous project assignments allowed for one employee.
@@ -116,7 +116,7 @@ Balanced:
 Aggressive:
 
 - Use when a strategic project urgently needs staffing.
-- Keep `max_moves` at `3`, or raise it up to `5` when broader reshuffles are acceptable.
+- Keep `max_moves` at `3` when broader reshuffles are acceptable.
 - Lower `minimum_remaining_project_coverage` toward `0.6`.
 - Consider `allow_understaff_current_project: true` only if leadership accepts the source-project risk.
 

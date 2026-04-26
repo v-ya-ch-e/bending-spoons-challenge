@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, fields, replace
 from typing import Any
 
 
-MAX_MOVES = 5
+MAX_MOVES = 3
 
 
 @dataclass(frozen=True)

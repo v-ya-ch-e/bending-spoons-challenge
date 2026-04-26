@@ -531,18 +531,18 @@ class TestMatchingStrictRules(unittest.TestCase):
         config = build_rule_config(
             policy_config={
                 "max_candidate_plans": 9,
-                "max_moves": 5,
+                "max_moves": 3,
                 "allow_understaff_current_project": True,
             },
         )
 
         self.assertEqual(config.max_candidate_plans, 9)
-        self.assertEqual(config.max_moves, 5)
+        self.assertEqual(config.max_moves, 3)
         self.assertTrue(config.allow_understaff_current_project)
 
-    def test_policy_config_rejects_more_than_five_moves(self):
-        with self.assertRaisesRegex(ValueError, "max_moves must be between 1 and 5"):
-            build_rule_config(policy_config={"max_moves": 6})
+    def test_policy_config_rejects_more_than_three_moves(self):
+        with self.assertRaisesRegex(ValueError, "max_moves must be between 1 and 3"):
+            build_rule_config(policy_config={"max_moves": 4})
 
     def test_unknown_config_keys_are_rejected_with_value_error(self):
         with self.assertRaisesRegex(ValueError, "Unknown matching rule config keys"):

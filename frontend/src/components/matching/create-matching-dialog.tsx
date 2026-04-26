@@ -122,7 +122,7 @@ const steps: Array<{
 ]
 
 const CUSTOM_POLICY_VALUE = "__custom__"
-const MAX_MATCHING_MOVES = 5
+const MAX_MATCHING_MOVES = 3
 const runningGenerationStages: GenerationStage[] = [
   "creating_policy",
   "running_matching",
