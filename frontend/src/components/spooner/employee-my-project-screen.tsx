@@ -162,12 +162,12 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
   ).length
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
-      <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 sm:p-6">
+    <div className="min-h-full bg-background">
+      <div className="flex flex-col gap-5 p-4 sm:p-6">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-sm text-muted-foreground">Employee workspace</p>
-            <h1 className="text-2xl font-semibold tracking-tight">My Project</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">My Projects</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               Assigned projects, source documentation, and project-specific guidance
               for {employee.name}.
@@ -185,7 +185,7 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
 
         {error ? (
           <Alert variant="destructive">
-            <AlertTitle>Could not load My Project</AlertTitle>
+            <AlertTitle>Could not load My Projects</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         ) : null}
@@ -195,16 +195,16 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
         ) : !assignedProjects.length ? (
           <EmptyAssignedProjects employee={employee} />
         ) : (
-          <div className="grid min-h-0 flex-1 gap-4 overflow-hidden xl:grid-cols-[320px_minmax(0,1fr)]">
-            <Card className="flex min-h-0 flex-col overflow-hidden">
+          <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+            <Card className="h-fit xl:sticky xl:top-6">
               <CardHeader>
                 <CardTitle>Assigned projects</CardTitle>
                 <CardDescription>
                   Switch between every project currently linked to you.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="min-h-0 flex-1">
-                <ScrollArea className="h-full pr-3">
+              <CardContent>
+                <ScrollArea className="max-h-[calc(100vh-16rem)] pr-3">
                   <div className="space-y-2">
                     {assignedProjects.map((project) => (
                       <AssignedProjectButton
@@ -220,8 +220,8 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
               </CardContent>
             </Card>
 
-            <div className="grid min-h-0 gap-4 overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_380px]">
-              <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
+            <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_380px]">
+              <div className="flex flex-col gap-4">
                 {selectedProject ? (
                   <ProjectInformationCard
                     employee={employee}
@@ -229,7 +229,7 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
                   />
                 ) : null}
 
-                <Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <Card className="min-h-[32rem]">
                   <CardHeader className="gap-3">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
@@ -264,7 +264,7 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
                       </div>
                     ) : null}
                   </CardHeader>
-                  <CardContent className="min-h-0 flex-1">
+                  <CardContent className="min-h-[24rem]">
                     <ProjectDocumentationViewer
                       project={selectedProject}
                       documentation={selectedDocumentation}
@@ -280,7 +280,7 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
                 documentation={selectedDocumentation}
                 starterPrompts={chatPrompts}
                 description="Ask about this project's docs from your employee perspective."
-                className="min-h-[420px]"
+                className="min-h-[32rem]"
               />
             </div>
           </div>
