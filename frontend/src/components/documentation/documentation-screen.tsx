@@ -1,19 +1,14 @@
 "use client"
 
-import { useEffect, useMemo, useState, type FormEvent } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { HugeiconsIcon } from "@hugeicons/react"
 import {
-  AiBrainIcon,
-  ArrowRight01Icon,
   DocumentValidationIcon,
-  Folder01Icon,
   Tick02Icon,
 } from "@hugeicons/core-free-icons"
 
 import {
-  chatWithProjectDocumentation,
-  refreshProjectDocumentation,
-  type DocumentationChatMessage,
+  streamProjectDocumentationRefresh,
 } from "@/lib/backend-api"
 import {
   getCachedProjects,
@@ -23,8 +18,15 @@ import {
   updateProjectDocumentationByProject,
   type Project,
   type ProjectDocumentation,
-  type ProjectDocumentationStatus,
 } from "@/lib/db-api"
+import {
+  DocumentationStatusBadge,
+  ProjectDocumentationChat,
+  ProjectDocumentationViewer,
+  formatGeneratedAt,
+  indexDocumentation,
+  isProjectDocumentation,
+} from "@/components/documentation/project-documentation-panel"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -35,21 +37,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-
-type ChatMessage = DocumentationChatMessage
-
-const statusLabels: Record<ProjectDocumentationStatus, string> = {
-  pending: "Pending",
-  running: "Fetching",
-  ready: "Ready",
-  failed: "Failed",
-}
+import { createTextRevealer } from "@/lib/streaming-text"
 
 export function DocumentationScreen() {
   const cachedProjects = getCachedProjects()
@@ -59,14 +51,11 @@ export function DocumentationScreen() {
   >({})
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null)
   const [draft, setDraft] = useState("")
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [chatInput, setChatInput] = useState("")
-  const [chatMode, setChatMode] = useState<"ask" | "edit">("ask")
   const [isEditing, setIsEditing] = useState(false)
   const [isLoading, setIsLoading] = useState(() => !cachedProjects)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [isChatting, setIsChatting] = useState(false)
+  const [generationStatus, setGenerationStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const selectedProject = useMemo(
@@ -157,14 +146,67 @@ export function DocumentationScreen() {
     }
     try {
       setIsRefreshing(true)
+      setGenerationStatus("Queued GitHub documentation scan.")
       setError(null)
-      const documentation = await refreshProjectDocumentation(selectedProject.id)
-      setDocumentationByProject((current) => ({
-        ...current,
-        [selectedProject.id]: documentation,
-      }))
-      if (!isEditing) {
-        setDraft(documentation.content_markdown ?? "")
+      setDraft("")
+      const docRevealer = createTextRevealer({
+        onText: setDraft,
+      })
+      const streamedDocumentationRef: { current: ProjectDocumentation | null } = {
+        current: null,
+      }
+      await streamProjectDocumentationRefresh(selectedProject.id, (event, data) => {
+        if (event === "status") {
+          if (typeof data.message === "string") {
+            setGenerationStatus(data.message)
+          }
+          const documentation = data.documentation
+          if (isProjectDocumentation(documentation)) {
+            setDocumentationByProject((current) => ({
+              ...current,
+              [selectedProject.id]: documentation,
+            }))
+          }
+          return
+        }
+
+        if (event === "content_delta" && typeof data.delta === "string") {
+          docRevealer.enqueue(data.delta)
+          return
+        }
+
+        if (event === "done") {
+          setGenerationStatus(null)
+          const documentation = data.documentation
+          if (isProjectDocumentation(documentation)) {
+            streamedDocumentationRef.current = documentation
+          }
+          return
+        }
+
+        if (event === "error") {
+          setGenerationStatus(null)
+          const documentation = data.documentation
+          if (isProjectDocumentation(documentation)) {
+            setDocumentationByProject((current) => ({
+              ...current,
+              [selectedProject.id]: documentation,
+            }))
+          }
+          throw new Error(
+            typeof data.message === "string"
+              ? data.message
+              : "Unable to fetch documentation from GitHub."
+          )
+        }
+      })
+      const streamedDocumentation = streamedDocumentationRef.current
+      await docRevealer.finish(streamedDocumentation?.content_markdown)
+      if (streamedDocumentation) {
+        setDocumentationByProject((current) => ({
+          ...current,
+          [selectedProject.id]: streamedDocumentation,
+        }))
       }
     } catch (refreshError) {
       setError(
@@ -173,6 +215,7 @@ export function DocumentationScreen() {
           : "Unable to fetch documentation from GitHub."
       )
     } finally {
+      setGenerationStatus(null)
       setIsRefreshing(false)
     }
   }
@@ -201,47 +244,10 @@ export function DocumentationScreen() {
     }
   }
 
-  async function handleChat(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!selectedProject || !chatInput.trim()) {
-      return
-    }
-    const userMessage: ChatMessage = { role: "user", content: chatInput.trim() }
-    const nextMessages = [...messages, userMessage]
-    setMessages(nextMessages)
-    setChatInput("")
-
-    try {
-      setIsChatting(true)
-      setError(null)
-      const response = await chatWithProjectDocumentation(selectedProject.id, {
-        message: userMessage.content,
-        history: messages.slice(-6),
-        mode: chatMode,
-      })
-      const assistantMessage: ChatMessage = {
-        role: "assistant",
-        content: response.answer,
-      }
-      setMessages([...nextMessages, assistantMessage])
-      if (response.updated_content_markdown) {
-        setDraft(response.updated_content_markdown)
-        setIsEditing(true)
-      }
-    } catch (chatError) {
-      setMessages(messages)
-      setError(chatError instanceof Error ? chatError.message : "Documentation chat failed.")
-    } finally {
-      setIsChatting(false)
-    }
-  }
-
   function selectProject(projectId: number) {
     setSelectedProjectId(projectId)
     setDraft(documentationByProject[projectId]?.content_markdown ?? "")
     setIsEditing(false)
-    setMessages([])
-    setChatInput("")
   }
 
   if (isLoading) {
@@ -249,7 +255,7 @@ export function DocumentationScreen() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 p-4 lg:p-6">
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 lg:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-sm text-muted-foreground">CTO workspace</p>
@@ -275,14 +281,14 @@ export function DocumentationScreen() {
         </Alert>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <Card className="min-h-0">
+      <div className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)]">
+        <Card className="flex min-h-0 flex-col overflow-hidden">
           <CardHeader>
             <CardTitle>Projects</CardTitle>
             <CardDescription>Select a project to inspect its generated docs.</CardDescription>
           </CardHeader>
-          <CardContent className="min-h-0">
-            <ScrollArea className="h-[calc(100vh-250px)] pr-3">
+          <CardContent className="min-h-0 flex-1">
+            <ScrollArea className="h-full pr-3">
               <div className="space-y-2">
                 {projects.map((project) => {
                   const documentation = documentationByProject[project.id]
@@ -324,8 +330,8 @@ export function DocumentationScreen() {
           </CardContent>
         </Card>
 
-        <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <Card className="min-h-0">
+        <div className="grid min-h-0 gap-4 overflow-hidden xl:grid-cols-[minmax(0,1fr)_360px]">
+          <Card className="flex min-h-0 flex-col overflow-hidden">
             <CardHeader className="gap-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -373,146 +379,40 @@ export function DocumentationScreen() {
                 </div>
               ) : null}
             </CardHeader>
-            <CardContent className="min-h-0">
-              {!selectedProject ? (
-                <EmptyDocumentationState title="No projects" description="Create a project first." />
-              ) : !selectedProject.github_repositories.length ? (
-                <EmptyDocumentationState
-                  title="No GitHub repositories"
-                  description="Add at least one GitHub repository to generate documentation."
-                />
-              ) : selectedDocumentation?.status === "running" ||
-                selectedDocumentation?.status === "pending" ? (
-                <EmptyDocumentationState
-                  title="Documentation is being generated"
-                  description="GitHub context is being scanned and summarized. This view will update automatically."
-                />
-              ) : selectedDocumentation?.status === "failed" ? (
-                <EmptyDocumentationState
-                  title="Generation failed"
-                  description={selectedDocumentation.last_error ?? "Try fetching from GitHub again."}
-                />
-              ) : isEditing ? (
+            <CardContent className="min-h-0 flex-1">
+              {isEditing ? (
                 <Textarea
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
-                  className="min-h-[calc(100vh-330px)] resize-none font-mono text-sm"
+                  className="h-full min-h-[360px] resize-none font-mono text-sm"
                   placeholder="Write or paste project documentation in Markdown..."
                 />
-              ) : draft ? (
-                <ScrollArea className="h-[calc(100vh-330px)] pr-4">
-                  <article className="whitespace-pre-wrap text-sm leading-7 text-foreground">
-                    {draft}
-                  </article>
-                </ScrollArea>
               ) : (
-                <EmptyDocumentationState
-                  title="No documentation yet"
-                  description="Fetch from GitHub to generate the first version."
+                <ProjectDocumentationViewer
+                  project={selectedProject}
+                  documentation={selectedDocumentation}
+                  markdown={draft}
+                  generationStatus={generationStatus}
                 />
               )}
             </CardContent>
           </Card>
 
-          <Card className="min-h-0">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <HugeiconsIcon icon={AiBrainIcon} className="size-4" />
-                Chat with docs
-              </CardTitle>
-              <CardDescription>
-                Ask questions or request an editable Markdown draft.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex min-h-0 flex-col gap-3">
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={chatMode === "ask" ? "default" : "outline"}
-                  onClick={() => setChatMode("ask")}
-                >
-                  Ask
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={chatMode === "edit" ? "default" : "outline"}
-                  onClick={() => setChatMode("edit")}
-                >
-                  Edit draft
-                </Button>
-              </div>
-              <Separator />
-              <ScrollArea className="h-[calc(100vh-430px)] pr-3">
-                <div className="space-y-3">
-                  {messages.length === 0 ? (
-                    <div className="rounded-3xl border border-dashed p-4 text-sm text-muted-foreground">
-                      Try “What should a new backend engineer read first?” or “Add
-                      offboarding notes for repository ownership.”
-                    </div>
-                  ) : (
-                    messages.map((message, index) => (
-                      <div
-                        key={`${message.role}-${index}`}
-                        className={cn(
-                          "rounded-3xl px-4 py-3 text-sm",
-                          message.role === "user"
-                            ? "ml-8 bg-primary text-primary-foreground"
-                            : "mr-8 bg-muted"
-                        )}
-                      >
-                        {message.content}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-              <form className="flex gap-2" onSubmit={handleChat}>
-                <Input
-                  value={chatInput}
-                  onChange={(event) => setChatInput(event.target.value)}
-                  placeholder="Ask about this documentation..."
-                  disabled={!selectedDocumentation?.content_markdown || isChatting}
-                />
-                <Button
-                  type="submit"
-                  size="icon"
-                  disabled={!chatInput.trim() || !selectedDocumentation?.content_markdown || isChatting}
-                >
-                  <HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+          <ProjectDocumentationChat
+            project={selectedProject}
+            documentation={selectedDocumentation}
+            allowEditMode
+            onDraftChange={setDraft}
+            onEditingChange={setIsEditing}
+            onError={(message) => setError(message || null)}
+            description="Ask questions or request an editable Markdown draft."
+            starterPrompts={[
+              "What should a new backend engineer read first?",
+              "Add offboarding notes for repository ownership.",
+            ]}
+          />
         </div>
       </div>
-    </div>
-  )
-}
-
-function DocumentationStatusBadge({ status }: { status: ProjectDocumentationStatus }) {
-  return (
-    <Badge
-      variant={status === "failed" ? "destructive" : status === "ready" ? "default" : "secondary"}
-    >
-      {statusLabels[status]}
-    </Badge>
-  )
-}
-
-function EmptyDocumentationState({
-  title,
-  description,
-}: {
-  title: string
-  description: string
-}) {
-  return (
-    <div className="flex min-h-[360px] flex-col items-center justify-center rounded-3xl border border-dashed p-8 text-center">
-      <HugeiconsIcon icon={Folder01Icon} className="mb-3 size-8 text-muted-foreground" />
-      <h2 className="text-base font-medium">{title}</h2>
-      <p className="mt-1 max-w-md text-sm text-muted-foreground">{description}</p>
     </div>
   )
 }
@@ -542,24 +442,4 @@ function DocumentationLoadingState() {
       </Card>
     </div>
   )
-}
-
-function indexDocumentation(documentation: ProjectDocumentation[]) {
-  return documentation.reduce<Record<number, ProjectDocumentation>>((indexed, item) => {
-    indexed[item.project_id] = item
-    return indexed
-  }, {})
-}
-
-function formatGeneratedAt(documentation: ProjectDocumentation) {
-  if (documentation.status === "ready" && documentation.last_generated_at) {
-    return `Last generated ${new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(documentation.last_generated_at))}`
-  }
-  if (documentation.status === "failed") {
-    return "The latest GitHub fetch failed."
-  }
-  return "Waiting for GitHub documentation generation."
 }

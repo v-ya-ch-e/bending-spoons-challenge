@@ -25,6 +25,10 @@ export default async function SpoonerSectionPage({
   }
 
   return (
-    <SpoonerWorkspace spoonerId={parsedSpoonerId} sectionLabel={item.label} />
+    <SpoonerWorkspace
+      spoonerId={parsedSpoonerId}
+      section={item.value}
+      sectionLabel={item.label}
+    />
   )
 }
