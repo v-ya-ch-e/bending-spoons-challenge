@@ -6,6 +6,7 @@ import { Cancel01Icon, Edit02Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import {
+  getGithubProfileUrl,
   getCachedEmployees,
   getCachedProjects,
   listEmployees,
@@ -181,6 +182,8 @@ export function EmployeesScreen({ selectedEmployeeId }: EmployeesScreenProps) {
         const searchableText = [
           employee.name,
           employee.role,
+          employee.github_username ?? "",
+          employee.github_username ? `@${employee.github_username}` : "",
           employee.current_project ?? "",
           ...employee.preferences,
           ...employee.interests,
@@ -582,6 +585,16 @@ function EmployeeDetailPanel({
                 <p className="truncate text-sm text-muted-foreground">
                   {employee.role}
                 </p>
+                {employee.github_username ? (
+                  <a
+                    href={getGithubProfileUrl(employee.github_username)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-flex text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    @{employee.github_username}
+                  </a>
+                ) : null}
               </div>
             </div>
 

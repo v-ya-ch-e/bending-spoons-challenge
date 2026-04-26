@@ -22,6 +22,10 @@ rate limits; private repositories require a token with repo access. Public repos
 work without a token, subject to unauthenticated rate limits.
 `DB_API_BASE_URL` must point at the db-rest-api service for matching runs,
 generated project documentation persistence, and transition instruction storage.
+`OPENAI_MATCHING_TIMEOUT_SECONDS` is optional and bounds the LLM ranking step for
+matching requests; default is 20 seconds.
+`BACKEND_CORS_ALLOW_ORIGIN_REGEX` is optional and defaults to allowing local
+browser origins such as `http://localhost:3000` and `http://127.0.0.1:3000`.
 
 ## Testing
 

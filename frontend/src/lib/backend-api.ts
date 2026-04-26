@@ -1,5 +1,7 @@
 import type {
   ProjectDocumentation,
+  ImpactLevel,
+  MatchingRunUseCase,
   ProjectPhase,
   ProjectSkillRequirements,
   SkillKey,
@@ -44,9 +46,82 @@ export type DocumentationChatResponse = {
   updated_content_markdown: string | null
 }
 
+export type MatchingRunRequest = {
+  requested_by?: string | null
+  policy_id?: number | null
+  policy_name?: string | null
+}
+
+export type MatchingSuggestionMove = {
+  employee_id: number
+  from_project_id: number | null
+  to_project_id: number
+  action: "assign" | "move" | "add_assignment"
+  suggested_role: string
+  current_project_impact: ImpactLevel
+  reason: string
+  move_request_reason: string
+}
+
+export type MatchingSuggestion = {
+  suggestion_id: string
+  candidate_plan_id: string
+  rank: number
+  score: number | null
+  title: string
+  rationale: string
+  tradeoffs: string[]
+  risks: string[]
+  moves: MatchingSuggestionMove[]
+  impact: {
+    target_project_id: number
+    target_headcount_gap: number
+    target_skill_gap: Partial<Record<SkillKey, number>>
+    source_project_impacts: Array<{
+      project_id: number
+      impact: ImpactLevel
+    }>
+  }
+}
+
+export type MatchingHiringSuggestion = {
+  candidate_plan_id: string | null
+  project_id: number
+  role_title: string
+  count: number
+  required_skills: Skills
+  rationale: string
+  urgency: ImpactLevel
+  suggested_assignment: string | null
+}
+
+export type MatchingRunResponse = {
+  run_id: number
+  use_case: MatchingRunUseCase
+  status: "pending" | "running" | "completed" | "failed"
+  target_project_id: number | null
+  summary: {
+    headline: string
+    selected_candidate_plan_id: string | null
+    generated_candidate_count: number
+    evaluated_candidate_count: number
+    suggestion_count: number
+    hiring_suggestion_count: number
+  }
+  suggestions: MatchingSuggestion[]
+  hiring_suggestions: MatchingHiringSuggestion[]
+  diagnostics: {
+    policy_id: number
+    policy_name: string
+    event_count: number
+    warnings: string[]
+  }
+}
+
 type StreamEventHandler = (event: string, data: Record<string, unknown>) => void
 
-const backendApiBasePath = "/api"
+const backendApiBasePath =
+  process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL ?? "/api"
 const backendSkillKeys: SkillKey[] = [
   "android",
   "ios",
@@ -193,6 +268,23 @@ export function suggestProjectRequirementsFromRepoRoute(
   input: SkillProfileSuggestInput
 ) {
   return suggestProjectRequirements(input)
+}
+
+export function runProjectMatching(projectId: number, input: MatchingRunRequest = {}) {
+  const payload = Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined && value !== null)
+  )
+
+  return fetchBackendApi<MatchingRunResponse>(
+    `/projects/${projectId}/matching:run`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: Object.keys(payload).length > 0 ? JSON.stringify(payload) : "{}",
+    }
+  )
 }
 
 export function refreshProjectDocumentation(projectId: number) {

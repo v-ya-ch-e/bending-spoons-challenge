@@ -53,6 +53,18 @@ def reset_tables(cursor) -> None:
     cursor.execute("SET FOREIGN_KEY_CHECKS = 1")
 
 
+def ensure_employee_github_username_column(cursor) -> bool:
+    cursor.execute("SHOW COLUMNS FROM employees LIKE 'github_username'")
+    if cursor.fetchone() is not None:
+        return False
+
+    cursor.execute(
+        "ALTER TABLE employees "
+        "ADD COLUMN github_username VARCHAR(255) NULL AFTER role"
+    )
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Initialize the Atlas demo database.")
     parser.add_argument(
@@ -78,9 +90,12 @@ def main() -> None:
             reset_tables(cursor)
         for statement in statements:
             cursor.execute(statement)
+        column_added = ensure_employee_github_username_column(cursor)
         connection.commit()
         cursor.close()
         print(f"Applied {len(statements)} statement(s) from {SCHEMA_PATH.name}.")
+        if column_added:
+            print("Added missing employees.github_username column.")
     finally:
         connection.close()
 

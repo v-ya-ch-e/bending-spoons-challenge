@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS employees (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE,
     role VARCHAR(255) NOT NULL,
-    github_username VARCHAR(39) NOT NULL UNIQUE,
+    github_username VARCHAR(255) NULL,
+    github_username VARCHAR(255) NULL,
     skills JSON NOT NULL,
     preferences JSON NOT NULL,
     interests JSON NOT NULL

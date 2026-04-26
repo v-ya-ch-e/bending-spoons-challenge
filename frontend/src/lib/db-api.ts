@@ -18,11 +18,13 @@ export type ProjectSkillRequirements = Record<SkillKey, ProjectSkillRequirement>
 
 export type ProjectPhase = "new acquisition" | "growth" | "maintenance"
 
+export type ImpactLevel = "low" | "medium" | "high"
+
 export type Employee = {
   id: number
   name: string
   role: string
-  github_username: string
+  github_username: string | null
   current_project: string | null
   current_project_ids: number[]
   current_project_names: string[]
@@ -34,7 +36,7 @@ export type Employee = {
 export type EmployeeCreateInput = {
   name: string
   role: string
-  github_username: string
+  github_username: string | null
   current_project: string | null
   skills: Skills
   preferences: string[]
@@ -116,7 +118,7 @@ export type MoveRequest = {
   to_project_name: string
   reason: string
   expected_role: string
-  current_project_impact: "low" | "medium" | "high"
+  current_project_impact: ImpactLevel
   status: MoveRequestStatus
   cto_approval_status: MoveRequestApprovalStatus
   cto_approved_at: string | null
@@ -158,6 +160,16 @@ export type TransitionInstruction = {
   updated_at: string
 }
 
+export type MoveRequestUpdateInput = Partial<{
+  employee_id: number
+  from_project_id: number | null
+  to_project_id: number
+  reason: string
+  expected_role: string
+  current_project_impact: ImpactLevel
+  status: MoveRequestStatus
+}>
+
 export type MatchingRunStatus =
   | "pending"
   | "running"
@@ -172,8 +184,155 @@ export type MatchingRunUseCase =
 export type MatchingRun = {
   id: number
   use_case: MatchingRunUseCase
-  status: MatchingRunStatus
   target_project_id: number | null
+  status: MatchingRunStatus
+  requested_by: string | null
+  rule_config: Record<string, unknown>
+  input_snapshot: Record<string, unknown> | null
+  candidate_count: number
+  recommendation_count: number
+  hiring_recommendation_count: number
+  selected_candidate_plan_id: string | null
+  summary: string | null
+  error_message: string | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+}
+
+export type MatchingPolicy = {
+  id: number
+  name: string
+  description: string | null
+  config: Record<string, unknown>
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  activated_at: string | null
+}
+
+export type MatchingPolicyCreateInput = {
+  name: string
+  description?: string | null
+  config: Record<string, unknown>
+  is_active?: boolean
+}
+
+export type MatchingRunUpdateInput = Partial<{
+  use_case: MatchingRunUseCase
+  target_project_id: number | null
+  status: MatchingRunStatus
+  requested_by: string | null
+  rule_config: Record<string, unknown>
+  input_snapshot: Record<string, unknown> | null
+  candidate_count: number
+  recommendation_count: number
+  hiring_recommendation_count: number
+  selected_candidate_plan_id: string | null
+  summary: string | null
+  error_message: string | null
+  started_at: string | null
+  completed_at: string | null
+}>
+
+export type MatchingCandidateMove = {
+  employee_id: number
+  from_project_id: number | null
+  to_project_id: number
+  action: "assign" | "move" | "add_assignment"
+  suggested_role: string
+  current_project_impact: ImpactLevel
+  hard_rule_reasons?: string[]
+  reason?: string
+}
+
+export type MatchingCandidatePlanPayload = {
+  summary?: string
+  moves?: MatchingCandidateMove[]
+  risks?: string[]
+  project_coverage_after?: Record<
+    string,
+    {
+      headcount_gap?: number
+      skill_gap?: Partial<Record<SkillKey, number>>
+      skill_gap_requirements?: Partial<
+        Record<SkillKey, Partial<ProjectSkillRequirement>>
+      >
+      available_skills?: Partial<Record<SkillKey, number>>
+      available_skill_counts?: Partial<
+        Record<SkillKey, Partial<ProjectSkillRequirement>>
+      >
+      coverage_ratio?: number
+    }
+  >
+}
+
+export type MatchingCandidate = {
+  id: number
+  run_id: number
+  candidate_plan_id: string
+  strict_score: number | null
+  hard_rule_summary: Record<string, unknown> | null
+  plan_payload: MatchingCandidatePlanPayload
+  rejected_reason: string | null
+  created_at: string
+}
+
+export type MatchingRecommendationMove = MatchingCandidateMove & {
+  reason?: string
+  move_request_reason?: string
+  expected_role?: string
+}
+
+export type MatchingRecommendation = {
+  id: number
+  run_id: number
+  candidate_plan_id: string
+  rank: number
+  fit_score: number | null
+  summary: string
+  explanation: string | null
+  risks: string[]
+  ramp_up_estimate: string | null
+  suggested_moves: MatchingRecommendationMove[]
+  model_metadata: Record<string, unknown> | null
+  created_at: string
+}
+
+export type MatchingHiringRecommendation = {
+  id: number
+  run_id: number
+  candidate_plan_id: string | null
+  project_id: number | null
+  role_title: string
+  count: number
+  required_skills: Skills
+  reason: string
+  urgency: ImpactLevel
+  suggested_assignment: string | null
+  created_at: string
+}
+
+export type MatchingRunEventLevel = "debug" | "info" | "warning" | "error"
+
+export type MatchingRunEventStage =
+  | "request"
+  | "snapshot"
+  | "strict_rules"
+  | "hiring_gap"
+  | "llm_evaluation"
+  | "persistence"
+  | "action"
+
+export type MatchingRunEvent = {
+  id: number
+  run_id: number
+  level: MatchingRunEventLevel
+  stage: MatchingRunEventStage
+  event_type: string
+  message: string
+  metadata: Record<string, unknown> | null
+  created_at: string
 }
 
 const dbApiBasePath = process.env.NEXT_PUBLIC_DB_API_BASE_URL ?? "/db-api"
@@ -209,6 +368,15 @@ const skillKeys: SkillKey[] = [
   "ai",
 ]
 
+export function normalizeGithubUsername(value: string | null | undefined) {
+  const trimmedValue = value?.trim().replace(/^@+/, "").trim() ?? ""
+  return trimmedValue || null
+}
+
+export function getGithubProfileUrl(username: string) {
+  return `https://github.com/${username}`
+}
+
 async function fetchDbApi<T>(
   path: string,
   init?: RequestInit
@@ -230,7 +398,12 @@ async function fetchDbApi<T>(
     )
   }
 
-  return response.json() as Promise<T>
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  const text = await response.text()
+  return (text ? JSON.parse(text) : undefined) as T
 }
 
 async function readErrorDetail(response: Response) {
@@ -585,4 +758,101 @@ export function updateEmployee(employeeId: number, employee: EmployeeUpdateInput
     projectsCache = null
     return savedEmployee
   })
+}
+
+export function listMoveRequests() {
+  return fetchDbApi<MoveRequest[]>("/move-requests?limit=500")
+}
+
+export function updateMoveRequest(
+  requestId: number,
+  moveRequest: MoveRequestUpdateInput
+) {
+  return fetchDbApi<MoveRequest>(`/move-requests/${requestId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(moveRequest),
+  })
+}
+
+export function deleteMoveRequest(requestId: number) {
+  return fetchDbApi<void>(`/move-requests/${requestId}`, {
+    method: "DELETE",
+  })
+}
+
+export function listMatchingPolicies() {
+  return fetchDbApi<MatchingPolicy[]>("/policies?limit=500")
+}
+
+export function getActiveMatchingPolicy() {
+  return fetchDbApi<MatchingPolicy>("/policies/active")
+}
+
+export function createMatchingPolicy(policy: MatchingPolicyCreateInput) {
+  return fetchDbApi<MatchingPolicy>("/policies", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(policy),
+  })
+}
+
+export function getMatchingRun(runId: number) {
+  return fetchDbApi<MatchingRun>(`/matching-runs/${runId}`)
+}
+
+export function updateMatchingRun(runId: number, run: MatchingRunUpdateInput) {
+  return fetchDbApi<MatchingRun>(`/matching-runs/${runId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(run),
+  })
+}
+
+export function deleteMatchingRun(runId: number) {
+  return fetchDbApi<void>(`/matching-runs/${runId}`, {
+    method: "DELETE",
+  })
+}
+
+export function listMatchingCandidates(runId: number) {
+  return fetchDbApi<MatchingCandidate[]>(
+    `/matching-runs/${runId}/candidates?limit=500`
+  )
+}
+
+export function listMatchingRecommendations(runId: number) {
+  return fetchDbApi<MatchingRecommendation[]>(
+    `/matching-runs/${runId}/recommendations?limit=500`
+  )
+}
+
+export function listMatchingHiringRecommendations(runId: number) {
+  return fetchDbApi<MatchingHiringRecommendation[]>(
+    `/matching-runs/${runId}/hiring-recommendations?limit=500`
+  )
+}
+
+export function listMatchingRunEvents(runId: number) {
+  return fetchDbApi<MatchingRunEvent[]>(`/matching-runs/${runId}/events?limit=500`)
+}
+
+export function createMoveRequestsFromMatchingRecommendation(
+  runId: number,
+  candidatePlanId: string
+) {
+  return fetchDbApi<{ move_requests: MoveRequest[] }>(
+    `/matching-runs/${runId}/recommendations/${encodeURIComponent(
+      candidatePlanId
+    )}/move-requests`,
+    {
+      method: "POST",
+    }
+  )
 }

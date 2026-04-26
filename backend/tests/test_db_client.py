@@ -220,6 +220,7 @@ class TestDbApiClientEmployees(unittest.TestCase):
             "name": employee_name,
             "role": "Backend engineer",
             "github_username": employee_name.lower(),
+            "github_username": employee_name.lower(),
             "current_project_ids": [],
             "skills": {**SKILL_ZERO, "backend": 3, "infrastructure": 2},
             "preferences": [],
@@ -237,6 +238,7 @@ class TestDbApiClientEmployees(unittest.TestCase):
         self.created_ids.append(created["id"])
 
         self.assertEqual(created["name"], payload["name"])
+        self.assertEqual(created["github_username"], payload["github_username"])
         self.assertEqual(created["skills"]["backend"], 3)
         self.assertEqual(created["current_project_ids"], [])
         self.assertEqual(created["current_project_names"], [])
