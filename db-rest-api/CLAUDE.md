@@ -45,7 +45,9 @@ The `fixtures/` directory is created on first run by the generator.
 
 - `projects`: `project_name`, `project_description`, `project_phase` (enum: `new acquisition`, `growth`, `maintenance`), `icon_url`, `poster_url`, `required_people_amount`, `required_skills` JSON, `github_repositories` JSON.
 - `project_documentation`: one generated documentation row per project, with generation status, markdown content, source repository/snapshot JSON, model metadata, latest error, and generation timestamps.
-- `employees`: `name`, `role`, `github_username`, `skills` JSON, `preferences` JSON, `interests` JSON.
+- `employees`: `name`, `role`, optional `github_username`, `skills` JSON, `preferences` JSON, `interests` JSON.
+- `project_documentation`: one generated documentation row per project, with generation status, markdown content, source repository/snapshot JSON, model metadata, latest error, and generation timestamps.
+- `employees`: `name`, `role`, optional `github_username`, `skills` JSON, `preferences` JSON, `interests` JSON.
 - `project_assignments`: `employee_id` FK, `project_id` FK, with composite primary key. This is the source of truth for current staffing.
 - `move_requests`: `employee_id` FK, `from_project_id` FK (nullable), `to_project_id` FK, `reason`, `expected_role`, `current_project_impact` enum, lifecycle `status`, CTO/employee approval statuses and timestamps, `created_at`, `responded_at` (nullable).
 - `move_request_transition_instructions`: onboarding/offboarding Markdown instructions per move request, with generation status, solve status, source documentation, snapshots, model metadata, and timestamps.

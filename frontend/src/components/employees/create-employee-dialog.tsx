@@ -5,6 +5,7 @@ import { useMemo, useState } from "react"
 import {
   createEmployee,
   DbApiError,
+  normalizeGithubUsername,
   updateEmployee,
   type Employee,
   type EmployeeCreateInput,
@@ -14,6 +15,7 @@ import {
   type Skills,
 } from "@/lib/db-api"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -136,7 +138,7 @@ function getInitialFormState(employee?: Employee): FormState {
   return {
     name: employee.name,
     role: employee.role,
-    githubUsername: employee.github_username,
+    githubUsername: employee.github_username ?? "",
     interestsText: employee.interests.join(", "),
     skills: { ...employee.skills },
     currentProject: employee.current_project ?? "",
@@ -279,7 +281,7 @@ export function CreateEmployeeDialog({
     const payload: EmployeeCreateInput | EmployeeUpdateInput = {
       name: formState.name.trim(),
       role: formState.role.trim(),
-      github_username: formState.githubUsername.trim(),
+      github_username: normalizeGithubUsername(formState.githubUsername),
       current_project: formState.currentProject || null,
       skills: formState.skills,
       preferences,
@@ -508,13 +510,12 @@ function PersonalDetailsStep({
         </Field>
         <Field
           label="GitHub username"
-          description="Used to gather commit history for transition instructions."
-          required
+          description="Optional. Enter a handle with or without @."
         >
           <Input
             value={formState.githubUsername}
             onChange={(event) => onChange({ githubUsername: event.target.value })}
-            placeholder="marco-bianchi"
+            placeholder="@marco-bianchi"
             aria-label="GitHub username"
           />
         </Field>
@@ -659,8 +660,12 @@ function AssignmentStep({
               <SelectGroup>
                 <SelectItem value="none">Unassigned</SelectItem>
                 {projects.map((project) => (
-                  <SelectItem key={project.id} value={project.project_name}>
-                    {project.project_name}
+                  <SelectItem
+                    key={project.id}
+                    value={project.project_name}
+                    textValue={project.project_name}
+                  >
+                    <ProjectSelectOption project={project} />
                   </SelectItem>
                 ))}
               </SelectGroup>
@@ -727,7 +732,11 @@ function SummaryStep({
         <SummaryRow label="Role" value={formState.role || "Not set"} />
         <SummaryRow
           label="GitHub"
-          value={formState.githubUsername || "Not set"}
+          value={
+            normalizeGithubUsername(formState.githubUsername)
+              ? `@${normalizeGithubUsername(formState.githubUsername)}`
+              : "Not set"
+          }
         />
         <SummaryTokenRow label="Interests" items={interests} emptyLabel="No interests" />
       </SummaryCard>
@@ -867,6 +876,29 @@ function SummaryTokenRow({
       )}
     </div>
   )
+}
+
+function ProjectSelectOption({ project }: { project: Project }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <Avatar className="size-6">
+        <AvatarImage src={project.icon_url} alt="" />
+        <AvatarFallback className="text-[0.625rem]">
+          {getInitials(project.project_name)}
+        </AvatarFallback>
+      </Avatar>
+      <span className="min-w-0 truncate">{project.project_name}</span>
+    </span>
+  )
+}
+
+function getInitials(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("")
 }
 
 function parseTokens(value: string) {

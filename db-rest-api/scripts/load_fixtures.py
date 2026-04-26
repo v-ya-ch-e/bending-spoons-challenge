@@ -146,7 +146,8 @@ def insert_employees(cursor, employees: list[dict[str, Any]]) -> dict[str, int]:
             (
                 employee["name"],
                 employee["role"],
-                employee["github_username"],
+                employee.get("github_username"),
+                employee.get("github_username"),
                 json.dumps(employee["skills"]),
                 json.dumps(employee["preferences"]),
                 json.dumps(employee["interests"]),

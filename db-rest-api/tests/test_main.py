@@ -14,6 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import main as api  # noqa: E402
 
+MISSING = object()
+
 
 SKILLS = {
     "android": 0,
@@ -87,16 +89,21 @@ def documentation_payload(project_id: int) -> dict[str, Any]:
     }
 
 
-def employee_payload(name: str = "Marco Bianchi") -> dict[str, Any]:
-    username = name.lower().replace(" ", "-")
-    return {
+def employee_payload(
+    name: str = "Marco Bianchi",
+    *,
+    github_username: str | None | object = "marco-bianchi",
+) -> dict[str, Any]:
+    payload = {
         "name": name,
         "role": "Backend engineer",
-        "github_username": username,
         "skills": deepcopy(SKILLS),
         "preferences": ["Atlas Staffing"],
         "interests": ["platform reliability", "internal tools"],
     }
+    if github_username is not MISSING:
+        payload["github_username"] = github_username
+    return payload
 
 
 def move_request_payload(employee_id: int, to_project_id: int) -> dict[str, Any]:
@@ -660,11 +667,6 @@ class InMemoryDatabase:
         row = dict(zip(columns, params, strict=True))
         if any(existing[unique_field] == row[unique_field] for existing in getattr(self, table)):
             raise pymysql.err.IntegrityError(1062, "Duplicate entry")
-        if table == "employees" and any(
-            existing["github_username"] == row["github_username"]
-            for existing in self.employees
-        ):
-            raise pymysql.err.IntegrityError(1062, "Duplicate entry")
         row["id"] = self.next_ids[table]
         self.next_ids[table] += 1
         getattr(self, table).append(row)
@@ -1221,27 +1223,70 @@ def test_employee_crud_and_validation(client: TestClient) -> None:
     assert update_response.status_code == 200
     assert update_response.json()["current_project"] is None
 
-    username_update = client.put("/employees/1", json={"github_username": "marco-platform"})
-    assert username_update.status_code == 200
-    assert username_update.json()["github_username"] == "marco-platform"
-
     invalid_skills = employee_payload("Giulia Rossi")
     invalid_skills["skills"]["backend"] = 4
     assert client.post("/employees", json=invalid_skills).status_code == 422
 
-    invalid_username = employee_payload("Giulia Rossi")
-    invalid_username["github_username"] = "-bad-username"
-    assert client.post("/employees", json=invalid_username).status_code == 422
-
-    duplicate = client.post(
-        "/employees",
-        json={**employee_payload(), "github_username": "marco-platform"},
-    )
+    duplicate = client.post("/employees", json=employee_payload())
     assert duplicate.status_code == 409
 
     delete_response = client.delete("/employees/1")
     assert delete_response.status_code == 204
     assert client.get("/employees/1").status_code == 404
+
+
+def test_employee_github_username_is_optional_and_normalized(client: TestClient) -> None:
+    create_without_username = client.post(
+        "/employees",
+        json=employee_payload("Giulia Rossi", github_username=MISSING),
+    )
+    assert create_without_username.status_code == 201
+    assert create_without_username.json()["github_username"] is None
+
+    create_with_at_prefix = client.post(
+        "/employees",
+        json=employee_payload("Luca Fontana", github_username="@luca-fontana"),
+    )
+    assert create_with_at_prefix.status_code == 201
+    assert create_with_at_prefix.json()["github_username"] == "luca-fontana"
+
+    cleared = client.put("/employees/2", json={"github_username": "   "})
+    assert cleared.status_code == 200
+    assert cleared.json()["github_username"] is None
+
+
+def test_employee_list_strips_unexpected_columns_from_raw_rows(
+    client: TestClient,
+    fake_db: InMemoryDatabase,
+) -> None:
+    fake_db.employees.append(
+        {
+            "id": 1,
+            "name": "Luca Fontana",
+            "role": "Backend engineer",
+            "github_username": "luca-fontana",
+            "skills": json.dumps(SKILLS),
+            "preferences": json.dumps(["Atlas Staffing"]),
+            "interests": json.dumps(["platform reliability"]),
+            "unexpected_column": "ignored",
+        }
+    )
+
+    employees = client.get("/employees").json()
+    assert employees == [
+        {
+            "id": 1,
+            "name": "Luca Fontana",
+            "role": "Backend engineer",
+            "github_username": "luca-fontana",
+            "skills": SKILLS,
+            "preferences": ["Atlas Staffing"],
+            "interests": ["platform reliability"],
+            "current_project_ids": [],
+            "current_project_names": [],
+            "current_project": None,
+        }
+    ]
 
 
 def test_move_request_crud_joined_response_and_status_timestamps(client: TestClient) -> None:

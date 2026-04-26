@@ -167,6 +167,7 @@ For frontend work, use `current_team_member_ids` and `current_project_ids` as th
 {
   "name": "Marco Bianchi",
   "role": "Backend engineer",
+  "github_username": "marco-bianchi",
   "current_project_ids": [1, 2],
   "skills": {
     "android": 0,
@@ -206,6 +207,7 @@ python scripts/init_db.py
 ```
 
 This applies [db/schema.sql](db/schema.sql). Statements are idempotent (`CREATE TABLE IF NOT EXISTS`), so running it on an already-initialized database adds missing tables without resetting existing data.
+The initializer also applies additive schema fixes for known employee fields such as `github_username`.
 
 To wipe and recreate the demo tables (drops matching persistence tables, `move_requests`, `project_assignments`, `employees`, and `projects` in FK-safe order):
 
@@ -251,7 +253,7 @@ You only need to re-run `generate_fixtures.py` when you want a new dataset; the 
 See [db/schema.sql](db/schema.sql) for the source of truth. Summary:
 
 - `projects(id, project_name, project_description, project_phase, icon_url, poster_url, required_people_amount, required_skills, github_repositories)`
-- `employees(id, name, role, skills, preferences, interests)`
+- `employees(id, name, role, github_username, skills, preferences, interests)`
 - `project_assignments(employee_id FK, project_id FK)`
 - `move_requests(id, employee_id FK, from_project_id FK nullable, to_project_id FK, reason, expected_role, current_project_impact, status, created_at, responded_at)`
 - `policies(id, name, description, config, is_active, created_at, updated_at, activated_at)`

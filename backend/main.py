@@ -4,6 +4,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from clients import DbApiError
@@ -29,10 +30,22 @@ from services.matching_llm_service import MatchingLlmError
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 ROOT_PATH = os.environ["BACKEND_ROOT_PATH"]
+LOCAL_CORS_ORIGIN_REGEX = os.getenv(
+    "BACKEND_CORS_ALLOW_ORIGIN_REGEX",
+    r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+)
 
 app = FastAPI(
     title="Bending Spoons Challenge Backend API",
     root_path=ROOT_PATH,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=LOCAL_CORS_ORIGIN_REGEX,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
