@@ -13,6 +13,7 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import {
+  getGithubProfileUrl,
   getCachedEmployees,
   getCachedProjects,
   listEmployees,
@@ -1003,6 +1004,16 @@ function ProjectEmployeeDetailPanel({
                 <p className="truncate text-sm text-muted-foreground">
                   {employee.role}
                 </p>
+                {employee.github_username ? (
+                  <a
+                    href={getGithubProfileUrl(employee.github_username)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 inline-flex text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    @{employee.github_username}
+                  </a>
+                ) : null}
               </div>
             </div>
 

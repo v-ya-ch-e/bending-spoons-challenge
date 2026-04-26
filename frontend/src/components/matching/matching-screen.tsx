@@ -13,8 +13,11 @@ import { currentUser } from "@/data/mock-navigation"
 import { runProjectMatching } from "@/lib/backend-api"
 import {
   createMoveRequestsFromMatchingRecommendation,
+  deleteMatchingRun,
+  deleteMoveRequest,
   getCachedEmployees,
   getCachedProjects,
+  getMatchingRun,
   listEmployees,
   listMatchingCandidates,
   listMatchingPolicies,
@@ -22,12 +25,14 @@ import {
   listMatchingRuns,
   listMoveRequests,
   listProjects,
+  updateMatchingRun,
   updateMoveRequest,
   updateProject,
-  deleteMoveRequest,
+  type ImpactLevel,
   type MatchingPolicy,
   type MoveRequest,
   type MoveRequestStatus,
+  type MoveRequestUpdateInput,
   type Project,
 } from "@/lib/db-api"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -41,6 +46,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sheet,
@@ -59,14 +73,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { CreateMatchingDialog } from "@/components/matching/create-matching-dialog"
 import {
   buildMovePlans,
   formatImpact,
-  formatLifecycle,
   formatRequestStatus,
   formatRequirement,
+  getCreateFlowMetadata,
   skillLabels,
   type AffectedCompanyImpact,
   type EmployeeTransitionImpact,
@@ -111,6 +134,19 @@ export function MatchingScreen() {
   const [detail, setDetail] = useState<DetailSelection>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [actionPlanId, setActionPlanId] = useState<string | null>(null)
+  const [overridePlan, setOverridePlan] = useState<MovePlan | null>(null)
+  const [overrideReason, setOverrideReason] = useState("")
+  const [overrideError, setOverrideError] = useState<string | null>(null)
+  const [deletePlanTarget, setDeletePlanTarget] = useState<MovePlan | null>(null)
+  const [editPlanTarget, setEditPlanTarget] = useState<MovePlan | null>(null)
+  const [editMoveContext, setEditMoveContext] = useState<{
+    plan: MovePlan
+    movement: ProposedMovement
+  } | null>(null)
+  const [deleteMoveContext, setDeleteMoveContext] = useState<{
+    plan: MovePlan
+    movement: ProposedMovement
+  } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const createDialogOpen = searchParams.get("create") === "1"
 
@@ -276,6 +312,131 @@ export function MatchingScreen() {
     }
   }
 
+  async function handleConfirmDeletePlan() {
+    const plan = deletePlanTarget
+    if (!plan) return
+
+    setActionPlanId(plan.id)
+    setError(null)
+    try {
+      if (plan.requests.length > 0) {
+        await Promise.all(plan.requests.map((request) => deleteMoveRequest(request.id)))
+      }
+      if (plan.run) {
+        await deleteMatchingRun(plan.run.id)
+      }
+      await loadWorkspace()
+      setDeletePlanTarget(null)
+      setDetail((current) => (current?.plan.id === plan.id ? null : current))
+      setSelectedPlanId(null)
+      setActiveTab(
+        plan.lifecycle === "completed"
+          ? "completed"
+          : plan.origin === "recommendation"
+            ? "draft"
+            : "active"
+      )
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Unable to delete this plan."
+      )
+    } finally {
+      setActionPlanId(null)
+    }
+  }
+
+  async function handleSaveEditPlan(planName: string, goal: string) {
+    const plan = editPlanTarget
+    if (!plan?.run) {
+      setEditPlanTarget(null)
+      return
+    }
+
+    setActionPlanId(plan.id)
+    setError(null)
+    try {
+      const fresh = await getMatchingRun(plan.run.id)
+      const priorMeta = getCreateFlowMetadata(fresh) ?? {}
+      await updateMatchingRun(plan.run.id, {
+        input_snapshot: {
+          ...(fresh.input_snapshot ?? {}),
+          matching_create_flow: {
+            ...priorMeta,
+            planName: planName.trim(),
+            goal: goal.trim(),
+          },
+        },
+      })
+      await loadWorkspace()
+      setEditPlanTarget(null)
+    } catch (editPlanError) {
+      setError(
+        editPlanError instanceof Error
+          ? editPlanError.message
+          : "Unable to update this plan."
+      )
+    } finally {
+      setActionPlanId(null)
+    }
+  }
+
+  async function handleSaveEditMoveRequest(payload: MoveRequestUpdateInput) {
+    const context = editMoveContext
+    if (!context?.movement.request) {
+      setEditMoveContext(null)
+      return
+    }
+
+    setActionPlanId(context.plan.id)
+    setError(null)
+    try {
+      await updateMoveRequest(context.movement.request.id, payload)
+      await loadWorkspace()
+      setEditMoveContext(null)
+      setDetail(null)
+    } catch (editMoveError) {
+      setError(
+        editMoveError instanceof Error
+          ? editMoveError.message
+          : "Unable to update this move request."
+      )
+    } finally {
+      setActionPlanId(null)
+    }
+  }
+
+  async function handleConfirmDeleteMoveRequest() {
+    const context = deleteMoveContext
+    if (!context?.movement.request) {
+      setDeleteMoveContext(null)
+      return
+    }
+
+    setActionPlanId(context.plan.id)
+    setError(null)
+    try {
+      await deleteMoveRequest(context.movement.request.id)
+      await loadWorkspace()
+      setDeleteMoveContext(null)
+      setDetail((current) =>
+        current?.plan.id === context.plan.id &&
+        (current.kind === "movement" || current.kind === "employee")
+          ? null
+          : current
+      )
+    } catch (deleteMoveError) {
+      setError(
+        deleteMoveError instanceof Error
+          ? deleteMoveError.message
+          : "Unable to delete this move request."
+      )
+    } finally {
+      setActionPlanId(null)
+    }
+  }
+
   async function handleRequestStatus(
     requestId: number,
     status: MoveRequestStatus,
@@ -297,52 +458,56 @@ export function MatchingScreen() {
     }
   }
 
+  async function executePlanAssignments(plan: MovePlan) {
+    const projectUpdates = new Map(
+      projects.map((project) => [
+        project.id,
+        new Set(project.current_team_member_ids),
+      ])
+    )
+
+    for (const movement of plan.movements) {
+      if (!movement.employee) {
+        continue
+      }
+
+      projectUpdates
+        .get(movement.targetProject.id)
+        ?.add(movement.employee.id)
+
+      if (movement.action === "move" && movement.sourceProject) {
+        projectUpdates
+          .get(movement.sourceProject.id)
+          ?.delete(movement.employee.id)
+      }
+    }
+
+    const changedProjects = projects.filter((project) => {
+      const nextIds = [...(projectUpdates.get(project.id) ?? new Set<number>())].sort(
+        (left, right) => left - right
+      )
+      const currentIds = [...project.current_team_member_ids].sort(
+        (left, right) => left - right
+      )
+      return nextIds.join(",") !== currentIds.join(",")
+    })
+
+    await Promise.all(
+      changedProjects.map((project) =>
+        updateProject(project.id, {
+          current_team_member_ids: [
+            ...(projectUpdates.get(project.id) ?? new Set<number>()),
+          ],
+        })
+      )
+    )
+  }
+
   async function handleExecutePlan(plan: MovePlan) {
     setActionPlanId(plan.id)
     setError(null)
     try {
-      const projectUpdates = new Map(
-        projects.map((project) => [
-          project.id,
-          new Set(project.current_team_member_ids),
-        ])
-      )
-
-      for (const movement of plan.movements) {
-        if (!movement.employee) {
-          continue
-        }
-
-        projectUpdates
-          .get(movement.targetProject.id)
-          ?.add(movement.employee.id)
-
-        if (movement.action === "move" && movement.sourceProject) {
-          projectUpdates
-            .get(movement.sourceProject.id)
-            ?.delete(movement.employee.id)
-        }
-      }
-
-      const changedProjects = projects.filter((project) => {
-        const nextIds = [...(projectUpdates.get(project.id) ?? new Set<number>())].sort(
-          (left, right) => left - right
-        )
-        const currentIds = [...project.current_team_member_ids].sort(
-          (left, right) => left - right
-        )
-        return nextIds.join(",") !== currentIds.join(",")
-      })
-
-      await Promise.all(
-        changedProjects.map((project) =>
-          updateProject(project.id, {
-            current_team_member_ids: [
-              ...(projectUpdates.get(project.id) ?? new Set<number>()),
-            ],
-          })
-        )
-      )
+      await executePlanAssignments(plan)
       await loadWorkspace()
       setActiveTab("completed")
       setSelectedPlanId(plan.id)
@@ -351,6 +516,67 @@ export function MatchingScreen() {
         executeError instanceof Error
           ? executeError.message
           : "Unable to execute this plan."
+      )
+    } finally {
+      setActionPlanId(null)
+    }
+  }
+
+  function openOverrideDialog(plan: MovePlan) {
+    setOverridePlan(plan)
+    setOverrideReason("")
+    setOverrideError(null)
+  }
+
+  async function handleForceApproveAndExecute() {
+    if (!overridePlan) return
+    const reason = overrideReason.trim()
+    if (!reason) {
+      setOverrideError("Enter the reason for bypassing employee confirmation.")
+      return
+    }
+
+    setActionPlanId(overridePlan.id)
+    setError(null)
+    setOverrideError(null)
+    try {
+      const requestsToForce = overridePlan.requests.filter(
+        (request) => request.status !== "accepted"
+      )
+      await Promise.all(
+        requestsToForce.map((request) =>
+          updateMoveRequest(request.id, {
+            status: "accepted",
+            reason: `${request.reason}\n\nCTO override: ${reason}`,
+          })
+        )
+      )
+
+      if (overridePlan.run) {
+        await updateMatchingRun(overridePlan.run.id, {
+          input_snapshot: {
+            ...(overridePlan.run.input_snapshot ?? {}),
+            cto_override: {
+              reason,
+              requestedBy: currentUser.email,
+              forcedRequestIds: requestsToForce.map((request) => request.id),
+              createdAt: new Date().toISOString(),
+            },
+          },
+        })
+      }
+
+      await executePlanAssignments(overridePlan)
+      await loadWorkspace()
+      setActiveTab("completed")
+      setSelectedPlanId(overridePlan.id)
+      setOverridePlan(null)
+      setOverrideReason("")
+    } catch (overrideFailure) {
+      setError(
+        overrideFailure instanceof Error
+          ? overrideFailure.message
+          : "Unable to force approve and execute this plan."
       )
     } finally {
       setActionPlanId(null)
@@ -404,9 +630,18 @@ export function MatchingScreen() {
               setCreateTargetProjectId(String(plan.targetProject.id))
               router.push(`${pathname}?create=1`)
             }}
+            onEditPlan={setEditPlanTarget}
+            onDeletePlan={setDeletePlanTarget}
+            onEditMoveRequest={(plan, movement) => {
+              setEditMoveContext({ plan, movement })
+            }}
+            onDeleteMoveRequest={(plan, movement) => {
+              setDeleteMoveContext({ plan, movement })
+            }}
             onStartRequest={handleStartRequest}
             onCancelRequest={handleCancelRequest}
             onExecutePlan={handleExecutePlan}
+            onForceExecute={openOverrideDialog}
             onRequestStatus={handleRequestStatus}
             onOpenProject={() => router.push("/cto/projects")}
           />
@@ -437,7 +672,85 @@ export function MatchingScreen() {
         />
       )}
 
-      <DetailSheet detail={detail} onOpenChange={(open) => !open && setDetail(null)} />
+      <DetailSheet
+        detail={detail}
+        isBusy={Boolean(detail && actionPlanId === detail.plan.id)}
+        onOpenChange={(open) => !open && setDetail(null)}
+        onRegenerate={handleRegenerate}
+        onStartRequest={handleStartRequest}
+        onRequestStatus={handleRequestStatus}
+        onExecutePlan={handleExecutePlan}
+        onForceExecute={openOverrideDialog}
+        onEditMoveRequest={(plan, movement) => {
+          setEditMoveContext({ plan, movement })
+          setDetail(null)
+        }}
+        onDeleteMoveRequest={(plan, movement) => {
+          setDeleteMoveContext({ plan, movement })
+          setDetail(null)
+        }}
+      />
+
+      <DeletePlanDialog
+        plan={deletePlanTarget}
+        sameRunRecommendationCount={
+          deletePlanTarget?.run
+            ? runBundles.find((bundle) => bundle.run.id === deletePlanTarget.run!.id)
+                ?.recommendations.length ?? 0
+            : 0
+        }
+        isBusy={Boolean(deletePlanTarget && actionPlanId === deletePlanTarget.id)}
+        onOpenChange={(open) => {
+          if (!open) setDeletePlanTarget(null)
+        }}
+        onConfirm={handleConfirmDeletePlan}
+      />
+
+      <EditPlanDialog
+        plan={editPlanTarget}
+        isBusy={Boolean(editPlanTarget && actionPlanId === editPlanTarget.id)}
+        onOpenChange={(open) => {
+          if (!open) setEditPlanTarget(null)
+        }}
+        onSave={handleSaveEditPlan}
+      />
+
+      <EditMoveRequestDialog
+        projects={projects}
+        context={editMoveContext}
+        isBusy={Boolean(
+          editMoveContext && actionPlanId === editMoveContext.plan.id
+        )}
+        onOpenChange={(open) => {
+          if (!open) setEditMoveContext(null)
+        }}
+        onSave={handleSaveEditMoveRequest}
+      />
+
+      <DeleteMoveRequestDialog
+        context={deleteMoveContext}
+        isBusy={Boolean(
+          deleteMoveContext && actionPlanId === deleteMoveContext.plan.id
+        )}
+        onOpenChange={(open) => {
+          if (!open) setDeleteMoveContext(null)
+        }}
+        onConfirm={handleConfirmDeleteMoveRequest}
+      />
+      <ForceOverrideDialog
+        plan={overridePlan}
+        reason={overrideReason}
+        error={overrideError}
+        isBusy={Boolean(overridePlan && actionPlanId === overridePlan.id)}
+        onReasonChange={(reason) => {
+          setOverrideReason(reason)
+          setOverrideError(null)
+        }}
+        onOpenChange={(open) => {
+          if (!open) setOverridePlan(null)
+        }}
+        onConfirm={handleForceApproveAndExecute}
+      />
     </div>
   )
 }
@@ -565,9 +878,14 @@ function SelectedPlanWorkspace({
   onOpenDetail,
   onRegenerate,
   onEditConstraints,
+  onEditPlan,
+  onDeletePlan,
+  onEditMoveRequest,
+  onDeleteMoveRequest,
   onStartRequest,
   onCancelRequest,
   onExecutePlan,
+  onForceExecute,
   onRequestStatus,
   onOpenProject,
 }: {
@@ -576,9 +894,14 @@ function SelectedPlanWorkspace({
   onOpenDetail: (detail: DetailSelection) => void
   onRegenerate: (plan: MovePlan) => void
   onEditConstraints: (plan: MovePlan) => void
+  onEditPlan: (plan: MovePlan) => void
+  onDeletePlan: (plan: MovePlan) => void
+  onEditMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
+  onDeleteMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
   onStartRequest: (plan: MovePlan) => void
   onCancelRequest: (plan: MovePlan) => void
   onExecutePlan: (plan: MovePlan) => void
+  onForceExecute: (plan: MovePlan) => void
   onRequestStatus: (
     requestId: number,
     status: MoveRequestStatus,
@@ -607,9 +930,12 @@ function SelectedPlanWorkspace({
           isBusy={isBusy}
           onRegenerate={onRegenerate}
           onEditConstraints={onEditConstraints}
+          onEditPlan={onEditPlan}
+          onDeletePlan={onDeletePlan}
           onStartRequest={onStartRequest}
           onCancelRequest={onCancelRequest}
           onExecutePlan={onExecutePlan}
+          onForceExecute={onForceExecute}
           onOpenProject={onOpenProject}
         />
       </div>
@@ -617,6 +943,7 @@ function SelectedPlanWorkspace({
       <div className="flex flex-col gap-4 p-4">
         <SafetyNotice state={plan.lifecycle} />
         <SummaryStrip plan={plan} />
+        <ResponseStatusSummary plan={plan} />
 
         <div className="grid gap-4 2xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
           <RequirementCoverageSection plan={plan} onOpenDetail={onOpenDetail} />
@@ -625,6 +952,8 @@ function SelectedPlanWorkspace({
             onOpenDetail={onOpenDetail}
             onRegenerate={onRegenerate}
             onRequestStatus={onRequestStatus}
+            onEditMoveRequest={onEditMoveRequest}
+            onDeleteMoveRequest={onDeleteMoveRequest}
           />
           <AffectedCompaniesSection plan={plan} onOpenDetail={onOpenDetail} />
           <EmployeeImpactSection plan={plan} onOpenDetail={onOpenDetail} />
@@ -639,23 +968,57 @@ function PlanActions({
   isBusy,
   onRegenerate,
   onEditConstraints,
+  onEditPlan,
+  onDeletePlan,
   onStartRequest,
   onCancelRequest,
   onExecutePlan,
+  onForceExecute,
   onOpenProject,
 }: {
   plan: MovePlan
   isBusy: boolean
   onRegenerate: (plan: MovePlan) => void
   onEditConstraints: (plan: MovePlan) => void
+  onEditPlan: (plan: MovePlan) => void
+  onDeletePlan: (plan: MovePlan) => void
   onStartRequest: (plan: MovePlan) => void
   onCancelRequest: (plan: MovePlan) => void
   onExecutePlan: (plan: MovePlan) => void
+  onForceExecute: (plan: MovePlan) => void
   onOpenProject: () => void
 }) {
+  const editPlanButton = plan.run ? (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={isBusy}
+      onClick={() => onEditPlan(plan)}
+    >
+      <HugeiconsIcon icon={Edit02Icon} strokeWidth={2} data-icon="inline-start" />
+      Edit plan
+    </Button>
+  ) : null
+
+  const deletePlanButton = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="text-destructive hover:text-destructive"
+      disabled={isBusy}
+      onClick={() => onDeletePlan(plan)}
+    >
+      Delete plan
+    </Button>
+  )
+
   if (plan.lifecycle === "draft") {
     return (
       <div className="flex flex-wrap gap-2">
+        {editPlanButton}
+        {deletePlanButton}
         <Button
           type="button"
           variant="outline"
@@ -681,7 +1044,7 @@ function PlanActions({
           disabled={isBusy || !plan.run || !plan.recommendation}
           onClick={() => onStartRequest(plan)}
         >
-          Start move request
+          Send employee requests
         </Button>
       </div>
     )
@@ -690,8 +1053,10 @@ function PlanActions({
   if (plan.lifecycle === "active") {
     return (
       <div className="flex flex-wrap gap-2">
+        {editPlanButton}
+        {deletePlanButton}
         <Button type="button" variant="outline" size="sm" disabled>
-          Send reminder
+          Remind employees
         </Button>
         <Button
           type="button"
@@ -711,6 +1076,15 @@ function PlanActions({
         >
           Cancel request
         </Button>
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          disabled={isBusy || plan.requests.length === 0}
+          onClick={() => onForceExecute(plan)}
+        >
+          Force approve and execute
+        </Button>
       </div>
     )
   }
@@ -718,8 +1092,10 @@ function PlanActions({
   if (plan.lifecycle === "ready") {
     return (
       <div className="flex flex-wrap gap-2">
+        {editPlanButton}
+        {deletePlanButton}
         <Button type="button" variant="outline" size="sm" disabled>
-          Schedule transition
+          All employees accepted
         </Button>
         <Button
           type="button"
@@ -727,7 +1103,7 @@ function PlanActions({
           disabled={isBusy}
           onClick={() => onExecutePlan(plan)}
         >
-          Start transition
+          Execute transition
         </Button>
       </div>
     )
@@ -735,6 +1111,8 @@ function PlanActions({
 
   return (
     <div className="flex flex-wrap gap-2">
+      {editPlanButton}
+      {deletePlanButton}
       <Button type="button" variant="outline" size="sm" onClick={onOpenProject}>
         Open company workspace
       </Button>
@@ -752,18 +1130,34 @@ function PlanActions({
 }
 
 function SafetyNotice({ state }: { state: MatchingLifecycleState }) {
-  const copy: Record<MatchingLifecycleState, string> = {
-    draft: "Nothing has been sent to employees yet. Review impact before starting the request.",
-    active: "Requests have been sent. Track employee responses before executing the transition.",
-    ready: "All required moves have been accepted. The transition can now be scheduled.",
-    completed: "Moves are complete. Requirements should be covered in current staffing records.",
+  const copy: Record<MatchingLifecycleState, { title: string; description: string }> = {
+    draft: {
+      title: "Draft plan",
+      description:
+        "Nothing has been sent to employees yet. Review coverage and impact before sending requests.",
+    },
+    active: {
+      title: "Waiting for employee acceptance",
+      description:
+        "Requests have been sent. The plan stays active until every requested employee accepts.",
+    },
+    ready: {
+      title: "All employees accepted",
+      description:
+        "Every required move has been accepted. You can now execute the transition.",
+    },
+    completed: {
+      title: "Transition completed",
+      description:
+        "Assignments have been applied. Requirements should be reflected in current staffing records.",
+    },
   }
 
   return (
     <Alert>
       <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
-      <AlertTitle>{formatLifecycle(state)} plan</AlertTitle>
-      <AlertDescription>{copy[state]}</AlertDescription>
+      <AlertTitle>{copy[state].title}</AlertTitle>
+      <AlertDescription>{copy[state].description}</AlertDescription>
     </Alert>
   )
 }
@@ -784,6 +1178,50 @@ function SummaryStrip({ plan }: { plan: MovePlan }) {
           <p className="mt-1 truncate font-medium">{item.value}</p>
         </div>
       ))}
+    </div>
+  )
+}
+
+function ResponseStatusSummary({ plan }: { plan: MovePlan }) {
+  if (plan.requests.length === 0) {
+    return null
+  }
+
+  const counts = getRequestStatusCounts(plan.requests)
+  const items = [
+    { label: "Accepted", value: counts.accepted, status: "accepted" as const },
+    { label: "Pending", value: counts.pending, status: "pending" as const },
+    {
+      label: "Needs clarification",
+      value: counts.clarification_requested,
+      status: "clarification_requested" as const,
+    },
+    { label: "Rejected", value: counts.rejected, status: "rejected" as const },
+  ].filter((item) => item.value > 0)
+
+  return (
+    <div className="flex flex-col gap-3 rounded-3xl border bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="font-medium">Employee response status</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {plan.lifecycle === "active"
+            ? "Waiting for every requested employee to accept before this plan becomes ready."
+            : plan.lifecycle === "ready"
+              ? "All requested employees accepted. The transition is ready to execute."
+              : "Responses are retained for the transition audit trail."}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {items.map((item) => (
+          <Badge
+            key={item.status}
+            variant="outline"
+            className={getRequestStatusAccentClass(item.status)}
+          >
+            {item.value} {item.label}
+          </Badge>
+        ))}
+      </div>
     </div>
   )
 }
@@ -841,6 +1279,8 @@ function ProposedMovementsSection({
   onOpenDetail,
   onRegenerate,
   onRequestStatus,
+  onEditMoveRequest,
+  onDeleteMoveRequest,
 }: {
   plan: MovePlan
   onOpenDetail: (detail: DetailSelection) => void
@@ -850,6 +1290,8 @@ function ProposedMovementsSection({
     status: MoveRequestStatus,
     plan: MovePlan
   ) => void
+  onEditMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
+  onDeleteMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
 }) {
   return (
     <WorkspaceSection title="2. Proposed movements">
@@ -942,6 +1384,33 @@ function ProposedMovementsSection({
                   >
                     Replace
                   </Button>
+                  {movement.request && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onEditMoveRequest(plan, movement)
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="xs"
+                        className="text-destructive"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onDeleteMoveRequest(plan, movement)
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </>
+                  )}
                 </div>
               </TableCell>
             </TableRow>
@@ -1065,14 +1534,34 @@ function WorkspaceSection({
 
 function DetailSheet({
   detail,
+  isBusy,
   onOpenChange,
+  onRegenerate,
+  onStartRequest,
+  onRequestStatus,
+  onExecutePlan,
+  onForceExecute,
+  onEditMoveRequest,
+  onDeleteMoveRequest,
 }: {
   detail: DetailSelection
+  isBusy: boolean
   onOpenChange: (open: boolean) => void
+  onRegenerate: (plan: MovePlan) => void
+  onStartRequest: (plan: MovePlan) => void
+  onRequestStatus: (
+    requestId: number,
+    status: MoveRequestStatus,
+    plan: MovePlan
+  ) => void
+  onExecutePlan: (plan: MovePlan) => void
+  onForceExecute: (plan: MovePlan) => void
+  onEditMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
+  onDeleteMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
 }) {
   return (
     <Sheet open={Boolean(detail)} onOpenChange={onOpenChange}>
-      <SheetContent className="sm:max-w-lg">
+      <SheetContent className="w-full sm:max-w-2xl lg:max-w-3xl">
         <SheetHeader>
           <SheetTitle>{getDetailTitle(detail)}</SheetTitle>
           <SheetDescription>
@@ -1081,18 +1570,107 @@ function DetailSheet({
         </SheetHeader>
 
         <div className="flex flex-col gap-5 overflow-y-auto px-6 pb-6">
-          {detail && <DetailContent detail={detail} />}
+          {detail && (
+            <DetailContent
+              detail={detail}
+              isBusy={isBusy}
+              onRegenerate={onRegenerate}
+              onStartRequest={onStartRequest}
+              onRequestStatus={onRequestStatus}
+              onExecutePlan={onExecutePlan}
+              onForceExecute={onForceExecute}
+              onEditMoveRequest={onEditMoveRequest}
+              onDeleteMoveRequest={onDeleteMoveRequest}
+            />
+          )}
         </div>
       </SheetContent>
     </Sheet>
   )
 }
 
-function DetailContent({ detail }: { detail: NonNullable<DetailSelection> }) {
+function DetailContent({
+  detail,
+  isBusy,
+  onRegenerate,
+  onStartRequest,
+  onRequestStatus,
+  onExecutePlan,
+  onForceExecute,
+  onEditMoveRequest,
+  onDeleteMoveRequest,
+}: {
+  detail: NonNullable<DetailSelection>
+  isBusy: boolean
+  onRegenerate: (plan: MovePlan) => void
+  onStartRequest: (plan: MovePlan) => void
+  onRequestStatus: (
+    requestId: number,
+    status: MoveRequestStatus,
+    plan: MovePlan
+  ) => void
+  onExecutePlan: (plan: MovePlan) => void
+  onForceExecute: (plan: MovePlan) => void
+  onEditMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
+  onDeleteMoveRequest: (plan: MovePlan, movement: ProposedMovement) => void
+}) {
   if (detail.kind === "requirement") {
     const requirement = detail.plan.targetProject.required_skills[detail.row.skill]
+    const relatedMovements = detail.plan.movements.filter((movement) =>
+      movement.requirementsCovered.some((requirementLabel) =>
+        requirementLabel.startsWith(skillLabels[detail.row.skill])
+      )
+    )
+    const uncovered = Math.max(0, detail.row.requiredSlots - detail.row.afterCovered)
+    const coveragePercent = getRatioPercent(
+      detail.row.afterCovered,
+      detail.row.requiredSlots
+    )
     return (
       <>
+        <DetailHero
+          eyebrow="Requirement coverage"
+          title={`${skillLabels[detail.row.skill]} coverage`}
+          description={`${detail.plan.targetProject.project_name} needs ${
+            formatRequirement(requirement) || "no dedicated coverage"
+          }.`}
+          badge={<CoverageBadge status={detail.row.status} />}
+        />
+        <DetailActions>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isBusy}
+            onClick={() => onRegenerate(detail.plan)}
+          >
+            Regenerate plan
+          </Button>
+          {detail.plan.lifecycle === "draft" && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={isBusy || !detail.plan.run || !detail.plan.recommendation}
+              onClick={() => onStartRequest(detail.plan)}
+            >
+              Send employee requests
+            </Button>
+          )}
+        </DetailActions>
+        <DetailMetricGrid
+          items={[
+            { label: "Required", value: String(detail.row.requiredSlots) },
+            { label: "Current", value: String(detail.row.currentCovered) },
+            { label: "After plan", value: String(detail.row.afterCovered) },
+            { label: "Gap", value: String(uncovered) },
+          ]}
+        />
+        <DetailProgressCard
+          label="After-plan coverage"
+          value={coveragePercent}
+          helper={`${detail.row.afterCovered} of ${detail.row.requiredSlots} required slots covered`}
+          tone={detail.row.status === "missing" ? "red" : detail.row.status === "partially_covered" ? "amber" : "green"}
+        />
         <DetailBlock label="What is this?">
           {skillLabels[detail.row.skill]} staffing requirement for{" "}
           {detail.plan.targetProject.project_name}.
@@ -1105,19 +1683,158 @@ function DetailContent({ detail }: { detail: NonNullable<DetailSelection> }) {
           {detail.row.afterCovered} / {detail.row.requiredSlots}.
         </DetailBlock>
         <DetailBlock label="Next action">
-          Review proposed movements covering this requirement before starting requests.
+          {uncovered > 0
+            ? "Regenerate or find a replacement before sending requests."
+            : "Coverage looks sufficient. Review employee impact before sending requests."}
         </DetailBlock>
         <TokenList
           label="Covering employees"
           items={detail.row.coveringEmployees.map((employee) => employee.name)}
+        />
+        <TokenList
+          label="Related proposed moves"
+          items={relatedMovements.map(
+            (movement) => movement.employee?.name ?? "Unknown employee"
+          )}
         />
       </>
     )
   }
 
   if (detail.kind === "movement") {
+    const sourceRisk =
+      detail.movement.sourceProject &&
+      detail.plan.affectedCompanies.find(
+        (company) => company.project?.id === detail.movement.sourceProject?.id
+      )
     return (
       <>
+        <DetailHero
+          eyebrow="Proposed movement"
+          title={detail.movement.employee?.name ?? "Unknown employee"}
+          description={`${detail.movement.sourceProject?.project_name ?? "Bench"} to ${detail.movement.targetProject.project_name}`}
+          badge={<RequestStatusBadge status={detail.movement.requestStatus} />}
+        />
+        <DetailActions>
+          {detail.plan.lifecycle === "draft" && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={isBusy || !detail.plan.run || !detail.plan.recommendation}
+              onClick={() => onStartRequest(detail.plan)}
+            >
+              Send employee requests
+            </Button>
+          )}
+          {detail.movement.request && detail.plan.lifecycle === "active" && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isBusy}
+                onClick={() =>
+                  onRequestStatus(detail.movement.request!.id, "accepted", detail.plan)
+                }
+              >
+                Mark accepted
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isBusy}
+                onClick={() =>
+                  onRequestStatus(
+                    detail.movement.request!.id,
+                    "clarification_requested",
+                    detail.plan
+                  )
+                }
+              >
+                Request clarification
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={isBusy}
+                onClick={() => onForceExecute(detail.plan)}
+              >
+                Force approve and execute
+              </Button>
+            </>
+          )}
+          {detail.plan.lifecycle === "ready" && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={isBusy}
+              onClick={() => onExecutePlan(detail.plan)}
+            >
+              Execute transition
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isBusy}
+            onClick={() => onRegenerate(detail.plan)}
+          >
+            Find replacement
+          </Button>
+          {detail.movement.request && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isBusy}
+                onClick={() => onEditMoveRequest(detail.plan, detail.movement)}
+              >
+                Edit move request
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={isBusy}
+                onClick={() => onDeleteMoveRequest(detail.plan, detail.movement)}
+              >
+                Delete move request
+              </Button>
+            </>
+          )}
+        </DetailActions>
+        <DetailMetricGrid
+          items={[
+            { label: "Status", value: formatRequestStatus(detail.movement.requestStatus) },
+            { label: "Impact", value: formatImpact(detail.movement.currentProjectImpact) },
+            { label: "From", value: detail.movement.sourceProject?.project_name ?? "Bench" },
+            { label: "To", value: detail.movement.targetProject.project_name },
+          ]}
+        />
+        <DetailProgressCard
+          label="Source company capacity after move"
+          value={
+            sourceRisk
+              ? getRatioPercent(sourceRisk.afterHeadcount, sourceRisk.requiredHeadcount)
+              : 100
+          }
+          helper={
+            sourceRisk
+              ? `${sourceRisk.afterHeadcount} of ${sourceRisk.requiredHeadcount} required people remain`
+              : "No source-company capacity constraint affected"
+          }
+          tone={
+            detail.movement.currentProjectImpact === "high"
+              ? "red"
+              : detail.movement.currentProjectImpact === "medium"
+                ? "amber"
+                : "green"
+          }
+        />
         <DetailBlock label="What is this?">
           {detail.movement.employee?.name ?? "Unknown employee"} moving from{" "}
           {detail.movement.sourceProject?.project_name ?? "Bench"} to{" "}
@@ -1127,10 +1844,17 @@ function DetailContent({ detail }: { detail: NonNullable<DetailSelection> }) {
         <DetailBlock label="Current status">
           {formatRequestStatus(detail.movement.requestStatus)}
         </DetailBlock>
+        <DetailBlock label="Source company risk">
+          {sourceRisk
+            ? `${sourceRisk.afterHeadcount} / ${sourceRisk.requiredHeadcount} people after plan, ${formatImpact(sourceRisk.risk)} risk.`
+            : "No source-company staffing risk detected for this movement."}
+        </DetailBlock>
         <DetailBlock label="Next action">
           {detail.plan.lifecycle === "draft"
             ? "Start the move request when the plan has been reviewed."
-            : "Track the employee response before executing the transition."}
+            : detail.plan.lifecycle === "active"
+              ? "Track the employee response, replace this move, or use CTO override if necessary."
+              : "Execute the transition when operationally ready."}
         </DetailBlock>
         <TokenList label="Requirements covered" items={detail.movement.requirementsCovered} />
       </>
@@ -1138,8 +1862,64 @@ function DetailContent({ detail }: { detail: NonNullable<DetailSelection> }) {
   }
 
   if (detail.kind === "company") {
+    const causedByMoves = detail.plan.movements.filter(
+      (movement) => movement.sourceProject?.id === detail.company.project?.id
+    )
     return (
       <>
+        <DetailHero
+          eyebrow="Source company impact"
+          title={detail.company.project?.project_name ?? "Bench"}
+          description={`${detail.company.lostEmployees.length} employee${
+            detail.company.lostEmployees.length === 1 ? "" : "s"
+          } proposed to move out.`}
+          badge={<ImpactBadge impact={detail.company.risk} />}
+        />
+        <DetailActions>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isBusy}
+            onClick={() => onRegenerate(detail.plan)}
+          >
+            Find replacement
+          </Button>
+          {detail.plan.lifecycle === "active" && detail.company.risk === "high" && (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={isBusy}
+              onClick={() => onForceExecute(detail.plan)}
+            >
+              Override with risk accepted
+            </Button>
+          )}
+        </DetailActions>
+        <DetailMetricGrid
+          items={[
+            { label: "Before", value: String(detail.company.beforeHeadcount) },
+            { label: "After", value: String(detail.company.afterHeadcount) },
+            { label: "Required", value: String(detail.company.requiredHeadcount) },
+            { label: "Risk", value: formatImpact(detail.company.risk) },
+          ]}
+        />
+        <DetailProgressCard
+          label="Headcount after plan"
+          value={getRatioPercent(
+            detail.company.afterHeadcount,
+            detail.company.requiredHeadcount
+          )}
+          helper={`${detail.company.afterHeadcount} of ${detail.company.requiredHeadcount} required people remain`}
+          tone={
+            detail.company.risk === "high"
+              ? "red"
+              : detail.company.risk === "medium"
+                ? "amber"
+                : "green"
+          }
+        />
         <DetailBlock label="What is this?">
           Source company impact for {detail.company.project?.project_name ?? "Bench"}.
         </DetailBlock>
@@ -1158,12 +1938,118 @@ function DetailContent({ detail }: { detail: NonNullable<DetailSelection> }) {
           label="Losing employees"
           items={detail.company.lostEmployees.map((employee) => employee.name)}
         />
+        <TokenList
+          label="Caused by moves"
+          items={causedByMoves.map(
+            (movement) =>
+              `${movement.employee?.name ?? "Unknown employee"} to ${movement.targetProject.project_name}`
+          )}
+        />
       </>
     )
   }
 
   return (
     <>
+      <DetailHero
+        eyebrow="Employee impact"
+        title={detail.impact.employee?.name ?? "Unknown employee"}
+        description={`${detail.impact.movement.sourceProject?.project_name ?? "Bench"} to ${detail.impact.movement.targetProject.project_name}`}
+        badge={<RequestStatusBadge status={detail.impact.status} />}
+      />
+      <DetailActions>
+        {detail.impact.movement.request && detail.plan.lifecycle === "active" && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isBusy}
+              onClick={() =>
+                onRequestStatus(
+                  detail.impact.movement.request!.id,
+                  "accepted",
+                  detail.plan
+                )
+              }
+            >
+              Mark accepted
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={isBusy}
+              onClick={() => onForceExecute(detail.plan)}
+            >
+              Force approve and execute
+            </Button>
+          </>
+        )}
+        {detail.plan.lifecycle === "ready" && (
+          <Button
+            type="button"
+            size="sm"
+            disabled={isBusy}
+            onClick={() => onExecutePlan(detail.plan)}
+          >
+            Execute transition
+          </Button>
+        )}
+        {detail.impact.movement.request && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={isBusy}
+              onClick={() => onEditMoveRequest(detail.plan, detail.impact.movement)}
+            >
+              Edit move request
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={isBusy}
+              onClick={() => onDeleteMoveRequest(detail.plan, detail.impact.movement)}
+            >
+              Delete move request
+            </Button>
+          </>
+        )}
+      </DetailActions>
+      <DetailMetricGrid
+        items={[
+          { label: "Status", value: formatRequestStatus(detail.impact.status) },
+          { label: "Effort", value: detail.impact.transitionEffort },
+          {
+            label: "From",
+            value: detail.impact.movement.sourceProject?.project_name ?? "Bench",
+          },
+          { label: "To", value: detail.impact.movement.targetProject.project_name },
+        ]}
+      />
+      <DetailProgressCard
+        label="Transition readiness"
+        value={
+          detail.impact.status === "accepted"
+            ? 100
+            : detail.impact.status === "pending"
+              ? 45
+              : detail.impact.status === "clarification_requested"
+                ? 30
+                : 15
+        }
+        helper={detail.impact.handoffNeeds}
+        tone={
+          detail.impact.status === "accepted"
+            ? "green"
+            : detail.impact.status === "rejected"
+              ? "red"
+              : "amber"
+        }
+      />
       <DetailBlock label="What is this?">
         Employee transition impact for {detail.impact.employee?.name ?? "Unknown employee"}.
       </DetailBlock>
@@ -1176,6 +2062,10 @@ function DetailContent({ detail }: { detail: NonNullable<DetailSelection> }) {
         {detail.impact.transitionEffort}.
       </DetailBlock>
       <DetailBlock label="Next action">{detail.impact.handoffNeeds}</DetailBlock>
+      <TokenList
+        label="Requirements covered"
+        items={detail.impact.movement.requirementsCovered}
+      />
     </>
   )
 }
@@ -1188,17 +2078,117 @@ function DetailBlock({
   children: ReactNode
 }) {
   return (
-    <div>
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+    <section className="rounded-3xl border bg-background p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-1 text-sm">{children}</p>
+    </section>
+  )
+}
+
+function DetailHero({
+  eyebrow,
+  title,
+  description,
+  badge,
+}: {
+  eyebrow: string
+  title: string
+  description: string
+  badge: ReactNode
+}) {
+  return (
+    <section className="overflow-hidden rounded-3xl border bg-muted/35">
+      <div className="flex items-start justify-between gap-3 p-4">
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {eyebrow}
+          </p>
+          <h3 className="mt-1 truncate text-lg font-semibold">{title}</h3>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+        </div>
+        <div className="shrink-0">{badge}</div>
+      </div>
+      <div className="h-1 bg-gradient-to-r from-green-500/70 via-amber-500/60 to-red-500/70" />
+    </section>
+  )
+}
+
+function DetailMetricGrid({
+  items,
+}: {
+  items: Array<{ label: string; value: string }>
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {items.map((item) => (
+        <div
+          key={item.label}
+          className="rounded-2xl border bg-background p-3 shadow-xs"
+        >
+          <p className="text-xs text-muted-foreground">{item.label}</p>
+          <p className="mt-1 truncate font-medium">{item.value}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function DetailProgressCard({
+  label,
+  value,
+  helper,
+  tone,
+}: {
+  label: string
+  value: number
+  helper: string
+  tone: "green" | "amber" | "red"
+}) {
+  return (
+    <section className="rounded-3xl border bg-background p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">{label}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{helper}</p>
+        </div>
+        <Badge variant="outline" className={getToneBadgeClass(tone)}>
+          {Math.round(value)}%
+        </Badge>
+      </div>
+      <Progress
+        value={Math.min(100, Math.max(0, value))}
+        className={cn(
+          "h-2 [&_[data-slot=progress-indicator]]:transition-all [&_[data-slot=progress-indicator]]:duration-700",
+          tone === "green" && "[&_[data-slot=progress-indicator]]:bg-green-600",
+          tone === "amber" && "[&_[data-slot=progress-indicator]]:bg-amber-500",
+          tone === "red" && "[&_[data-slot=progress-indicator]]:bg-red-600"
+        )}
+      />
+    </section>
+  )
+}
+
+function DetailActions({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-3xl border bg-muted/25 p-3">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Actions
+      </p>
+      <div className="flex flex-wrap gap-2">
+      {children}
+      </div>
     </div>
   )
 }
 
 function TokenList({ label, items }: { label: string; items: string[] }) {
   return (
-    <div>
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+    <section className="rounded-3xl border bg-background p-4">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {items.length > 0 ? (
           items.map((item) => (
@@ -1210,7 +2200,486 @@ function TokenList({ label, items }: { label: string; items: string[] }) {
           <span className="text-sm text-muted-foreground">None</span>
         )}
       </div>
-    </div>
+    </section>
+  )
+}
+
+const BENCH_SELECT_VALUE = "__bench__"
+
+function DeletePlanDialog({
+  plan,
+  sameRunRecommendationCount,
+  isBusy,
+  onOpenChange,
+  onConfirm,
+}: {
+  plan: MovePlan | null
+  sameRunRecommendationCount: number
+  isBusy: boolean
+  onOpenChange: (open: boolean) => void
+  onConfirm: () => void
+}) {
+  const multiPlanWarning =
+    plan?.run &&
+    sameRunRecommendationCount > 1
+
+  return (
+    <Dialog open={Boolean(plan)} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Delete this plan?</DialogTitle>
+          <DialogDescription>
+            {plan?.lifecycle === "completed"
+              ? "This removes stored matching data and related move requests. It does not revert project assignments that were already applied."
+              : "This permanently deletes the move requests for this plan and removes the matching run (draft recommendations and audit events)."}
+          </DialogDescription>
+        </DialogHeader>
+        {multiPlanWarning && (
+          <Alert>
+            <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
+            <AlertTitle>Multiple recommendations on one run</AlertTitle>
+            <AlertDescription>
+              Deleting will remove the entire matching run and all{" "}
+              {sameRunRecommendationCount} recommendation plan
+              {sameRunRecommendationCount === 1 ? "" : "s"} tied to it.
+            </AlertDescription>
+          </Alert>
+        )}
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isBusy}
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button type="button" variant="destructive" disabled={isBusy} onClick={onConfirm}>
+            Delete plan
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function EditPlanFormBody({
+  plan,
+  isBusy,
+  onCancel,
+  onSave,
+}: {
+  plan: MovePlan
+  isBusy: boolean
+  onCancel: () => void
+  onSave: (planName: string, goal: string) => void | Promise<void>
+}) {
+  const run = plan.run!
+  const meta = getCreateFlowMetadata(run)
+  const [planName, setPlanName] = useState(
+    () => (meta?.planName ?? plan.title).trim() || plan.title
+  )
+  const [goal, setGoal] = useState(
+    () => (meta?.goal ?? plan.summary).trim() || plan.summary
+  )
+
+  return (
+    <>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium" htmlFor="edit-plan-name">
+            Plan name
+          </label>
+          <Input
+            id="edit-plan-name"
+            value={planName}
+            onChange={(event) => setPlanName(event.target.value)}
+            maxLength={200}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium" htmlFor="edit-plan-goal">
+            Goal
+          </label>
+          <Textarea
+            id="edit-plan-goal"
+            value={goal}
+            onChange={(event) => setGoal(event.target.value)}
+            className="min-h-24"
+          />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" disabled={isBusy} onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          disabled={isBusy || !planName.trim() || !goal.trim()}
+          onClick={() => onSave(planName, goal)}
+        >
+          Save
+        </Button>
+      </DialogFooter>
+    </>
+  )
+}
+
+function EditPlanDialog({
+  plan,
+  isBusy,
+  onOpenChange,
+  onSave,
+}: {
+  plan: MovePlan | null
+  isBusy: boolean
+  onOpenChange: (open: boolean) => void
+  onSave: (planName: string, goal: string) => void | Promise<void>
+}) {
+  return (
+    <Dialog open={Boolean(plan)} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit plan</DialogTitle>
+          <DialogDescription>
+            Update the display name and goal stored on this matching run.
+          </DialogDescription>
+        </DialogHeader>
+        {plan?.run && (
+          <EditPlanFormBody
+            key={plan.run!.id}
+            plan={plan}
+            isBusy={isBusy}
+            onCancel={() => onOpenChange(false)}
+            onSave={onSave}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function EditMoveRequestFormBody({
+  projects,
+  request,
+  isBusy,
+  onCancel,
+  onSave,
+}: {
+  projects: Project[]
+  request: MoveRequest
+  isBusy: boolean
+  onCancel: () => void
+  onSave: (payload: MoveRequestUpdateInput) => void | Promise<void>
+}) {
+  const [reason, setReason] = useState(() => request.reason)
+  const [expectedRole, setExpectedRole] = useState(() => request.expected_role)
+  const [impact, setImpact] = useState<ImpactLevel>(() => request.current_project_impact)
+  const [fromProjectId, setFromProjectId] = useState(() =>
+    request.from_project_id != null
+      ? String(request.from_project_id)
+      : BENCH_SELECT_VALUE
+  )
+  const [toProjectId, setToProjectId] = useState(() => String(request.to_project_id))
+
+  return (
+    <>
+      <div className="flex max-h-[min(28rem,70vh)] flex-col gap-3 overflow-y-auto pr-1">
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium">Employee</span>
+          <p className="text-sm text-muted-foreground">{request.employee_name}</p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium">From company</span>
+          <Select value={fromProjectId} onValueChange={setFromProjectId}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Source project" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={BENCH_SELECT_VALUE}>Bench (unassigned)</SelectItem>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={String(project.id)}>
+                  {project.project_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium">To company</span>
+          <Select value={toProjectId} onValueChange={setToProjectId}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Target project" />
+            </SelectTrigger>
+            <SelectContent>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={String(project.id)}>
+                  {project.project_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium" htmlFor="edit-mr-role">
+            Expected role
+          </label>
+          <Input
+            id="edit-mr-role"
+            value={expectedRole}
+            onChange={(event) => setExpectedRole(event.target.value)}
+            maxLength={255}
+          />
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium">Current project impact</span>
+          <Select
+            value={impact}
+            onValueChange={(value) => setImpact(value as ImpactLevel)}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium" htmlFor="edit-mr-reason">
+            Reason
+          </label>
+          <Textarea
+            id="edit-mr-reason"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            className="min-h-24"
+          />
+        </div>
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" disabled={isBusy} onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          disabled={
+            isBusy || !reason.trim() || !expectedRole.trim() || !toProjectId
+          }
+          onClick={() =>
+            onSave({
+              reason: reason.trim(),
+              expected_role: expectedRole.trim(),
+              current_project_impact: impact,
+              from_project_id:
+                fromProjectId === BENCH_SELECT_VALUE ? null : Number(fromProjectId),
+              to_project_id: Number(toProjectId),
+            })
+          }
+        >
+          Save changes
+        </Button>
+      </DialogFooter>
+    </>
+  )
+}
+
+function EditMoveRequestDialog({
+  projects,
+  context,
+  isBusy,
+  onOpenChange,
+  onSave,
+}: {
+  projects: Project[]
+  context: { plan: MovePlan; movement: ProposedMovement } | null
+  isBusy: boolean
+  onOpenChange: (open: boolean) => void
+  onSave: (payload: MoveRequestUpdateInput) => void | Promise<void>
+}) {
+  const request = context?.movement.request
+
+  return (
+    <Dialog open={Boolean(request)} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit move request</DialogTitle>
+          <DialogDescription>
+            Changes are saved to the move request record only; project assignments are
+            not updated automatically.
+          </DialogDescription>
+        </DialogHeader>
+        {request && (
+          <EditMoveRequestFormBody
+            key={request.id}
+            projects={projects}
+            request={request}
+            isBusy={isBusy}
+            onCancel={() => onOpenChange(false)}
+            onSave={onSave}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function DeleteMoveRequestDialog({
+  context,
+  isBusy,
+  onOpenChange,
+  onConfirm,
+}: {
+  context: { plan: MovePlan; movement: ProposedMovement } | null
+  isBusy: boolean
+  onOpenChange: (open: boolean) => void
+  onConfirm: () => void
+}) {
+  const name = context?.movement.employee?.name ?? "This employee"
+
+  return (
+    <Dialog open={Boolean(context?.movement.request)} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete move request?</DialogTitle>
+          <DialogDescription>
+            Remove the request for {name}. The proposed move may still appear on the plan
+            until you regenerate or adjust staffing elsewhere.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isBusy}
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button type="button" variant="destructive" disabled={isBusy} onClick={onConfirm}>
+            Delete request
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ForceOverrideDialog({
+  plan,
+  reason,
+  error,
+  isBusy,
+  onReasonChange,
+  onOpenChange,
+  onConfirm,
+}: {
+  plan: MovePlan | null
+  reason: string
+  error: string | null
+  isBusy: boolean
+  onReasonChange: (reason: string) => void
+  onOpenChange: (open: boolean) => void
+  onConfirm: () => void
+}) {
+  const counts = plan ? getRequestStatusCounts(plan.requests) : null
+  const forcedRequests =
+    plan?.requests.filter((request) => request.status !== "accepted") ?? []
+  const riskyCompanies =
+    plan?.affectedCompanies.filter((company) => company.risk !== "low") ?? []
+
+  return (
+    <Dialog open={Boolean(plan)} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Force approve and execute</DialogTitle>
+          <DialogDescription>
+            This bypasses employee confirmation, marks unresolved requests accepted,
+            and immediately applies project assignments.
+          </DialogDescription>
+        </DialogHeader>
+
+        {plan && counts && (
+          <div className="flex flex-col gap-4">
+            <Alert variant="destructive">
+              <HugeiconsIcon icon={InformationCircleIcon} strokeWidth={2} />
+              <AlertTitle>CTO override required</AlertTitle>
+              <AlertDescription>
+                Use this only when the transition must happen before every employee
+                has confirmed. The reason will be stored with the matching run.
+              </AlertDescription>
+            </Alert>
+
+            <div className="grid gap-2 sm:grid-cols-4">
+              {([
+                ["Accepted", counts.accepted],
+                ["Pending", counts.pending],
+                ["Clarification", counts.clarification_requested],
+                ["Rejected", counts.rejected],
+              ] as const).map(([label, value]) => (
+                <div key={label} className="rounded-2xl border bg-muted/35 p-3">
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-xl font-semibold">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            <TokenList
+              label="Employees being force-approved"
+              items={forcedRequests.map((request) => request.employee_name)}
+            />
+            <TokenList
+              label="Source-company risks"
+              items={
+                riskyCompanies.length > 0
+                  ? riskyCompanies.map(
+                      (company) =>
+                        `${company.project?.project_name ?? "Bench"}: ${formatImpact(
+                          company.risk
+                        )} risk (${company.afterHeadcount}/${company.requiredHeadcount})`
+                    )
+                  : ["No medium or high source-company risk detected"]
+              }
+            />
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium" htmlFor="cto-override-reason">
+                Override reason
+              </label>
+              <Textarea
+                id="cto-override-reason"
+                value={reason}
+                onChange={(event) => onReasonChange(event.target.value)}
+                placeholder="Explain why this move must be executed before employee confirmation."
+                className="min-h-28"
+              />
+              {error && <p className="text-sm text-destructive">{error}</p>}
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isBusy}
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={isBusy}
+            onClick={onConfirm}
+          >
+            {isBusy ? "Executing..." : "Force approve and execute"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -1327,7 +2796,7 @@ function RequestStatusBadge({
 function LifecycleBadge({ state }: { state: MatchingLifecycleState }) {
   return (
     <Badge variant="outline" className={getLifecycleAccentClass(state)}>
-      {formatLifecycle(state)}
+      {getLifecycleStatusLabel(state)}
     </Badge>
   )
 }
@@ -1376,6 +2845,17 @@ function getPlanSurfaceClass(state: MatchingLifecycleState) {
   return "bg-card"
 }
 
+function getLifecycleStatusLabel(state: MatchingLifecycleState) {
+  const labels: Record<MatchingLifecycleState, string> = {
+    draft: "Draft",
+    active: "Waiting",
+    ready: "Accepted",
+    completed: "Completed",
+  }
+
+  return labels[state]
+}
+
 function getLifecycleAccentClass(state: MatchingLifecycleState) {
   if (state === "draft") {
     return "border-border bg-muted text-foreground"
@@ -1390,6 +2870,38 @@ function getLifecycleAccentClass(state: MatchingLifecycleState) {
   }
 
   return "border-green-600/30 bg-green-600/10 text-green-700 dark:text-green-300"
+}
+
+function getRequestStatusCounts(requests: MoveRequest[]) {
+  return requests.reduce(
+    (counts, request) => {
+      counts[request.status] += 1
+      return counts
+    },
+    {
+      accepted: 0,
+      pending: 0,
+      clarification_requested: 0,
+      rejected: 0,
+    } satisfies Record<MoveRequestStatus, number>
+  )
+}
+
+function getRatioPercent(value: number, total: number) {
+  if (total <= 0) return 100
+  return Math.round((value / total) * 100)
+}
+
+function getToneBadgeClass(tone: "green" | "amber" | "red") {
+  if (tone === "green") {
+    return "border-green-500/25 bg-green-500/10 text-green-700 dark:text-green-300"
+  }
+
+  if (tone === "amber") {
+    return "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+  }
+
+  return "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300"
 }
 
 function getCoverageAccentClass(status: RequirementCoverageRow["status"]) {

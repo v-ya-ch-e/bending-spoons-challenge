@@ -273,6 +273,7 @@ Stored fields:
 - `id`: integer primary key, auto-incremented.
 - `name`: required string, unique, maximum 255 characters.
 - `role`: required string, maximum 255 characters.
+- `github_username`: optional string, maximum 255 characters. Stored as a bare handle without `@`.
 - `skills`: required JSON object matching the skill contract.
 - `preferences`: required JSON array of project-name strings.
 - `interests`: required JSON array of short interest strings.
@@ -287,6 +288,7 @@ Write behavior:
 
 - Create/update accepts `current_project_ids` as the preferred assignment field.
 - Create/update also accepts legacy `current_project` as a single project-name string or `null`.
+- Create/update accepts optional `github_username`; leading `@` is stripped and blank input is stored as `null`.
 - If both assignment fields are provided, `current_project_ids` wins.
 - Assignment updates replace the full project list for that employee.
 
@@ -304,6 +306,7 @@ Create payload:
 {
   "name": "Marco Bianchi",
   "role": "Backend engineer",
+  "github_username": "marco-bianchi",
   "current_project_ids": [1, 2],
   "skills": {
     "android": 0,
@@ -325,6 +328,7 @@ Response shape:
   "id": 1,
   "name": "Marco Bianchi",
   "role": "Backend engineer",
+  "github_username": "marco-bianchi",
   "current_project_ids": [1, 2],
   "current_project_names": ["Evernote", "Remini"],
   "current_project": "Evernote",

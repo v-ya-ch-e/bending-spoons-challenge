@@ -48,6 +48,7 @@ export type Employee = {
   id: number
   name: string
   role: string
+  github_username: string | null
   current_project: string | null
   current_project_ids: number[]
   current_project_names: string[]
@@ -59,6 +60,7 @@ export type Employee = {
 export type EmployeeCreateInput = {
   name: string
   role: string
+  github_username: string | null
   current_project: string | null
   skills: Skills
   preferences: string[]
@@ -290,6 +292,15 @@ const skillKeys: SkillKey[] = [
   "infrastructure",
   "ai",
 ]
+
+export function normalizeGithubUsername(value: string | null | undefined) {
+  const trimmedValue = value?.trim().replace(/^@+/, "").trim() ?? ""
+  return trimmedValue || null
+}
+
+export function getGithubProfileUrl(username: string) {
+  return `https://github.com/${username}`
+}
 
 async function fetchDbApi<T>(
   path: string,
@@ -640,6 +651,12 @@ export function updateMatchingRun(runId: number, run: MatchingRunUpdateInput) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(run),
+  })
+}
+
+export function deleteMatchingRun(runId: number) {
+  return fetchDbApi<void>(`/matching-runs/${runId}`, {
+    method: "DELETE",
   })
 }
 

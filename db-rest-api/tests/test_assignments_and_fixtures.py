@@ -89,6 +89,7 @@ def test_serializers_expose_canonical_ids_and_legacy_names() -> None:
             "id": 10,
             "name": "Giulia Rossi",
             "role": "Backend Engineer",
+            "github_username": "@giulia-rossi",
             "skills": json.dumps(
                 {
                     "android": 0,
@@ -101,6 +102,7 @@ def test_serializers_expose_canonical_ids_and_legacy_names() -> None:
             ),
             "preferences": json.dumps(["Evernote"]),
             "interests": json.dumps(["sync reliability", "API design"]),
+            "unexpected": "ignored",
         },
         current_project_ids=[1, 2],
         current_project_names=["Evernote", "Remini"],
@@ -121,6 +123,8 @@ def test_serializers_expose_canonical_ids_and_legacy_names() -> None:
     assert employee["current_project_ids"] == [1, 2]
     assert employee["current_project_names"] == ["Evernote", "Remini"]
     assert employee["current_project"] == "Evernote"
+    assert employee["github_username"] == "giulia-rossi"
+    assert "unexpected" not in employee
 
 
 def test_checked_in_seed_data_matches_fixture_contract() -> None:

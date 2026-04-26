@@ -61,6 +61,7 @@ AGGRESSIVE_POLICY_CONFIG = {
     "minimum_remaining_project_coverage": 0.6,
     "allow_understaff_current_project": True,
 }
+MISSING = object()
 
 
 def project_payload(name: str = "Atlas Staffing") -> dict[str, Any]:
@@ -76,14 +77,21 @@ def project_payload(name: str = "Atlas Staffing") -> dict[str, Any]:
     }
 
 
-def employee_payload(name: str = "Marco Bianchi") -> dict[str, Any]:
-    return {
+def employee_payload(
+    name: str = "Marco Bianchi",
+    *,
+    github_username: str | None | object = "marco-bianchi",
+) -> dict[str, Any]:
+    payload = {
         "name": name,
         "role": "Backend engineer",
         "skills": deepcopy(SKILLS),
         "preferences": ["Atlas Staffing"],
         "interests": ["platform reliability", "internal tools"],
     }
+    if github_username is not MISSING:
+        payload["github_username"] = github_username
+    return payload
 
 
 def move_request_payload(employee_id: int, to_project_id: int) -> dict[str, Any]:
@@ -867,6 +875,7 @@ def test_employee_crud_and_validation(client: TestClient) -> None:
     employee = create_response.json()
     assert employee["id"] == 1
     assert employee["skills"] == SKILLS
+    assert employee["github_username"] == "marco-bianchi"
 
     assert client.get("/employees").json() == [employee]
     assert client.get("/employees/1").json() == employee
@@ -885,6 +894,62 @@ def test_employee_crud_and_validation(client: TestClient) -> None:
     delete_response = client.delete("/employees/1")
     assert delete_response.status_code == 204
     assert client.get("/employees/1").status_code == 404
+
+
+def test_employee_github_username_is_optional_and_normalized(client: TestClient) -> None:
+    create_without_username = client.post(
+        "/employees",
+        json=employee_payload("Giulia Rossi", github_username=MISSING),
+    )
+    assert create_without_username.status_code == 201
+    assert create_without_username.json()["github_username"] is None
+
+    create_with_at_prefix = client.post(
+        "/employees",
+        json=employee_payload("Luca Fontana", github_username="@luca-fontana"),
+    )
+    assert create_with_at_prefix.status_code == 201
+    assert create_with_at_prefix.json()["github_username"] == "luca-fontana"
+
+    cleared = client.put("/employees/2", json={"github_username": "   "})
+    assert cleared.status_code == 200
+    assert cleared.json()["github_username"] is None
+
+
+def test_employee_list_strips_unexpected_columns_from_raw_rows(
+    client: TestClient,
+    fake_db: InMemoryDatabase,
+) -> None:
+    fake_db.employees.append(
+        {
+            "id": 1,
+            "name": "Luca Fontana",
+            "role": "Backend engineer",
+            "github_username": "luca-fontana",
+            "skills": json.dumps(SKILLS),
+            "preferences": json.dumps(["Atlas Staffing"]),
+            "interests": json.dumps(["platform reliability"]),
+            "unexpected": "value",
+        }
+    )
+
+    response = client.get("/employees")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": 1,
+            "name": "Luca Fontana",
+            "role": "Backend engineer",
+            "github_username": "luca-fontana",
+            "current_project_ids": [],
+            "current_project_names": [],
+            "current_project": None,
+            "skills": SKILLS,
+            "preferences": ["Atlas Staffing"],
+            "interests": ["platform reliability"],
+        }
+    ]
 
 
 def test_move_request_crud_joined_response_and_status_timestamps(client: TestClient) -> None:

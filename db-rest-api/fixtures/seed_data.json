@@ -3,6 +3,7 @@
     {
       "name": "Luca Fontana",
       "role": "Senior iOS Engineer",
+      "github_username": "luca-fontana",
       "current_projects": ["Evernote", "StreamYard"],
       "skills": {"android": 1, "ios": 3, "web": 1, "backend": 1, "infrastructure": 1, "ai": 1},
       "preferences": ["Komoot", "Remini"],
@@ -11,6 +12,7 @@
     {
       "name": "Giulia Rossi",
       "role": "Backend Engineer",
+      "github_username": "giulia-rossi",
       "current_projects": ["WeTransfer"],
       "skills": {"android": 0, "ios": 0, "web": 2, "backend": 3, "infrastructure": 3, "ai": 1},
       "preferences": ["Evernote", "Eventbrite"],
@@ -19,6 +21,7 @@
     {
       "name": "Marco Bianchi",
       "role": "AI/ML Engineer",
+      "github_username": "marco-bianchi",
       "current_projects": ["Remini", "Evernote"],
       "skills": {"android": 0, "ios": 0, "web": 1, "backend": 2, "infrastructure": 2, "ai": 3},
       "preferences": ["StreamYard", "Brightcove"],
@@ -27,6 +30,7 @@
     {
       "name": "Alessia Conti",
       "role": "Android Engineer",
+      "github_username": "alessia-conti",
       "current_projects": ["Komoot"],
       "skills": {"android": 3, "ios": 1, "web": 1, "backend": 1, "infrastructure": 1, "ai": 0},
       "preferences": ["Meetup", "Eventbrite"],
@@ -35,6 +39,7 @@
     {
       "name": "Francesco Romano",
       "role": "Web Engineer",
+      "github_username": "francesco-romano",
       "current_projects": ["Eventbrite", "Meetup"],
       "skills": {"android": 0, "ios": 0, "web": 3, "backend": 2, "infrastructure": 1, "ai": 1},
       "preferences": ["WeTransfer", "Brightcove"],
@@ -43,6 +48,7 @@
     {
       "name": "Elena Greco",
       "role": "Product Engineer",
+      "github_username": "elena-greco",
       "current_projects": ["Meetup"],
       "skills": {"android": 1, "ios": 2, "web": 2, "backend": 1, "infrastructure": 1, "ai": 1},
       "preferences": ["Evernote", "Komoot"],
@@ -51,6 +57,7 @@
     {
       "name": "Matteo Gallo",
       "role": "Engineering Manager",
+      "github_username": "matteo-gallo",
       "current_projects": ["Evernote", "WeTransfer"],
       "skills": {"android": 1, "ios": 1, "web": 2, "backend": 2, "infrastructure": 2, "ai": 1},
       "preferences": ["Eventbrite", "Brightcove"],
@@ -59,6 +66,7 @@
     {
       "name": "Sofia Ferrari",
       "role": "Infrastructure Engineer",
+      "github_username": "sofia-ferrari",
       "current_projects": ["Brightcove", "StreamYard"],
       "skills": {"android": 0, "ios": 0, "web": 1, "backend": 2, "infrastructure": 3, "ai": 1},
       "preferences": ["WeTransfer", "Remini"],
@@ -67,6 +75,7 @@
     {
       "name": "Riccardo Mariani",
       "role": "iOS Engineer",
+      "github_username": "riccardo-mariani",
       "current_projects": ["Remini"],
       "skills": {"android": 1, "ios": 3, "web": 1, "backend": 1, "infrastructure": 0, "ai": 2},
       "preferences": ["StreamYard", "Evernote"],
@@ -75,6 +84,7 @@
     {
       "name": "Giovanni Riva",
       "role": "Backend Platform Engineer",
+      "github_username": "giovanni-riva",
       "current_projects": ["Eventbrite"],
       "skills": {"android": 0, "ios": 0, "web": 2, "backend": 3, "infrastructure": 2, "ai": 0},
       "preferences": ["Meetup", "WeTransfer"],
@@ -83,6 +93,7 @@
     {
       "name": "Beatrice Verdi",
       "role": "Full-stack Engineer",
+      "github_username": "beatrice-verdi",
       "current_projects": ["Meetup", "Eventbrite"],
       "skills": {"android": 1, "ios": 1, "web": 3, "backend": 2, "infrastructure": 1, "ai": 1},
       "preferences": ["Evernote", "StreamYard"],
@@ -91,6 +102,7 @@
     {
       "name": "Dario Marchetti",
       "role": "Machine Learning Platform Engineer",
+      "github_username": "dario-marchetti",
       "current_projects": ["Remini"],
       "skills": {"android": 0, "ios": 0, "web": 1, "backend": 2, "infrastructure": 3, "ai": 3},
       "preferences": ["Evernote", "Brightcove"],
@@ -99,6 +111,7 @@
     {
       "name": "Francesca Gallo",
       "role": "QA Automation Engineer",
+      "github_username": "francesca-gallo",
       "current_projects": ["StreamYard", "Komoot"],
       "skills": {"android": 2, "ios": 2, "web": 2, "backend": 1, "infrastructure": 1, "ai": 0},
       "preferences": ["Meetup", "Remini"],
@@ -107,6 +120,7 @@
     {
       "name": "Emanuele Riva",
       "role": "Video Platform Engineer",
+      "github_username": "emanuele-riva",
       "current_projects": ["Brightcove"],
       "skills": {"android": 0, "ios": 1, "web": 2, "backend": 3, "infrastructure": 3, "ai": 1},
       "preferences": ["StreamYard", "WeTransfer"],
@@ -115,6 +129,7 @@
     {
       "name": "Lorenzo Bianchi",
       "role": "Web Platform Engineer",
+      "github_username": "lorenzo-bianchi",
       "current_projects": ["StreamYard"],
       "skills": {"android": 0, "ios": 0, "web": 3, "backend": 2, "infrastructure": 2, "ai": 2},
       "preferences": ["Brightcove", "Eventbrite"],
@@ -123,6 +138,7 @@
     {
       "name": "Nicola Fontana",
       "role": "Android Engineer",
+      "github_username": "nicola-fontana",
       "current_projects": ["Meetup"],
       "skills": {"android": 3, "ios": 1, "web": 1, "backend": 1, "infrastructure": 1, "ai": 0},
       "preferences": ["Komoot", "Eventbrite"],
@@ -131,6 +147,7 @@
     {
       "name": "Giovanni Ferraro",
       "role": "Data Engineer",
+      "github_username": "giovanni-ferraro",
       "current_projects": ["WeTransfer", "Brightcove"],
       "skills": {"android": 0, "ios": 0, "web": 1, "backend": 3, "infrastructure": 3, "ai": 2},
       "preferences": ["Remini", "Evernote"],
@@ -139,6 +156,7 @@
     {
       "name": "Laura Esposito",
       "role": "Product Analyst",
+      "github_username": "laura-esposito",
       "current_projects": [],
       "skills": {"android": 0, "ios": 0, "web": 2, "backend": 1, "infrastructure": 1, "ai": 2},
       "preferences": ["Evernote", "Meetup", "Eventbrite"],
@@ -147,6 +165,7 @@
     {
       "name": "Marta Leone",
       "role": "Security Engineer",
+      "github_username": "marta-leone",
       "current_projects": ["WeTransfer"],
       "skills": {"android": 1, "ios": 1, "web": 2, "backend": 2, "infrastructure": 3, "ai": 0},
       "preferences": ["Eventbrite", "Brightcove"],
@@ -155,6 +174,7 @@
     {
       "name": "Paolo Sala",
       "role": "Product Designer",
+      "github_username": "paolo-sala",
       "current_projects": [],
       "skills": {"android": 1, "ios": 1, "web": 2, "backend": 0, "infrastructure": 0, "ai": 1},
       "preferences": ["StreamYard", "Remini", "Meetup"],

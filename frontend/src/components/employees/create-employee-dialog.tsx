@@ -5,6 +5,7 @@ import { useMemo, useState } from "react"
 import {
   createEmployee,
   DbApiError,
+  normalizeGithubUsername,
   updateEmployee,
   type Employee,
   type EmployeeCreateInput,
@@ -51,6 +52,7 @@ type StepId = "details" | "skills" | "assignment" | "summary"
 type FormState = {
   name: string
   role: string
+  githubUsername: string
   interestsText: string
   skills: Skills
   currentProject: string
@@ -125,6 +127,7 @@ function getInitialFormState(employee?: Employee): FormState {
     return {
       name: "",
       role: "",
+      githubUsername: "",
       interestsText: "",
       skills: { ...emptySkills },
       currentProject: "",
@@ -135,6 +138,7 @@ function getInitialFormState(employee?: Employee): FormState {
   return {
     name: employee.name,
     role: employee.role,
+    githubUsername: employee.github_username ?? "",
     interestsText: employee.interests.join(", "),
     skills: { ...employee.skills },
     currentProject: employee.current_project ?? "",
@@ -269,6 +273,7 @@ export function CreateEmployeeDialog({
     const payload: EmployeeCreateInput | EmployeeUpdateInput = {
       name: formState.name.trim(),
       role: formState.role.trim(),
+      github_username: normalizeGithubUsername(formState.githubUsername),
       current_project: formState.currentProject || null,
       skills: formState.skills,
       preferences,
@@ -496,6 +501,17 @@ function PersonalDetailsStep({
           />
         </Field>
         <Field
+          label="GitHub username"
+          description="Optional. Enter a handle with or without @."
+        >
+          <Input
+            value={formState.githubUsername}
+            onChange={(event) => onChange({ githubUsername: event.target.value })}
+            placeholder="@marco-bianchi"
+            aria-label="GitHub username"
+          />
+        </Field>
+        <Field
           label="Interests"
           description="Optional. Separate interests with commas or new lines."
         >
@@ -706,6 +722,14 @@ function SummaryStep({
       <SummaryCard title="Personal details" onEdit={() => onEditStep(0)}>
         <SummaryRow label="Full name" value={formState.name || "Not set"} />
         <SummaryRow label="Role" value={formState.role || "Not set"} />
+        <SummaryRow
+          label="GitHub"
+          value={
+            normalizeGithubUsername(formState.githubUsername)
+              ? `@${normalizeGithubUsername(formState.githubUsername)}`
+              : "Not set"
+          }
+        />
         <SummaryTokenRow label="Interests" items={interests} emptyLabel="No interests" />
       </SummaryCard>
       <SummaryCard title="Skills" onEdit={() => onEditStep(1)}>

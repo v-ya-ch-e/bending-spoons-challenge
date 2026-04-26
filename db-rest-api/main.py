@@ -194,12 +194,36 @@ class Project(ProjectBase):
     current_team_members: list[str]
 
 
+def normalize_github_username(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        value = value.decode("utf-8")
+    if not isinstance(value, str):
+        value = str(value)
+    normalized = value.strip().lstrip("@").strip()
+    return normalized or None
+
+
 class EmployeeBase(ApiModel):
     name: str = Field(min_length=1, max_length=255)
     role: str = Field(min_length=1, max_length=255)
+    github_username: str | None = Field(default=None, max_length=255)
     skills: Skills
     preferences: list[str]
     interests: list[str]
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_github_username_input(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        if "github_username" in normalized:
+            normalized["github_username"] = normalize_github_username(
+                normalized["github_username"]
+            )
+        return normalized
 
 
 class EmployeeCreate(EmployeeBase):
@@ -210,11 +234,24 @@ class EmployeeCreate(EmployeeBase):
 class EmployeeUpdate(UpdateModel):
     name: str = Field(default=None, min_length=1, max_length=255)
     role: str = Field(default=None, min_length=1, max_length=255)
+    github_username: str | None = Field(default=None, max_length=255)
     current_project_ids: list[int] | None = None
     current_project: str | None = Field(default=None, max_length=255)
     skills: Skills = None
     preferences: list[str] = None
     interests: list[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_github_username_input(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        if "github_username" in normalized:
+            normalized["github_username"] = normalize_github_username(
+                normalized["github_username"]
+            )
+        return normalized
 
 
 class Employee(EmployeeBase):
@@ -526,7 +563,15 @@ def serialize_employee(
     current_project_ids: list[int] | None = None,
     current_project_names: list[str] | None = None,
 ) -> dict[str, Any]:
-    employee = dict(row)
+    employee = {
+        "id": row["id"],
+        "name": row["name"],
+        "role": row["role"],
+        "github_username": normalize_github_username(row.get("github_username")),
+        "skills": row["skills"],
+        "preferences": row["preferences"],
+        "interests": row["interests"],
+    }
     for column in ("skills", "preferences", "interests"):
         employee[column] = parse_json_column(employee[column])
     project_ids = current_project_ids or []
@@ -820,6 +865,8 @@ def employee_payload(payload: dict[str, Any]) -> dict[str, Any]:
     for column in ("skills", "preferences", "interests"):
         if column in prepared:
             prepared[column] = json_column(prepared[column])
+    if "github_username" in prepared:
+        prepared["github_username"] = normalize_github_username(prepared["github_username"])
     return prepared
 
 

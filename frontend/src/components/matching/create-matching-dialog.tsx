@@ -91,6 +91,14 @@ type GeneratedPlan = {
   candidatePlanId: string | null
 }
 
+type GenerationStage =
+  | "idle"
+  | "creating_policy"
+  | "running_matching"
+  | "saving_plan"
+  | "ready"
+  | "failed"
+
 const steps: Array<{
   id: StepId
   label: string
@@ -102,14 +110,12 @@ const steps: Array<{
   { id: "final", label: "Final", description: "Review and confirm." },
 ]
 
-const generationStepLabels = [
-  "Reading minimum requirements",
-  "Finding matching employees",
-  "Checking source company capacity",
-  "Estimating employee transition impact",
-  "Building proposed move plan",
-]
 const CUSTOM_POLICY_VALUE = "__custom__"
+const runningGenerationStages: GenerationStage[] = [
+  "creating_policy",
+  "running_matching",
+  "saving_plan",
+]
 
 export function CreateMatchingDialog({
   open,
@@ -138,7 +144,7 @@ export function CreateMatchingDialog({
   }))
   const [validationError, setValidationError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [isGenerating, setIsGenerating] = useState(false)
+  const [generationStage, setGenerationStage] = useState<GenerationStage>("idle")
   const [generatedPlan, setGeneratedPlan] = useState<GeneratedPlan | null>(null)
 
   const currentStep = steps[stepIndex]
@@ -152,6 +158,7 @@ export function CreateMatchingDialog({
     ? undefined
     : policies.find((policy) => String(policy.id) === formState.policyId)
   const generatedSuggestion = generatedPlan?.response.suggestions[0]
+  const isGenerating = runningGenerationStages.includes(generationStage)
 
   const summary = useMemo(() => {
     const proposedMoves = generatedSuggestion?.moves.length ?? 0
@@ -175,6 +182,8 @@ export function CreateMatchingDialog({
     setFormState((current) => ({ ...current, ...nextState }))
     setValidationError(null)
     setSubmitError(null)
+    setGeneratedPlan(null)
+    setGenerationStage("idle")
   }
 
   function handleTargetProjectChange(projectId: string) {
@@ -286,7 +295,7 @@ export function CreateMatchingDialog({
       return
     }
 
-    setIsGenerating(true)
+    setGenerationStage(isCustomPolicy ? "creating_policy" : "running_matching")
     setValidationError(null)
     setSubmitError(null)
 
@@ -301,6 +310,7 @@ export function CreateMatchingDialog({
           })
         : selectedPolicy
 
+      setGenerationStage("running_matching")
       const response = await runProjectMatching(targetProject.id, {
         policy_id: runPolicy?.id,
         requested_by: requestedBy,
@@ -310,6 +320,7 @@ export function CreateMatchingDialog({
         response.suggestions[0]?.candidate_plan_id ??
         null
       const persistedRun = await getMatchingRun(response.run_id)
+      setGenerationStage("saving_plan")
       const metadata: MatchingCreateFlowMetadata = {
         planName: formState.planName.trim(),
         goal: formState.goal.trim(),
@@ -337,13 +348,12 @@ export function CreateMatchingDialog({
       })
 
       setGeneratedPlan({ response, candidatePlanId })
-      setStepIndex(3)
+      setGenerationStage("ready")
     } catch (error) {
       setSubmitError(
         error instanceof Error ? error.message : "Unable to generate move plan."
       )
-    } finally {
-      setIsGenerating(false)
+      setGenerationStage("failed")
     }
   }
 
@@ -417,7 +427,8 @@ export function CreateMatchingDialog({
                         ? "Custom impact tolerance"
                         : selectedPolicy?.name ?? "Selected matching policy"
                     }
-                    isGenerating={isGenerating}
+                    isCustomPolicy={isCustomPolicy}
+                    stage={generationStage}
                   />
                 )}
                 {currentStep.id === "final" && generatedPlan && targetProject && (
@@ -451,8 +462,16 @@ export function CreateMatchingDialog({
               Back
             </Button>
             {currentStep.id === "generate" ? (
-              <Button type="button" onClick={handleGenerate} disabled={isGenerating}>
-                {isGenerating ? "Generating..." : "Generate draft plan"}
+              <Button
+                type="button"
+                onClick={
+                  generationStage === "ready"
+                    ? () => setStepIndex(3)
+                    : handleGenerate
+                }
+                disabled={isGenerating}
+              >
+                {getGenerateButtonLabel(generationStage)}
               </Button>
             ) : isFinalStep ? (
               <Button type="button" onClick={handleOpenDraftPlan}>
@@ -715,12 +734,17 @@ function ConstraintsStep({
 function GenerateStep({
   targetProject,
   policyLabel,
-  isGenerating,
+  isCustomPolicy,
+  stage,
 }: {
   targetProject?: Project
   policyLabel: string
-  isGenerating: boolean
+  isCustomPolicy: boolean
+  stage: GenerationStage
 }) {
+  const progress = getGenerationProgress(stage, isCustomPolicy)
+  const stageRows = getGenerationStageRows({ stage, isCustomPolicy })
+
   return (
     <section className="animate-in fade-in-0 slide-in-from-right-2 flex flex-col gap-6 duration-200">
       <StepHeading
@@ -732,39 +756,21 @@ function GenerateStep({
 
       <div className="flex items-center gap-4">
         <Progress
-          value={isGenerating ? 65 : 0}
-          className="max-w-md [&_[data-slot=progress-indicator]]:bg-green-600"
+          value={progress}
+          className="max-w-md transition-all duration-500 [&_[data-slot=progress-indicator]]:bg-green-600 [&_[data-slot=progress-indicator]]:transition-all [&_[data-slot=progress-indicator]]:duration-700"
         />
         <span className="text-sm text-muted-foreground">
-          {isGenerating ? "65%" : "Ready"}
+          {getGenerationStatusLabel(stage, progress)}
         </span>
       </div>
 
-      <ol className="flex flex-col divide-y rounded-3xl border bg-muted/35">
-        {generationStepLabels.map((label, index) => (
-          <li key={label} className="flex items-start gap-3 px-4 py-3">
-            <span
-              className={cn(
-                "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-xs",
-                (isGenerating || index === 0) &&
-                  "border-green-600 bg-green-600 text-white"
-              )}
-            >
-              {index < 3 && isGenerating ? (
-                <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />
-              ) : (
-                index + 1
-              )}
-            </span>
-            <div>
-              <p className="font-medium">{label}</p>
-              {index >= 3 && (
-                <p className="text-sm text-muted-foreground">
-                  Uses current project assignments, employee skills, and selected policy.
-                </p>
-              )}
-            </div>
-          </li>
+      <ol className="flex flex-col divide-y overflow-hidden rounded-3xl border bg-muted/35">
+        {stageRows.map((row, index) => (
+          <GenerationStageRow
+            key={row.id}
+            row={row}
+            index={index}
+          />
         ))}
       </ol>
 
@@ -868,6 +874,66 @@ function FinalStep({
         </AlertDescription>
       </Alert>
     </section>
+  )
+}
+
+type GenerationRowState = "pending" | "active" | "complete" | "failed" | "skipped"
+
+type GenerationStageRowModel = {
+  id: string
+  label: string
+  description: string
+  state: GenerationRowState
+}
+
+function GenerationStageRow({
+  row,
+  index,
+}: {
+  row: GenerationStageRowModel
+  index: number
+}) {
+  return (
+    <li
+      className={cn(
+        "animate-in fade-in-0 slide-in-from-bottom-1 flex items-start gap-3 px-4 py-3 transition-all duration-300",
+        row.state === "active" && "bg-green-500/10",
+        row.state === "failed" && "bg-red-500/10",
+        row.state === "pending" && "opacity-65"
+      )}
+      style={{ animationDelay: `${index * 45}ms` }}
+    >
+      <span
+        className={cn(
+          "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border text-xs transition-all duration-300",
+          row.state === "complete" &&
+            "border-green-600 bg-green-600 text-white",
+          row.state === "active" &&
+            "animate-pulse border-green-600 bg-green-600 text-white ring-4 ring-green-600/15",
+          row.state === "failed" && "border-red-600 bg-red-600 text-white",
+          row.state === "skipped" && "border-border bg-background text-muted-foreground"
+        )}
+      >
+        {row.state === "complete" ? (
+          <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} />
+        ) : row.state === "failed" ? (
+          "!"
+        ) : (
+          index + 1
+        )}
+      </span>
+      <div className="min-w-0">
+        <p
+          className={cn(
+            "font-medium transition-colors",
+            row.state === "failed" && "text-red-700 dark:text-red-300"
+          )}
+        >
+          {row.label}
+        </p>
+        <p className="text-sm text-muted-foreground">{row.description}</p>
+      </div>
+    </li>
   )
 }
 
@@ -1036,6 +1102,101 @@ function getSuggestionCoveragePercent(suggestion: MatchingRunResponse["suggestio
 function impactRank(impact: "low" | "medium" | "high") {
   const ranks = { low: 1, medium: 2, high: 3 }
   return ranks[impact]
+}
+
+function getGenerateButtonLabel(stage: GenerationStage) {
+  if (stage === "ready") return "Review draft plan"
+  if (stage === "failed") return "Retry generation"
+  if (runningGenerationStages.includes(stage)) return "Generating..."
+  return "Generate draft plan"
+}
+
+function getGenerationStatusLabel(stage: GenerationStage, progress: number) {
+  if (stage === "idle") return "Ready"
+  if (stage === "ready") return "Complete"
+  if (stage === "failed") return "Failed"
+  return `${progress}%`
+}
+
+function getGenerationProgress(stage: GenerationStage, isCustomPolicy: boolean) {
+  if (stage === "idle") return 0
+  if (stage === "failed") return 100
+  if (stage === "ready") return 100
+  if (stage === "creating_policy") return isCustomPolicy ? 18 : 28
+  if (stage === "running_matching") return isCustomPolicy ? 58 : 68
+  return 88
+}
+
+function getGenerationStageRows({
+  stage,
+  isCustomPolicy,
+}: {
+  stage: GenerationStage
+  isCustomPolicy: boolean
+}): GenerationStageRowModel[] {
+  return [
+    {
+      id: "policy",
+      label: isCustomPolicy ? "Save custom impact tolerance" : "Load saved matching preset",
+      description: isCustomPolicy
+        ? "Creates a plan-specific preset so this run uses your edited constraints."
+        : "Uses the selected platform policy for candidate search and impact checks.",
+      state: getRowState({
+        stage,
+        active: "creating_policy",
+        completeAfter: ["running_matching", "saving_plan", "ready"],
+        skipped: !isCustomPolicy,
+      }),
+    },
+    {
+      id: "matching",
+      label: "Find matching employees",
+      description: "Compares employee skills, assignments, preferences, and availability.",
+      state: getRowState({
+        stage,
+        active: "running_matching",
+        completeAfter: ["saving_plan", "ready"],
+      }),
+    },
+    {
+      id: "impact",
+      label: "Check source company impact",
+      description: "Verifies proposed moves do not create avoidable staffing risk elsewhere.",
+      state: getRowState({
+        stage,
+        active: "running_matching",
+        completeAfter: ["saving_plan", "ready"],
+      }),
+    },
+    {
+      id: "save",
+      label: "Save draft move plan",
+      description: "Persists the generated plan and keeps employee requests unsent.",
+      state: getRowState({
+        stage,
+        active: "saving_plan",
+        completeAfter: ["ready"],
+      }),
+    },
+  ]
+}
+
+function getRowState({
+  stage,
+  active,
+  completeAfter,
+  skipped = false,
+}: {
+  stage: GenerationStage
+  active: GenerationStage
+  completeAfter: GenerationStage[]
+  skipped?: boolean
+}): GenerationRowState {
+  if (stage === "failed" && !skipped) return "failed"
+  if (skipped) return stage === "idle" ? "skipped" : "complete"
+  if (stage === active) return "active"
+  if (completeAfter.includes(stage)) return "complete"
+  return "pending"
 }
 
 function getPolicyConstraintState(policy?: MatchingPolicy): Pick<

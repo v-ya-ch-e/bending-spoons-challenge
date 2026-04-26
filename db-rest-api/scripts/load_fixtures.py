@@ -136,8 +136,8 @@ def insert_projects(cursor, projects: list[dict[str, Any]]) -> dict[str, int]:
 def insert_employees(cursor, employees: list[dict[str, Any]]) -> dict[str, int]:
     sql = """
         INSERT INTO employees (
-            name, role, skills, preferences, interests
-        ) VALUES (%s, %s, %s, %s, %s)
+            name, role, github_username, skills, preferences, interests
+        ) VALUES (%s, %s, %s, %s, %s, %s)
     """
     name_to_id: dict[str, int] = {}
     for employee in employees:
@@ -146,6 +146,7 @@ def insert_employees(cursor, employees: list[dict[str, Any]]) -> dict[str, int]:
             (
                 employee["name"],
                 employee["role"],
+                employee.get("github_username"),
                 json.dumps(employee["skills"]),
                 json.dumps(employee["preferences"]),
                 json.dumps(employee["interests"]),
