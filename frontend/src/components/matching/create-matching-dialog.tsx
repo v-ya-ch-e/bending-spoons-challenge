@@ -329,8 +329,8 @@ export function CreateMatchingDialog({
         policyId: runPolicy?.id,
         policyName: runPolicy?.name,
         policyPreset: isCustomPolicy ? "Custom" : "Saved preset",
-        candidatePool: "All employees in API matching scope",
-        moveTiming: "Requests sent after CTO starts the draft request",
+        candidatePool: "All eligible employees",
+        moveTiming: "Move requests are created only after the CTO opens a draft plan",
         impactTolerance: runPolicy?.name ?? "Selected matching policy",
         avoidBreakingMinimums: formState.avoidBreakingMinimums,
         excludeOpenMoveRequests: formState.excludeOpenMoveRequests,
@@ -643,9 +643,11 @@ function ConstraintsStep({
 
       <div className="grid gap-4 md:grid-cols-[14rem_1fr] md:items-center">
         <FieldLabel>Candidate pool</FieldLabel>
-        <ReadOnlyField>All employees in API matching scope</ReadOnlyField>
+        <ReadOnlyField>All eligible employees</ReadOnlyField>
         <FieldLabel>Move timing</FieldLabel>
-        <ReadOnlyField>Requests sent only after CTO starts the draft request</ReadOnlyField>
+        <ReadOnlyField>
+          Move requests are created only after the CTO opens a draft plan
+        </ReadOnlyField>
         <FieldLabel>Impact tolerance</FieldLabel>
         <Select value={policyId} onValueChange={onPolicyChange}>
           <SelectTrigger>

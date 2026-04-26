@@ -101,7 +101,8 @@ export type MatchingRunResponse = {
   }
 }
 
-const backendApiBasePath = "/api"
+const backendApiBasePath =
+  process.env.NEXT_PUBLIC_BACKEND_API_BASE_URL ?? "/api"
 const backendSkillKeys: SkillKey[] = [
   "android",
   "ios",

@@ -1,3 +1,5 @@
+import os
+
 from pydantic import ValidationError
 
 from clients import get_openai_client, get_openai_model
@@ -57,12 +59,28 @@ class MatchingLlmError(RuntimeError):
     """Raised when the LLM response cannot be used."""
 
 
+def _matching_llm_timeout_seconds() -> float:
+    raw_value = os.environ.get("OPENAI_MATCHING_TIMEOUT_SECONDS", "20")
+    try:
+        return max(1.0, float(raw_value))
+    except ValueError:
+        return 20.0
+
+
 async def evaluate_matching(payload: MatchingLlmRequest) -> MatchingLlmResponse:
     """Run step 2 (LLM refinement) over algorithm-produced candidate plans."""
 
     client = get_openai_client()
+    request_client = (
+        client.with_options(
+            timeout=_matching_llm_timeout_seconds(),
+            max_retries=0,
+        )
+        if hasattr(client, "with_options")
+        else client
+    )
     try:
-        response = client.responses.parse(
+        response = request_client.responses.parse(
             model=get_openai_model(),
             temperature=0.2,
             instructions=SYSTEM_PROMPT,
@@ -84,6 +102,10 @@ async def evaluate_matching(payload: MatchingLlmRequest) -> MatchingLlmResponse:
 
 def _public_openai_error(exc: Exception) -> str:
     message = str(exc)
+    if isinstance(exc, TimeoutError) or "timed out" in message.lower() or "timeout" in message.lower():
+        return "OpenAI matching evaluation timed out."
+    if "connection error" in message.lower() or "connecterror" in message.lower():
+        return "OpenAI matching evaluation could not reach OpenAI."
     if "Request too large" in message or "tokens per min" in message:
         return (
             "OpenAI rejected the matching evaluation because the request was too large "

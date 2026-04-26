@@ -3,6 +3,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -287,6 +288,32 @@ class TestSchemaConstraints(unittest.TestCase):
                 bench_moves=[],
                 risks=[],
             )
+
+
+class TestEvaluateMatchingFailures(unittest.TestCase):
+    def test_timeout_is_reported_cleanly(self):
+        payload = _request()
+
+        class _Responses:
+            @staticmethod
+            def parse(**_kwargs):
+                raise TimeoutError("request timed out")
+
+        class _Client:
+            responses = _Responses()
+
+            @staticmethod
+            def with_options(**_kwargs):
+                return _Client()
+
+        async def run_test():
+            with patch("services.matching_llm_service.get_openai_client", return_value=_Client()):
+                with patch("services.matching_llm_service.get_openai_model", return_value="gpt-4o"):
+                    with self.assertRaises(MatchingLlmError) as ctx:
+                        await evaluate_matching(payload)
+            self.assertEqual(str(ctx.exception), "OpenAI matching evaluation timed out.")
+
+        asyncio.run(run_test())
 
 
 def _step1_output_fixture() -> MatchingLlmRequest:
