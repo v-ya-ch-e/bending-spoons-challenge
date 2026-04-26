@@ -66,7 +66,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ## Project Notes
 
-- `db-rest-api/` is the FastAPI service exposed publicly under `https://doubleu.team/db-api/...` for production and `https://dev.doubleu.team/db-api/...` for development.
+- `db-rest-api/` is the FastAPI service exposed publicly under `https://mixing-spooners.club/db-api/...` for production and `https://dev.mixing-spooners.club/db-api/...` for development.
 - `docs/DB_API_DOCUMENTATION.md` is the canonical agent-facing DB API contract. Read it before changing database-backed API behavior, frontend API calls, schema, fixtures, or seed loading.
 - Any database structure change must update `db-rest-api/db/schema.sql` in the same change; also update API models, fixture tooling, tests, and `docs/DB_API_DOCUMENTATION.md` when the schema change affects them.
 - Deployments are branch-based: pushes to `main` deploy production, and pushes to `dev` deploy development. See `docs/deployment.md` before changing CI/CD, nginx, TLS, compose project names, server paths, or exposed ports.

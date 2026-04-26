@@ -1,38 +1,64 @@
 # Mixing Spooners
 
-Internal Talent, Project, and Documentation OS for dynamic project staffing.
+**Live demo:** https://mixing-spooners.club
 
-See `docs/bending_spoons_internal_platform_brief.md` for the product brief.
+Mixing Spooners is an internal staffing and knowledge-transfer platform built for
+the Bending Spoons challenge. It helps a CTO understand the current project
+portfolio, identify the right people for a new or understaffed project, and
+generate the documentation needed to move employees between teams with context.
 
-## Current Product Surface
+## What to Try in the Demo
 
-- CTO workspace for project and employee management, project skill inference, matching runs, and generated project documentation.
-- Documentation workspace that fetches GitHub repository context, streams generated Markdown, supports manual edits, and lets the CTO chat with or rewrite project docs.
-- Spooner workspace with employee selection, assigned-project context, generated documentation access, and project-specific documentation chat.
-- Transition instruction flows that generate onboarding and offboarding Markdown from approved move requests, stored project documentation, and available GitHub activity.
+- Open the CTO workspace to review employees, companies, staffing gaps, and move
+  requests.
+- Create or inspect a company, then generate a skill profile from repository
+  context.
+- Run matching to get explainable staffing recommendations. The system combines
+  deterministic strict rules with an LLM ranking step, then can turn selected
+  recommendations into move requests.
+- Open the documentation workspace to generate, edit, chat with, and rewrite
+  project documentation from GitHub repository context.
+- Switch to the Spooner workspace to see the employee-side view: assigned
+  projects, requested transitions, onboarding/offboarding instructions, and
+  project resources.
 
-## Services
+## Product Scope
 
-- `backend/`: FastAPI orchestration API for LLM-powered staffing analysis, documentation generation/chat, transition instruction generation, and matching.
-- `db-rest-api/`: FastAPI service for database-facing endpoints, project documentation persistence, transition instructions, matching persistence, and health checks.
-- `frontend/`: Next.js application workspace for CTO and Spooner workflows.
+The platform focuses on the operational loop that matters during rapid staffing
+changes:
 
-Environment variables live in the repository-level `.env` file. Start from
-`.env.example`. For backend-specific variables (e.g. LLM and GitHub
-integration), see `backend/README.md`.
+- `Portfolio`: active companies/projects, phases, repository links, staffing
+  needs, and current team members.
+- `People`: employee skills, interests, current assignments, and preferences.
+- `Matching`: explainable reassignment and hiring-gap recommendations.
+- `Documentation`: generated project docs, project-specific chat, and transition
+  instructions for onboarding and offboarding.
 
-## Docs
+The current implementation is GitHub-first. Notion and Slack are represented in
+the product direction, but are not required for the live demo.
 
-- [DB API documentation](docs/DB_API_DOCUMENTATION.md) for the `db-rest-api` schema, CRUD endpoints, payload contracts, and agent workflow.
-- [Deployment documentation](docs/deployment.md) for the CI/CD workflow, server layout, nginx routing, TLS setup, and verification commands.
-- [Internal platform brief](docs/bending_spoons_internal_platform_brief.md) for the product model and demo narrative.
-- [Frontend UI/UX plan](frontend/docs/bending_spoons_platform_ui_ux_plan.md) for the implemented and planned CTO/Spooner screens.
+## Architecture
 
-## Deployment
+- `frontend/`: Next.js App Router application for CTO and Spooner workflows.
+- `backend/`: FastAPI orchestration API for LLM-powered skill inference,
+  documentation generation/chat, transition instruction generation, and matching.
+- `db-rest-api/`: FastAPI service exposing the MySQL-backed project, employee,
+  move-request, documentation, policy, and matching persistence API.
+- `docs/`: technical overview, local setup, API contracts, matching details, and
+  deployment notes.
 
-The DB REST API deploys to two environments on the same EC2 host:
+Public production routes:
 
-- `main` -> production at `https://mixing-spooners.club/db-api/...`
-- `dev` -> development at `https://dev.mixing-spooners.club/db-api/...`
+- App: `https://mixing-spooners.club`
+- Backend orchestration API: `https://mixing-spooners.club/api/...`
+- DB REST API: `https://mixing-spooners.club/db-api/...`
 
-See [docs/deployment.md](docs/deployment.md) for the CI/CD workflow, server layout, nginx routing, TLS setup, and verification commands.
+## Documentation
+
+- [Documentation index](docs/README.md)
+- [Technical overview](docs/TECHNICAL_OVERVIEW.md)
+- [Local development](docs/LOCAL_DEVELOPMENT.md)
+- [Product brief](docs/bending_spoons_internal_platform_brief.md)
+- [Matching contract](docs/MATCHING_DOCUMENTATION.md)
+- [DB API contract](docs/DB_API_DOCUMENTATION.md)
+- [Deployment notes](docs/deployment.md)
