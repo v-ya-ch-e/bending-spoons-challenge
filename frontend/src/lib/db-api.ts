@@ -188,6 +188,7 @@ type ListCacheEntry<T> = {
 let employeesCache: ListCacheEntry<Employee[]> | null = null
 let projectsCache: ListCacheEntry<Project[]> | null = null
 let matchingRunsCache: ListCacheEntry<MatchingRun[]> | null = null
+let moveRequestsCache: ListCacheEntry<MoveRequest[]> | null = null
 
 export class DbApiError extends Error {
   constructor(
@@ -369,6 +370,10 @@ export function getCachedMatchingRuns() {
   return isCacheFresh(matchingRunsCache) ? matchingRunsCache?.data : undefined
 }
 
+export function getCachedMoveRequests() {
+  return isCacheFresh(moveRequestsCache) ? moveRequestsCache?.data : undefined
+}
+
 export async function listEmployees() {
   if (isCacheFresh(employeesCache)) {
     return employeesCache!.data
@@ -430,6 +435,38 @@ export async function listProjects() {
     projectsCache =
       projectsCache.data.length > 0
         ? { data: projectsCache.data, fetchedAt: projectsCache.fetchedAt }
+        : null
+    throw error
+  }
+}
+
+export async function listMoveRequests() {
+  if (isCacheFresh(moveRequestsCache)) {
+    return moveRequestsCache!.data
+  }
+
+  if (moveRequestsCache?.promise) {
+    return moveRequestsCache.promise
+  }
+
+  const promise = fetchDbApi<MoveRequest[]>("/move-requests?limit=500")
+  moveRequestsCache = {
+    data: moveRequestsCache?.data ?? [],
+    fetchedAt: moveRequestsCache?.fetchedAt ?? 0,
+    promise,
+  }
+
+  try {
+    const moveRequests = await promise
+    moveRequestsCache = {
+      data: moveRequests,
+      fetchedAt: Date.now(),
+    }
+    return moveRequests
+  } catch (error) {
+    moveRequestsCache =
+      moveRequestsCache.data.length > 0
+        ? { data: moveRequestsCache.data, fetchedAt: moveRequestsCache.fetchedAt }
         : null
     throw error
   }
