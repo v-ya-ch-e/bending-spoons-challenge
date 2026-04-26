@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 type TopbarProps = {
   workspace: RoleWorkspace
   activeLabel: string
-  primaryAction: string
+  primaryAction?: string
   primaryActionHref?: string
   sidebarCollapsed: boolean
   onSidebarCollapsedChange: (collapsed: boolean) => void
@@ -61,21 +61,23 @@ export function Topbar({
           </nav>
         </div>
 
-        <div className="flex shrink-0 items-center gap-3">
-          {primaryActionHref ? (
-            <Button asChild size="sm" className="rounded-full">
-              <Link href={primaryActionHref}>
+        {primaryAction ? (
+          <div className="flex shrink-0 items-center gap-3">
+            {primaryActionHref ? (
+              <Button asChild size="sm" className="rounded-full">
+                <Link href={primaryActionHref}>
+                  <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
+                  {primaryAction}
+                </Link>
+              </Button>
+            ) : (
+              <Button type="button" size="sm" className="rounded-full">
                 <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
                 {primaryAction}
-              </Link>
-            </Button>
-          ) : (
-            <Button type="button" size="sm" className="rounded-full">
-              <HugeiconsIcon icon={Add01Icon} strokeWidth={2} className="size-4" />
-              {primaryAction}
-            </Button>
-          )}
-        </div>
+              </Button>
+            )}
+          </div>
+        ) : null}
       </div>
     </header>
   )
