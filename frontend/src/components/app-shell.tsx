@@ -50,6 +50,12 @@ const actionableMoveRequestStatuses = new Set([
   "accepted",
   "clarification_requested",
 ])
+const currentMoveRequestStatuses = new Set([
+  "pending",
+  "accepted",
+  "clarification_requested",
+  "transition_started",
+])
 
 function writePreferenceCookie(name: string, value: string) {
   document.cookie = `${name}=${value}; path=/; max-age=${preferenceCookieMaxAge}; samesite=lax`
@@ -138,6 +144,9 @@ export function AppShell({
   const [employeeCount, setEmployeeCount] = useState<number | undefined>(
     () => initialData?.employeeCount ?? getCachedEmployees()?.length
   )
+  const [moveRequestCount, setMoveRequestCount] = useState<number | undefined>(
+    () => initialData?.moveRequestCount
+  )
   const [matchingPlanCount, setMatchingPlanCount] = useState<number | undefined>(
     () => initialData?.matchingPlanCount
   )
@@ -187,6 +196,9 @@ export function AppShell({
       if (nextItem.value === "employees" && employeeCount !== undefined) {
         return { ...nextItem, count: String(employeeCount) }
       }
+      if (nextItem.value === "move-requests" && moveRequestCount !== undefined) {
+        return { ...nextItem, count: String(moveRequestCount) }
+      }
       if (nextItem.value === "matching" && matchingPlanCount !== undefined) {
         return { ...nextItem, count: String(matchingPlanCount) }
       }
@@ -217,6 +229,7 @@ export function AppShell({
     activeSpoonerId,
     projectCount,
     employeeCount,
+    moveRequestCount,
     matchingPlanCount,
     spoonerNotificationCounts,
   ])
@@ -253,6 +266,17 @@ export function AppShell({
     loadMatchingPlanCount()
       .then((count) => {
         if (isMounted) setMatchingPlanCount(count)
+      })
+      .catch(() => {})
+
+    listMoveRequests()
+      .then((moveRequests) => {
+        if (!isMounted) return
+        setMoveRequestCount(
+          moveRequests.filter((request) =>
+            currentMoveRequestStatuses.has(request.status)
+          ).length
+        )
       })
       .catch(() => {})
 

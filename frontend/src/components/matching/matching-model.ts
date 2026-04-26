@@ -375,6 +375,9 @@ function buildPlansFromUnmatchedRequests({
   const requestsByTarget = new Map<number, MoveRequest[]>()
 
   for (const request of moveRequests) {
+    if (request.to_project_id === null) {
+      continue
+    }
     const targetProject = projectById.get(request.to_project_id)
     if (!targetProject) {
       continue
@@ -397,7 +400,7 @@ function buildPlansFromUnmatchedRequests({
         move: {
           employee_id: request.employee_id,
           from_project_id: request.from_project_id,
-          to_project_id: request.to_project_id,
+          to_project_id: request.to_project_id ?? targetProject.id,
           action: "move",
           suggested_role: request.expected_role,
           current_project_impact: request.current_project_impact,

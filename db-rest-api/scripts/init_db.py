@@ -65,6 +65,46 @@ def ensure_employee_github_username_column(cursor) -> bool:
     return True
 
 
+def ensure_move_requests_nullable_target(cursor) -> bool:
+    cursor.execute("SHOW COLUMNS FROM move_requests LIKE 'to_project_id'")
+    column = cursor.fetchone()
+    if column is None:
+        return False
+
+    cursor.execute(
+        """
+        SELECT rc.CONSTRAINT_NAME, rc.DELETE_RULE
+        FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS rc
+        INNER JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS kcu
+            ON kcu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
+            AND kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
+        WHERE kcu.TABLE_SCHEMA = DATABASE()
+            AND kcu.TABLE_NAME = 'move_requests'
+            AND kcu.COLUMN_NAME = 'to_project_id'
+            AND kcu.REFERENCED_TABLE_NAME = 'projects'
+        LIMIT 1
+        """
+    )
+    constraint = cursor.fetchone()
+    constraint_name = constraint[0] if constraint else None
+    delete_rule = constraint[1] if constraint else None
+    is_nullable = column[2] == "YES"
+
+    if is_nullable and delete_rule == "SET NULL":
+        return False
+
+    if constraint_name is not None:
+        cursor.execute(f"ALTER TABLE move_requests DROP FOREIGN KEY {constraint_name}")
+    if not is_nullable:
+        cursor.execute("ALTER TABLE move_requests MODIFY COLUMN to_project_id INT NULL")
+    cursor.execute(
+        "ALTER TABLE move_requests "
+        "ADD CONSTRAINT fk_move_requests_to_project "
+        "FOREIGN KEY (to_project_id) REFERENCES projects(id) ON DELETE SET NULL"
+    )
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Initialize the Atlas demo database.")
     parser.add_argument(
@@ -91,11 +131,14 @@ def main() -> None:
         for statement in statements:
             cursor.execute(statement)
         column_added = ensure_employee_github_username_column(cursor)
+        move_target_updated = ensure_move_requests_nullable_target(cursor)
         connection.commit()
         cursor.close()
         print(f"Applied {len(statements)} statement(s) from {SCHEMA_PATH.name}.")
         if column_added:
             print("Added missing employees.github_username column.")
+        if move_target_updated:
+            print("Updated move_requests.to_project_id to allow offboarding-only requests.")
     finally:
         connection.close()
 

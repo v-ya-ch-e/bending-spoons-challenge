@@ -274,7 +274,9 @@ function getAssignedProjects(
     if (request.from_project_id !== null) {
       assignedIds.add(request.from_project_id)
     }
-    assignedIds.add(request.to_project_id)
+    if (request.to_project_id !== null) {
+      assignedIds.add(request.to_project_id)
+    }
   }
 
   return projects.filter(

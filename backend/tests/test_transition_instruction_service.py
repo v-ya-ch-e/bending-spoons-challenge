@@ -234,6 +234,20 @@ def test_start_generation_skips_offboarding_for_bench_move() -> None:
     assert result["source_documentation_id"] == 200
 
 
+def test_start_generation_supports_offboarding_only_move() -> None:
+    db = FakeDbClient()
+    db.move_request["to_project_id"] = None
+    db.move_request["to_project_name"] = None
+
+    with pytest.raises(ValueError, match="Offboarding-only"):
+        start_transition_instruction_generation(7, "onboarding", db_client=db)
+
+    result = start_transition_instruction_generation(7, "offboarding", db_client=db)
+    assert result["status"] == "running"
+    assert result["source_documentation_id"] == 100
+    assert result["input_snapshot"]["target_project_id"] is None
+
+
 def test_start_generation_stores_running_instruction_with_documentation_source() -> None:
     db = FakeDbClient()
 
@@ -290,6 +304,29 @@ def test_generate_offboarding_includes_source_docs_and_commit_context() -> None:
     prompt_payload = json.loads(openai.messages[1]["content"])
     assert prompt_payload["context_project"]["name"] == "Evernote"
     assert prompt_payload["commit_context"][0]["commits"][0]["message"] == "Improve sync worker"
+
+
+def test_generate_offboarding_only_has_no_target_project_context() -> None:
+    db = FakeDbClient()
+    db.move_request["to_project_id"] = None
+    db.move_request["to_project_name"] = None
+    github = FakeGitHubClient()
+    openai = FakeOpenAIClient()
+
+    result = asyncio.run(
+        generate_transition_instruction(
+            7,
+            "offboarding",
+            db_client=db,
+            github_client=github,
+            openai_client=openai,
+        )
+    )
+
+    assert result["status"] == "ready"
+    assert result["source_documentation_id"] == 100
+    prompt_payload = json.loads(openai.messages[1]["content"])
+    assert prompt_payload["target_project"] is None
 
 
 def test_generate_offboarding_skips_commit_context_for_mock_documentation() -> None:

@@ -46,6 +46,11 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
         primaryActionHref: "/cto/employees?create=1",
       },
       {
+        label: "Move requests",
+        value: "move-requests",
+        href: "/cto/move-requests",
+      },
+      {
         label: "Matching",
         value: "matching",
         href: "/cto/matching",

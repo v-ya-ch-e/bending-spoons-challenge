@@ -325,7 +325,7 @@ class Employee(EmployeeBase):
 class MoveRequestCreate(ApiModel):
     employee_id: int = Field(gt=0)
     from_project_id: int | None = Field(default=None, gt=0)
-    to_project_id: int = Field(gt=0)
+    to_project_id: int | None = Field(default=None, gt=0)
     reason: str = Field(min_length=1)
     expected_role: str = Field(min_length=1, max_length=255)
     current_project_impact: CurrentProjectImpact
@@ -335,11 +335,17 @@ class MoveRequestCreate(ApiModel):
     employee_approval_status: ApprovalStatus = ApprovalStatus.pending
     employee_approved_at: datetime | None = None
 
+    @model_validator(mode="after")
+    def require_source_or_target(self) -> "MoveRequestCreate":
+        if self.from_project_id is None and self.to_project_id is None:
+            raise ValueError("Move request requires a source or target project.")
+        return self
+
 
 class MoveRequestUpdate(UpdateModel):
     employee_id: int = Field(default=None, gt=0)
     from_project_id: int | None = Field(default=None, gt=0)
-    to_project_id: int = Field(default=None, gt=0)
+    to_project_id: int | None = Field(default=None, gt=0)
     reason: str = Field(default=None, min_length=1)
     expected_role: str = Field(default=None, min_length=1, max_length=255)
     current_project_impact: CurrentProjectImpact = None
@@ -361,8 +367,8 @@ class MoveRequest(ApiModel):
     employee_name: str
     from_project_id: int | None
     from_project_name: str | None
-    to_project_id: int
-    to_project_name: str
+    to_project_id: int | None
+    to_project_name: str | None
     reason: str
     expected_role: str
     current_project_impact: CurrentProjectImpact
@@ -412,8 +418,8 @@ class TransitionInstruction(TransitionInstructionCreate):
     employee_name: str
     from_project_id: int | None
     from_project_name: str | None
-    to_project_id: int
-    to_project_name: str
+    to_project_id: int | None
+    to_project_name: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -916,7 +922,7 @@ MOVE_REQUEST_SELECT = """
     FROM move_requests AS mr
     INNER JOIN employees AS employee ON employee.id = mr.employee_id
     LEFT JOIN projects AS from_project ON from_project.id = mr.from_project_id
-    INNER JOIN projects AS to_project ON to_project.id = mr.to_project_id
+    LEFT JOIN projects AS to_project ON to_project.id = mr.to_project_id
 """
 
 
@@ -946,7 +952,7 @@ TRANSITION_INSTRUCTION_SELECT = """
     INNER JOIN move_requests AS mr ON mr.id = instruction.move_request_id
     INNER JOIN employees AS employee ON employee.id = mr.employee_id
     LEFT JOIN projects AS from_project ON from_project.id = mr.from_project_id
-    INNER JOIN projects AS to_project ON to_project.id = mr.to_project_id
+    LEFT JOIN projects AS to_project ON to_project.id = mr.to_project_id
 """
 
 
@@ -1203,7 +1209,9 @@ def transition_instructions_solved(cursor: DictCursor, request_id: int) -> bool:
         (request_id,),
     )
     statuses = {row["instruction_type"]: row["status"] for row in cursor.fetchall()}
-    required_types = [TransitionInstructionType.onboarding.value]
+    required_types: list[str] = []
+    if move_request["to_project_id"] is not None:
+        required_types.append(TransitionInstructionType.onboarding.value)
     if move_request["from_project_id"] is not None:
         required_types.append(TransitionInstructionType.offboarding.value)
     return all(
@@ -1224,7 +1232,8 @@ def complete_move_request_if_ready(cursor: DictCursor, request_id: int) -> bool:
 
     if from_project_id is not None and from_project_id != to_project_id:
         next_project_ids.discard(from_project_id)
-    next_project_ids.add(to_project_id)
+    if to_project_id is not None:
+        next_project_ids.add(to_project_id)
     sync_employee_projects(cursor, move_request["employee_id"], sorted(next_project_ids))
 
     execute_or_raise(
@@ -1800,7 +1809,7 @@ def complete_move_request(request_id: int) -> dict[str, Any]:
                 if not complete_move_request_if_ready(cursor, request_id):
                     raise HTTPException(
                         status_code=409,
-                        detail="Both onboarding and offboarding instructions must be solved first.",
+                        detail="Required transition instructions must be solved first.",
                     )
                 completed = fetch_move_request(cursor, request_id)
                 connection.commit()

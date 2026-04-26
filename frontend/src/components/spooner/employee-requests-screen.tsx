@@ -206,10 +206,7 @@ function MoveRequestCard({
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>
-              {request.from_project_name ?? "Current assignment"} to{" "}
-              {request.to_project_name}
-            </CardTitle>
+            <CardTitle>{formatMoveLabel(request)}</CardTitle>
             <CardDescription>{request.expected_role}</CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -258,6 +255,14 @@ function MoveRequestCard({
       </CardContent>
     </Card>
   )
+}
+
+function formatMoveLabel(request: MoveRequest) {
+  if (request.to_project_name === null) {
+    return `${request.from_project_name ?? "Current assignment"} to offboarding`
+  }
+
+  return `${request.from_project_name ?? "Current assignment"} to ${request.to_project_name}`
 }
 
 function Fact({ label, value }: { label: string; value: string }) {

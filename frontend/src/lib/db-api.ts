@@ -126,8 +126,8 @@ export type MoveRequest = {
   employee_name: string
   from_project_id: number | null
   from_project_name: string | null
-  to_project_id: number
-  to_project_name: string
+  to_project_id: number | null
+  to_project_name: string | null
   reason: string
   expected_role: string
   current_project_impact: ImpactLevel
@@ -166,8 +166,8 @@ export type TransitionInstruction = {
   employee_name: string
   from_project_id: number | null
   from_project_name: string | null
-  to_project_id: number
-  to_project_name: string
+  to_project_id: number | null
+  to_project_name: string | null
   created_at: string
   updated_at: string
 }
@@ -175,12 +175,24 @@ export type TransitionInstruction = {
 export type MoveRequestUpdateInput = Partial<{
   employee_id: number
   from_project_id: number | null
-  to_project_id: number
+  to_project_id: number | null
   reason: string
   expected_role: string
   current_project_impact: ImpactLevel
   status: MoveRequestStatus
 }>
+
+export type MoveRequestCreateInput = {
+  employee_id: number
+  from_project_id: number | null
+  to_project_id: number | null
+  reason: string
+  expected_role: string
+  current_project_impact: ImpactLevel
+  status?: MoveRequestStatus
+  cto_approval_status?: MoveRequestApprovalStatus
+  employee_approval_status?: MoveRequestApprovalStatus
+}
 
 export type MatchingRunStatus =
   | "pending"
@@ -774,6 +786,16 @@ export function updateEmployee(employeeId: number, employee: EmployeeUpdateInput
 
 export function listMoveRequests() {
   return fetchDbApi<MoveRequest[]>("/move-requests?limit=500")
+}
+
+export function createMoveRequest(moveRequest: MoveRequestCreateInput) {
+  return fetchDbApi<MoveRequest>("/move-requests", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(moveRequest),
+  })
 }
 
 export function updateMoveRequest(

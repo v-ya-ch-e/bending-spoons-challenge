@@ -50,6 +50,7 @@ const navIcons = {
   overview: DashboardSquare01Icon,
   projects: Folder01Icon,
   employees: UserGroupIcon,
+  "move-requests": Notification03Icon,
   matching: ChartRelationshipIcon,
   documentation: DocumentValidationIcon,
   "my-project": Briefcase01Icon,

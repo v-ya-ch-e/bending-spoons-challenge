@@ -294,9 +294,14 @@ export function MatchingScreen({
     setActionPlanId(plan.id)
     setError(null)
     try {
-      await createMoveRequestsFromMatchingRecommendation(
+      const response = await createMoveRequestsFromMatchingRecommendation(
         plan.run.id,
         plan.recommendation.candidate_plan_id
+      )
+      await Promise.all(
+        response.move_requests.map((request) =>
+          approveMoveRequest(request.id, "cto", "approved")
+        )
       )
       await loadWorkspace()
       setActiveTab("active")
@@ -1344,7 +1349,9 @@ function ProposedMovementsSection({
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
-                  {movement.request && plan.lifecycle === "active" && (
+                  {movement.request &&
+                    plan.lifecycle === "active" &&
+                    movement.request.cto_approval_status === "pending" && (
                     <>
                       <Button
                         type="button"
@@ -2362,7 +2369,9 @@ function EditMoveRequestFormBody({
       ? String(request.from_project_id)
       : BENCH_SELECT_VALUE
   )
-  const [toProjectId, setToProjectId] = useState(() => String(request.to_project_id))
+  const [toProjectId, setToProjectId] = useState(() =>
+    request.to_project_id != null ? String(request.to_project_id) : ""
+  )
 
   return (
     <>
@@ -2457,7 +2466,7 @@ function EditMoveRequestFormBody({
               current_project_impact: impact,
               from_project_id:
                 fromProjectId === BENCH_SELECT_VALUE ? null : Number(fromProjectId),
-              to_project_id: Number(toProjectId),
+              to_project_id: toProjectId ? Number(toProjectId) : null,
             })
           }
         >
