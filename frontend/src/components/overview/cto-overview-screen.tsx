@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 import type { ReactNode } from "react"
 import {
   Add01Icon,
@@ -21,7 +22,8 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import type { OverviewInitialData } from "@/lib/server/db-api"
-import type { Project } from "@/lib/db-api"
+import type { Employee, Project } from "@/lib/db-api"
+import { buildDistinctOverviewPeopleAvatarSrcs } from "@/lib/employee-avatars"
 import { cn } from "@/lib/utils"
 
 type CtoOverviewScreenProps = {
@@ -61,6 +63,24 @@ export function CtoOverviewScreen({ initialData }: CtoOverviewScreenProps) {
       <div className="mx-auto flex min-h-full w-full max-w-7xl flex-col p-4 md:p-8">
         <header className="mx-auto flex max-w-3xl flex-1 flex-col items-center justify-center gap-4 py-8 text-center md:py-10">
           <Badge variant="outline">CTO workspace</Badge>
+          <div className="relative h-16 w-16">
+            <Image
+              src="/icon_light.png"
+              alt="Mixing Spooners"
+              width={320}
+              height={315}
+              priority
+              className="h-16 w-auto dark:hidden"
+            />
+            <Image
+              src="/icon_dark.png"
+              alt="Mixing Spooners"
+              width={320}
+              height={315}
+              priority
+              className="hidden h-16 w-auto dark:block"
+            />
+          </div>
           <h1 className="text-4xl font-semibold tracking-tight md:text-5xl">
             Welcome to Mixing Spooners.
           </h1>
@@ -91,7 +111,7 @@ export function CtoOverviewScreen({ initialData }: CtoOverviewScreenProps) {
             secondaryHref="/cto/employees?create=1"
             secondaryAction="Add employee"
             icon={UserGroupIcon}
-            visual={<PeopleVisual names={employees.map((employee) => employee.name)} />}
+            visual={<PeopleVisual employees={employees} />}
           />
           <ActionCard
             eyebrow={`${plans.length} move plans`}
@@ -209,21 +229,26 @@ function ProjectVisual({ projects }: { projects: Project[] }) {
   )
 }
 
-function PeopleVisual({ names }: { names: string[] }) {
+function PeopleVisual({ employees }: { employees: Employee[] }) {
+  const previewEmployees = employees.slice(0, 12)
+  const avatarSrcByEmployeeId = buildDistinctOverviewPeopleAvatarSrcs(previewEmployees)
+
   return (
     <div className={cn("relative p-3", visualPanelClass)}>
       <div className="grid grid-cols-6 place-items-center gap-1.5">
-        {names.slice(0, 12).map((name, index) => (
-          <div
-            key={`${name}-${index}`}
+        {previewEmployees.map((employee, index) => (
+          <Avatar
+            key={employee.id}
+            size="sm"
             className={cn(
-              "flex size-7 items-center justify-center rounded-full bg-background text-[0.625rem] font-medium text-muted-foreground ring-1 ring-border",
+              "bg-background ring-1 ring-border",
               index % 4 === 0 && "translate-y-2",
               index % 4 === 2 && "-translate-y-2"
             )}
           >
-            {getInitials(name)}
-          </div>
+            <AvatarImage src={avatarSrcByEmployeeId.get(employee.id)!} alt="" />
+            <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
+          </Avatar>
         ))}
       </div>
       <div className="absolute bottom-3 left-3 h-1.5 w-20 rounded-full bg-border" />

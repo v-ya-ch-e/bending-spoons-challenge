@@ -102,6 +102,7 @@ import {
   type ProposedMovement,
   type RequirementCoverageRow,
 } from "@/components/matching/matching-model"
+import { getEmployeeAvatarSrc } from "@/lib/employee-avatars"
 
 type DetailSelection =
   | { kind: "requirement"; row: RequirementCoverageRow; plan: MovePlan }
@@ -1322,6 +1323,9 @@ function ProposedMovementsSection({
               <TableCell>
                 <div className="flex items-center gap-2">
                   <Avatar>
+                    {movement.employee ? (
+                      <AvatarImage src={getEmployeeAvatarSrc(movement.employee)} alt="" />
+                    ) : null}
                     <AvatarFallback>
                       {getInitials(movement.employee?.name ?? "?")}
                     </AvatarFallback>

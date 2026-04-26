@@ -80,6 +80,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { getEmployeeAvatarSrc } from "@/lib/employee-avatars"
 import { cn } from "@/lib/utils"
 
 type FilterKey =
@@ -626,7 +627,13 @@ function ProjectsTable({
               </TableCell>
               <TableCell className="min-w-0">
                 <div className="flex min-w-0 items-center gap-3">
-                  <TeamAvatars members={project.current_team_members} compact />
+                  <TeamAvatars
+                    members={project.current_team_members.map((member, index) => ({
+                      name: member,
+                      id: project.current_team_member_ids[index],
+                    }))}
+                    compact
+                  />
                   <span className="text-sm text-muted-foreground">
                     {project.current_team_members.length} /{" "}
                     {project.required_people_amount}
@@ -715,7 +722,13 @@ function ProjectsCardGrid({
               </div>
               <SkillBadges skills={project.required_skills} compact />
               <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-                <TeamAvatars members={project.current_team_members} compact />
+                <TeamAvatars
+                  members={project.current_team_members.map((member, index) => ({
+                    name: member,
+                    id: project.current_team_member_ids[index],
+                  }))}
+                  compact
+                />
                 <Button
                   type="button"
                   size="xs"
@@ -856,6 +869,12 @@ function ProjectDetailPanel({
                         className="group flex items-center gap-3 rounded-2xl bg-muted px-3 py-2 text-left transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Avatar size="sm">
+                          <AvatarImage
+                            src={getEmployeeAvatarSrc(
+                              employeeId ? { id: employeeId, name: member } : { name: member }
+                            )}
+                            alt=""
+                          />
                           <AvatarFallback>{getInitials(member)}</AvatarFallback>
                         </Avatar>
                         <span className="min-w-0 truncate text-sm font-medium">
@@ -1010,6 +1029,7 @@ function ProjectEmployeeDetailPanel({
           <div className="flex flex-col gap-5 px-6 pt-5 pb-8">
             <div className="flex items-center gap-3">
               <Avatar size="lg">
+                <AvatarImage src={getEmployeeAvatarSrc(employee)} alt="" />
                 <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
               </Avatar>
               <div className="min-w-0">
@@ -1272,7 +1292,7 @@ function TeamAvatars({
   members,
   compact,
 }: {
-  members: string[]
+  members: Array<{ name: string; id?: number }>
   compact?: boolean
 }) {
   const visibleMembers = compact ? members.slice(0, 3) : members
@@ -1285,8 +1305,14 @@ function TeamAvatars({
   return (
     <AvatarGroup>
       {visibleMembers.map((member) => (
-        <Avatar key={member} size="sm">
-          <AvatarFallback>{getInitials(member)}</AvatarFallback>
+        <Avatar key={member.id ?? member.name} size="sm">
+          <AvatarImage
+            src={getEmployeeAvatarSrc(
+              member.id ? { id: member.id, name: member.name } : { name: member.name }
+            )}
+            alt=""
+          />
+          <AvatarFallback>{getInitials(member.name)}</AvatarFallback>
         </Avatar>
       ))}
       {hiddenCount > 0 && <AvatarGroupCount>+{hiddenCount}</AvatarGroupCount>}

@@ -24,6 +24,7 @@ import {
   listProjects,
   type Employee,
 } from "@/lib/db-api"
+import { syncEmployeeAvatarFaceAssignments } from "@/lib/employee-avatars"
 import type { AppShellInitialData } from "@/lib/server/db-api"
 import { buildMovePlans } from "@/components/matching/matching-model"
 import {
@@ -240,6 +241,10 @@ export function AppShell({
       workspace.navItems[0]
     )
   }, [pathname, workspace.navItems])
+
+  useEffect(() => {
+    syncEmployeeAvatarFaceAssignments(employees)
+  }, [employees])
 
   useEffect(() => {
     if (shouldSkipInitialRefreshRef.current) {
