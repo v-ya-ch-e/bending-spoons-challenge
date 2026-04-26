@@ -99,7 +99,7 @@ export function TransitionInstructionScreen({
     }
     return instructionType === "onboarding"
       ? instruction.to_project_name
-      : instruction.from_project_name ?? instruction.to_project_name
+      : instruction.from_project_name ?? instruction.to_project_name ?? "Offboarding"
   }, [instruction, instructionType])
 
   useEffect(() => {
@@ -282,7 +282,10 @@ function TransitionSummaryCard({
           Transition context
         </CardTitle>
         <CardDescription>
-          {instruction.employee_name} toward {instruction.to_project_name}
+          {instruction.employee_name}{" "}
+          {instruction.to_project_name
+            ? `toward ${instruction.to_project_name}`
+            : "offboarding from current company"}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">

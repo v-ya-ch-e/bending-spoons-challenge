@@ -5,13 +5,16 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Cancel01Icon, Edit02Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
+import { approveMoveRequest } from "@/lib/backend-api"
 import {
+  createMoveRequest,
   getGithubProfileUrl,
   getCachedEmployees,
   getCachedProjects,
   listEmployees,
   listProjects,
   type Employee,
+  type ImpactLevel,
   type Project,
   type ProjectSkillRequirements,
   type SkillKey,
@@ -23,6 +26,15 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import {
   InputGroup,
   InputGroupAddon,
@@ -48,6 +60,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 
 type EmployeesScreenProps = {
@@ -57,6 +70,9 @@ type EmployeesScreenProps = {
 
 type FilterKey = "all" | "assigned" | "unassigned"
 type SortKey = "name" | "role" | "project"
+type EmployeeMoveDialogMode = "move" | "offboard"
+
+const benchSelectValue = "__bench__"
 
 const skillLabels: Record<SkillKey, string> = {
   android: "Android",
@@ -103,6 +119,11 @@ export function EmployeesScreen({
   const [error, setError] = useState<string | null>(null)
   const [activeEmployeeId, setActiveEmployeeId] = useState(selectedEmployeeId)
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
+  const [moveDialog, setMoveDialog] = useState<{
+    employee: Employee
+    mode: EmployeeMoveDialogMode
+  } | null>(null)
+  const [isCreatingMoveRequest, setIsCreatingMoveRequest] = useState(false)
   const createDialogOpen = searchParams.get("create") === "1"
 
   useEffect(() => {
@@ -271,6 +292,31 @@ export function EmployeesScreen({
     openEmployeeProfile(employee.id, "replace")
   }
 
+  async function handleCreateMoveRequest(payload: {
+    employee_id: number
+    from_project_id: number | null
+    to_project_id: number | null
+    reason: string
+    expected_role: string
+    current_project_impact: ImpactLevel
+  }) {
+    setIsCreatingMoveRequest(true)
+    setError(null)
+    try {
+      const createdRequest = await createMoveRequest(payload)
+      await approveMoveRequest(createdRequest.id, "cto", "approved")
+      setMoveDialog(null)
+    } catch (createError) {
+      setError(
+        createError instanceof Error
+          ? createError.message
+          : "Unable to create move request."
+      )
+    } finally {
+      setIsCreatingMoveRequest(false)
+    }
+  }
+
   function upsertEmployee(employee: Employee) {
     setEmployees((currentEmployees) => {
       const exists = currentEmployees.some(
@@ -328,6 +374,18 @@ export function EmployeesScreen({
           onCreated={handleEmployeeSaved}
         />
       )}
+      {moveDialog ? (
+        <EmployeeMoveRequestDialog
+          employee={moveDialog.employee}
+          mode={moveDialog.mode}
+          projects={projects}
+          isBusy={isCreatingMoveRequest}
+          onOpenChange={(open) => {
+            if (!open) setMoveDialog(null)
+          }}
+          onSubmit={handleCreateMoveRequest}
+        />
+      ) : null}
       <div className="flex min-h-0 flex-1 flex-col gap-5 p-4 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
@@ -434,6 +492,12 @@ export function EmployeesScreen({
                 project={selectedProject}
                 isLoading={isLoading}
                 onEdit={(employee) => setEditingEmployee(employee)}
+                onCreateMoveRequest={(employee) =>
+                  setMoveDialog({ employee, mode: "move" })
+                }
+                onStartOffboarding={(employee) =>
+                  setMoveDialog({ employee, mode: "offboard" })
+                }
                 onClose={closeEmployeeProfile}
               />
             )}
@@ -441,6 +505,184 @@ export function EmployeesScreen({
         )}
       </div>
     </div>
+  )
+}
+
+function EmployeeMoveRequestDialog({
+  employee,
+  mode,
+  projects,
+  isBusy,
+  onOpenChange,
+  onSubmit,
+}: {
+  employee: Employee
+  mode: EmployeeMoveDialogMode
+  projects: Project[]
+  isBusy: boolean
+  onOpenChange: (open: boolean) => void
+  onSubmit: (payload: {
+    employee_id: number
+    from_project_id: number | null
+    to_project_id: number | null
+    reason: string
+    expected_role: string
+    current_project_impact: ImpactLevel
+  }) => void | Promise<void>
+}) {
+  const defaultSourceId = employee.current_project_ids[0]
+  const [fromProjectId, setFromProjectId] = useState(() =>
+    defaultSourceId != null ? String(defaultSourceId) : benchSelectValue
+  )
+  const [toProjectId, setToProjectId] = useState(() => {
+    const defaultTarget =
+      projects.find((project) => project.id !== defaultSourceId) ?? projects[0]
+    return mode === "move" ? String(defaultTarget?.id ?? "") : ""
+  })
+  const [expectedRole, setExpectedRole] = useState(() =>
+    mode === "move" ? employee.role : `${employee.role} handoff`
+  )
+  const [impact, setImpact] = useState<ImpactLevel>("low")
+  const [reason, setReason] = useState(() =>
+      mode === "move"
+        ? `${employee.name} is a fit for the selected company based on role, skills, and staffing needs.`
+        : `${employee.name} should be offboarded from the current company with a documented handoff.`
+  )
+
+  const assignedProjects = projects.filter((project) =>
+    employee.current_project_ids.includes(project.id)
+  )
+  const sourceProjects =
+    mode === "offboard" && assignedProjects.length > 0 ? assignedProjects : projects
+  const fromProjectIdValue =
+    fromProjectId === benchSelectValue ? null : Number(fromProjectId)
+  const canSubmit =
+    Boolean(reason.trim()) &&
+    Boolean(expectedRole.trim()) &&
+    (mode === "offboard" ? fromProjectIdValue !== null : Boolean(toProjectId))
+
+  return (
+    <Dialog open onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            {mode === "move" ? "Create move request" : "Start offboarding"}
+          </DialogTitle>
+          <DialogDescription>
+            Configure the request for CTO confirmation. CTO approval will be
+            recorded immediately; the employee still follows the normal approval
+            and transition steps.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex max-h-[min(30rem,70vh)] flex-col gap-3 overflow-y-auto pr-1">
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium">Employee</span>
+              <p className="text-sm text-muted-foreground">{employee.name}</p>
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium">From company</span>
+              <Select value={fromProjectId} onValueChange={setFromProjectId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Source company" />
+                </SelectTrigger>
+                <SelectContent>
+                  {mode === "move" ? (
+                    <SelectItem value={benchSelectValue}>Bench (unassigned)</SelectItem>
+                  ) : null}
+                  {sourceProjects.map((project) => (
+                    <SelectItem key={project.id} value={String(project.id)}>
+                      {project.project_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {mode === "move" ? (
+              <div className="flex flex-col gap-2">
+                <span className="text-sm font-medium">To company</span>
+                <Select value={toProjectId} onValueChange={setToProjectId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Target company" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={String(project.id)}>
+                        {project.project_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium" htmlFor="employee-move-role">
+                Expected role
+              </label>
+              <Input
+                id="employee-move-role"
+                value={expectedRole}
+                onChange={(event) => setExpectedRole(event.target.value)}
+                maxLength={255}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium">Current company impact</span>
+              <Select
+                value={impact}
+                onValueChange={(value) => setImpact(value as ImpactLevel)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium" htmlFor="employee-move-reason">
+                Reason
+              </label>
+              <Textarea
+                id="employee-move-reason"
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                className="min-h-24"
+              />
+            </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isBusy}
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            disabled={!canSubmit || isBusy}
+            onClick={() => {
+              onSubmit({
+                employee_id: employee.id,
+                from_project_id: fromProjectIdValue,
+                to_project_id: mode === "move" ? Number(toProjectId) : null,
+                reason: reason.trim(),
+                expected_role: expectedRole.trim(),
+                current_project_impact: impact,
+              })
+            }}
+          >
+            {isBusy ? "Creating..." : "Create and approve"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -535,12 +777,16 @@ function EmployeeDetailPanel({
   project,
   isLoading,
   onEdit,
+  onCreateMoveRequest,
+  onStartOffboarding,
   onClose,
 }: {
   employee?: Employee
   project?: Project
   isLoading: boolean
   onEdit: (employee: Employee) => void
+  onCreateMoveRequest: (employee: Employee) => void
+  onStartOffboarding: (employee: Employee) => void
   onClose: () => void
 }) {
   return (
@@ -696,10 +942,19 @@ function EmployeeDetailPanel({
             )}
 
             <div className="flex flex-col gap-2">
-              <Button type="button" variant="outline">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onCreateMoveRequest(employee)}
+              >
                 Create move request
               </Button>
-              <Button type="button" variant="outline">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onStartOffboarding(employee)}
+                disabled={employee.current_project_ids.length === 0}
+              >
                 Start offboarding
               </Button>
             </div>

@@ -109,7 +109,13 @@ def _load_transition_context(
     move_request = client.get_move_request(request_id)
     _validate_move_request_active(move_request)
     employee = client.get_employee(move_request["employee_id"])
-    target_project = client.get_project(move_request["to_project_id"])
+    target_project = (
+        client.get_project(move_request["to_project_id"])
+        if move_request.get("to_project_id") is not None
+        else None
+    )
+    if instruction_type == "onboarding" and target_project is None:
+        raise ValueError("Offboarding-only moves do not require onboarding instructions.")
     if instruction_type == "offboarding" and move_request.get("from_project_id") is None:
         raise ValueError("Bench-to-project moves do not require offboarding instructions.")
     source_project = (
@@ -244,7 +250,9 @@ def _base_input_snapshot(context: dict[str, Any]) -> dict[str, Any]:
         "move_request_id": context["move_request"]["id"],
         "employee_id": context["employee"]["id"],
         "source_project_id": context["source_project"]["id"],
-        "target_project_id": context["target_project"]["id"],
+        "target_project_id": (
+            context["target_project"]["id"] if context["target_project"] else None
+        ),
         "documentation_id": context["documentation"]["id"],
     }
 
@@ -286,7 +294,10 @@ def _team_member_summary(employee: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _project_summary(project: dict[str, Any]) -> dict[str, Any]:
+def _project_summary(project: dict[str, Any] | None) -> dict[str, Any] | None:
+    if project is None:
+        return None
+
     return {
         "id": project["id"],
         "name": project["project_name"],

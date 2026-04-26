@@ -16,10 +16,10 @@ export type RoleWorkspace = {
 }
 
 export const currentUser = {
-  name: "Demo User",
-  email: "demo@example.com",
-  initials: "DU",
-  team: "Platform Operations",
+  name: "Elena Rossi",
+  email: "elena.rossi@mixingspoons.com",
+  initials: "ER",
+  team: "CTO",
 }
 
 export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
@@ -44,6 +44,11 @@ export const roleWorkspaces: Record<AppRole, RoleWorkspace> = {
         href: "/cto/employees",
         primaryAction: "Add employee",
         primaryActionHref: "/cto/employees?create=1",
+      },
+      {
+        label: "Move requests",
+        value: "move-requests",
+        href: "/cto/move-requests",
       },
       {
         label: "Matching",

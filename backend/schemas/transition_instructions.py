@@ -24,7 +24,7 @@ class TransitionInstructionResponse(BaseModel):
     employee_name: str
     from_project_id: int | None = None
     from_project_name: str | None = None
-    to_project_id: int
-    to_project_name: str
+    to_project_id: int | None = None
+    to_project_name: str | None = None
     created_at: str
     updated_at: str

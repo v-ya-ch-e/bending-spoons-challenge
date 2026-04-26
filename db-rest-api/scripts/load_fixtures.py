@@ -221,10 +221,11 @@ def insert_move_requests(
         employee_id = employee_ids.get(request["employee_name"])
         if employee_id is None:
             sys.exit(f"Move request references unknown employee {request['employee_name']!r}")
-        to_project_id = project_ids.get(request["to_project_name"])
-        if to_project_id is None:
+        to_project_name = request.get("to_project_name")
+        to_project_id = project_ids.get(to_project_name) if to_project_name is not None else None
+        if to_project_name is not None and to_project_id is None:
             sys.exit(
-                f"Move request references unknown to_project {request['to_project_name']!r}"
+                f"Move request references unknown to_project {to_project_name!r}"
             )
         from_project_name = request.get("from_project_name")
         from_project_id = (
@@ -233,6 +234,10 @@ def insert_move_requests(
         if from_project_name is not None and from_project_id is None:
             sys.exit(
                 f"Move request references unknown from_project {from_project_name!r}"
+            )
+        if from_project_id is None and to_project_id is None:
+            sys.exit(
+                f"Move request for {request['employee_name']!r} has no source or target project"
             )
 
         cto_approval_status, employee_approval_status = approval_statuses_for_request(request)
@@ -307,14 +312,16 @@ def insert_mock_transition_instructions(cursor, move_requests: list[dict[str, An
             continue
         instruction_status = "solved" if request["status"] == "completed" else "ready"
         solved_at = approval_timestamp(request["id"], 0) if instruction_status == "solved" else None
-        instruction_types = ["onboarding"]
+        instruction_types = []
+        if request.get("to_project_id") is not None:
+            instruction_types.append("onboarding")
         if request.get("from_project_id") is not None:
             instruction_types.append("offboarding")
         for instruction_type in instruction_types:
             project_name = (
                 request["to_project_name"]
                 if instruction_type == "onboarding"
-                else request.get("from_project_name") or request["to_project_name"]
+                else request.get("from_project_name") or request.get("to_project_name")
             )
             cursor.execute(
                 sql,

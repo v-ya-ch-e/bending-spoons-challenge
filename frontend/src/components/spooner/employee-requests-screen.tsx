@@ -22,12 +22,14 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { cn } from "@/lib/utils"
 
 type EmployeeRequestsScreenProps = {
   employee: Employee
 }
 
 const activeStatuses = new Set(["pending", "accepted", "clarification_requested", "transition_started"])
+const spoonerCardClass = "border border-border shadow-none ring-0"
 
 export function EmployeeRequestsScreen({ employee }: EmployeeRequestsScreenProps) {
   const [requests, setRequests] = useState<MoveRequest[]>([])
@@ -151,7 +153,7 @@ export function EmployeeRequestsScreen({ employee }: EmployeeRequestsScreenProps
             ))}
           </div>
         ) : (
-          <Card className="rounded-3xl">
+          <Card className={cn(spoonerCardClass, "rounded-3xl")}>
             <CardHeader>
               <CardTitle>No active move requests</CardTitle>
               <CardDescription>
@@ -200,14 +202,11 @@ function MoveRequestCard({
     request.employee_approval_status !== "approved"
 
   return (
-    <Card className="rounded-3xl">
+    <Card className={cn(spoonerCardClass, "rounded-3xl")}>
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>
-              {request.from_project_name ?? "Current assignment"} to{" "}
-              {request.to_project_name}
-            </CardTitle>
+            <CardTitle>{formatMoveLabel(request)}</CardTitle>
             <CardDescription>{request.expected_role}</CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -256,6 +255,14 @@ function MoveRequestCard({
       </CardContent>
     </Card>
   )
+}
+
+function formatMoveLabel(request: MoveRequest) {
+  if (request.to_project_name === null) {
+    return `${request.from_project_name ?? "Current assignment"} to offboarding`
+  }
+
+  return `${request.from_project_name ?? "Current assignment"} to ${request.to_project_name}`
 }
 
 function Fact({ label, value }: { label: string; value: string }) {

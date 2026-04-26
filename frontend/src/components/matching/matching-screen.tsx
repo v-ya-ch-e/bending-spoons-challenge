@@ -87,9 +87,12 @@ import { CreateMatchingDialog } from "@/components/matching/create-matching-dial
 import {
   buildMovePlans,
   formatImpact,
+  formatMovementDescription,
+  formatMovementRoute,
   formatRequestStatus,
   formatRequirement,
   getCreateFlowMetadata,
+  getMovementSourceLabel,
   skillLabels,
   type AffectedCompanyImpact,
   type EmployeeTransitionImpact,
@@ -180,7 +183,7 @@ export function MatchingScreen({
         listProjects(),
         listMoveRequests(),
         listMatchingPolicies(),
-        listMatchingRuns(),
+        listMatchingRuns({ force: true }),
       ])
       const recentRuns = matchingRuns
         .filter((run) => run.use_case === "project_rebalance")
@@ -294,9 +297,14 @@ export function MatchingScreen({
     setActionPlanId(plan.id)
     setError(null)
     try {
-      await createMoveRequestsFromMatchingRecommendation(
+      const response = await createMoveRequestsFromMatchingRecommendation(
         plan.run.id,
         plan.recommendation.candidate_plan_id
+      )
+      await Promise.all(
+        response.move_requests.map((request) =>
+          approveMoveRequest(request.id, "cto", "approved")
+        )
       )
       await loadWorkspace()
       setActiveTab("active")
@@ -1325,9 +1333,15 @@ function ProposedMovementsSection({
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-1 text-muted-foreground">
-                  <span>{movement.sourceProject?.project_name ?? "Bench"}</span>
-                  <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
-                  <span>{movement.targetProject.project_name}</span>
+                  {movement.action === "add_assignment" ? (
+                    <span>{formatMovementRoute(movement)}</span>
+                  ) : (
+                    <>
+                      <span>{getMovementSourceLabel(movement)}</span>
+                      <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} />
+                      <span>{movement.targetProject.project_name}</span>
+                    </>
+                  )}
                 </div>
               </TableCell>
               <TableCell>{movement.expectedRole}</TableCell>
@@ -1344,7 +1358,9 @@ function ProposedMovementsSection({
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
-                  {movement.request && plan.lifecycle === "active" && (
+                  {movement.request &&
+                    plan.lifecycle === "active" &&
+                    movement.request.cto_approval_status === "pending" && (
                     <>
                       <Button
                         type="button"
@@ -1704,7 +1720,7 @@ function DetailContent({
         <DetailHero
           eyebrow="Proposed movement"
           title={detail.movement.employee?.name ?? "Unknown employee"}
-          description={`${detail.movement.sourceProject?.project_name ?? "Bench"} to ${detail.movement.targetProject.project_name}`}
+          description={formatMovementRoute(detail.movement)}
           badge={<RequestStatusBadge status={detail.movement.requestStatus} />}
         />
         <DetailActions>
@@ -1798,7 +1814,10 @@ function DetailContent({
           items={[
             { label: "Status", value: formatRequestStatus(detail.movement.requestStatus) },
             { label: "Impact", value: formatImpact(detail.movement.currentProjectImpact) },
-            { label: "From", value: detail.movement.sourceProject?.project_name ?? "Bench" },
+            {
+              label: detail.movement.action === "add_assignment" ? "Keeps" : "From",
+              value: getMovementSourceLabel(detail.movement),
+            },
             { label: "To", value: detail.movement.targetProject.project_name },
           ]}
         />
@@ -1823,9 +1842,7 @@ function DetailContent({
           }
         />
         <DetailBlock label="What is this?">
-          {detail.movement.employee?.name ?? "Unknown employee"} moving from{" "}
-          {detail.movement.sourceProject?.project_name ?? "Bench"} to{" "}
-          {detail.movement.targetProject.project_name}.
+          {formatMovementDescription(detail.movement)}
         </DetailBlock>
         <DetailBlock label="Why it matters?">{detail.movement.reason}</DetailBlock>
         <DetailBlock label="Current status">
@@ -1941,7 +1958,7 @@ function DetailContent({
       <DetailHero
         eyebrow="Employee impact"
         title={detail.impact.employee?.name ?? "Unknown employee"}
-        description={`${detail.impact.movement.sourceProject?.project_name ?? "Bench"} to ${detail.impact.movement.targetProject.project_name}`}
+        description={formatMovementRoute(detail.impact.movement)}
         badge={<RequestStatusBadge status={detail.impact.status} />}
       />
       <DetailActions>
@@ -2006,8 +2023,8 @@ function DetailContent({
           { label: "Status", value: formatRequestStatus(detail.impact.status) },
           { label: "Effort", value: detail.impact.transitionEffort },
           {
-            label: "From",
-            value: detail.impact.movement.sourceProject?.project_name ?? "Bench",
+            label: detail.impact.movement.action === "add_assignment" ? "Keeps" : "From",
+            value: getMovementSourceLabel(detail.impact.movement),
           },
           { label: "To", value: detail.impact.movement.targetProject.project_name },
         ]}
@@ -2362,7 +2379,9 @@ function EditMoveRequestFormBody({
       ? String(request.from_project_id)
       : BENCH_SELECT_VALUE
   )
-  const [toProjectId, setToProjectId] = useState(() => String(request.to_project_id))
+  const [toProjectId, setToProjectId] = useState(() =>
+    request.to_project_id != null ? String(request.to_project_id) : ""
+  )
 
   return (
     <>
@@ -2457,7 +2476,7 @@ function EditMoveRequestFormBody({
               current_project_impact: impact,
               from_project_id:
                 fromProjectId === BENCH_SELECT_VALUE ? null : Number(fromProjectId),
-              to_project_id: Number(toProjectId),
+              to_project_id: toProjectId ? Number(toProjectId) : null,
             })
           }
         >
