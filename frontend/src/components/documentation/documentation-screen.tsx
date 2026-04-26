@@ -13,6 +13,7 @@ import {
 import {
   getCachedProjects,
   getProjectDocumentationByProject,
+  isMockProjectDocumentation,
   listProjectDocumentation,
   listProjects,
   updateProjectDocumentationByProject,
@@ -65,6 +66,7 @@ export function DocumentationScreen() {
   const selectedDocumentation = selectedProject
     ? documentationByProject[selectedProject.id]
     : undefined
+  const selectedDocumentationIsMock = isMockProjectDocumentation(selectedDocumentation)
 
   useEffect(() => {
     let isMounted = true
@@ -267,10 +269,24 @@ export function DocumentationScreen() {
         </div>
         <Button
           onClick={handleRefresh}
-          disabled={!selectedProject || isRefreshing || !selectedProject.github_repositories.length}
+          disabled={
+            !selectedProject ||
+            isRefreshing ||
+            selectedDocumentationIsMock ||
+            !selectedProject.github_repositories.length
+          }
+          title={
+            selectedDocumentationIsMock
+              ? "This project uses seeded mock documentation, so GitHub refresh is disabled."
+              : undefined
+          }
         >
           <HugeiconsIcon icon={DocumentValidationIcon} className="size-4" />
-          {isRefreshing ? "Fetching..." : "Fetch new changes from GitHub"}
+          {selectedDocumentationIsMock
+            ? "Mock documentation"
+            : isRefreshing
+              ? "Fetching..."
+              : "Fetch new changes from GitHub"}
         </Button>
       </div>
 
@@ -293,6 +309,7 @@ export function DocumentationScreen() {
                 {projects.map((project) => {
                   const documentation = documentationByProject[project.id]
                   const isSelected = selectedProject?.id === project.id
+                  const isMockDocumentation = isMockProjectDocumentation(documentation)
                   return (
                     <button
                       key={project.id}
@@ -319,8 +336,11 @@ export function DocumentationScreen() {
                         )}
                       </div>
                       <p className="mt-2 text-xs text-muted-foreground">
-                        {project.github_repositories.length} GitHub source
-                        {project.github_repositories.length === 1 ? "" : "s"}
+                        {isMockDocumentation
+                          ? "Mock documentation"
+                          : `${project.github_repositories.length} GitHub source${
+                              project.github_repositories.length === 1 ? "" : "s"
+                            }`}
                       </p>
                     </button>
                   )

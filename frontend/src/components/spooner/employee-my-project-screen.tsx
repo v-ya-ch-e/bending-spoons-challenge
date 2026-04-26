@@ -47,6 +47,7 @@ import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 
 type EmployeeMyProjectScreenProps = {
@@ -220,68 +221,85 @@ export function EmployeeMyProjectScreen({ employee }: EmployeeMyProjectScreenPro
               </CardContent>
             </Card>
 
-            <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_380px]">
-              <div className="flex flex-col gap-4">
-                {selectedProject ? (
-                  <ProjectInformationCard
-                    employee={employee}
-                    project={selectedProject}
-                  />
-                ) : null}
+            <div className="flex flex-col gap-4">
+              {selectedProject ? (
+                <ProjectInformationCard
+                  employee={employee}
+                  project={selectedProject}
+                />
+              ) : null}
 
-                <Card className="min-h-[32rem]">
-                  <CardHeader className="gap-3">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <CardTitle>Documentation</CardTitle>
-                          {selectedDocumentation ? (
-                            <DocumentationStatusBadge status={selectedDocumentation.status} />
-                          ) : (
-                            <Badge variant="outline">No docs</Badge>
-                          )}
+              <Tabs defaultValue="documentation" className="gap-4">
+                <div className="flex flex-col gap-3 rounded-3xl border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="px-1">
+                    <p className="text-sm font-medium">Project knowledge</p>
+                    <p className="text-xs text-muted-foreground">
+                      Switch between full documentation and the interactive assistant.
+                    </p>
+                  </div>
+                  <TabsList>
+                    <TabsTrigger value="documentation">Documentation</TabsTrigger>
+                    <TabsTrigger value="chat">Chat</TabsTrigger>
+                  </TabsList>
+                </div>
+
+                <TabsContent value="documentation" className="mt-0">
+                  <Card className="min-h-[32rem]">
+                    <CardHeader className="gap-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <CardTitle>Documentation</CardTitle>
+                            {selectedDocumentation ? (
+                              <DocumentationStatusBadge status={selectedDocumentation.status} />
+                            ) : (
+                              <Badge variant="outline">No docs</Badge>
+                            )}
+                          </div>
+                          <CardDescription>
+                            {selectedDocumentation
+                              ? formatGeneratedAt(selectedDocumentation)
+                              : "No generated documentation has been stored yet."}
+                          </CardDescription>
                         </div>
-                        <CardDescription>
-                          {selectedDocumentation
-                            ? formatGeneratedAt(selectedDocumentation)
-                            : "No generated documentation has been stored yet."}
-                        </CardDescription>
+                        <Button type="button" variant="outline" size="sm" asChild>
+                          <Link href={`/spooner/${employee.id}/onboarding`}>
+                            <HugeiconsIcon icon={CheckListIcon} className="size-4" />
+                            Onboarding
+                          </Link>
+                        </Button>
                       </div>
-                      <Button type="button" variant="outline" size="sm" asChild>
-                        <Link href={`/spooner/${employee.id}/onboarding`}>
-                          <HugeiconsIcon icon={CheckListIcon} className="size-4" />
-                          Onboarding
-                        </Link>
-                      </Button>
-                    </div>
-                    {selectedProject ? (
-                      <div className="flex flex-wrap gap-2">
-                        {selectedProject.github_repositories.map((repo) => (
-                          <Badge key={repo} variant="secondary" className="max-w-full truncate">
-                            {repo}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : null}
-                  </CardHeader>
-                  <CardContent className="min-h-[24rem]">
-                    <ProjectDocumentationViewer
-                      project={selectedProject}
-                      documentation={selectedDocumentation}
-                      markdown={documentationMarkdown}
-                      noDocumentationDescription="Generated docs are not ready yet. Ask your CTO to fetch documentation from GitHub."
-                    />
-                  </CardContent>
-                </Card>
-              </div>
+                      {selectedProject ? (
+                        <div className="flex flex-wrap gap-2">
+                          {selectedProject.github_repositories.map((repo) => (
+                            <Badge key={repo} variant="secondary" className="max-w-full truncate">
+                              {repo}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : null}
+                    </CardHeader>
+                    <CardContent className="min-h-[24rem]">
+                      <ProjectDocumentationViewer
+                        project={selectedProject}
+                        documentation={selectedDocumentation}
+                        markdown={documentationMarkdown}
+                        noDocumentationDescription="Generated docs are not ready yet. Ask your CTO to fetch documentation from GitHub."
+                      />
+                    </CardContent>
+                  </Card>
+                </TabsContent>
 
-              <ProjectDocumentationChat
-                project={selectedProject}
-                documentation={selectedDocumentation}
-                starterPrompts={chatPrompts}
-                description="Ask about this project's docs from your employee perspective."
-                className="min-h-[32rem]"
-              />
+                <TabsContent value="chat" className="mt-0">
+                  <ProjectDocumentationChat
+                    project={selectedProject}
+                    documentation={selectedDocumentation}
+                    starterPrompts={chatPrompts}
+                    description="Ask about this project's docs from your employee perspective."
+                    className="min-h-[32rem]"
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
           </div>
         )}

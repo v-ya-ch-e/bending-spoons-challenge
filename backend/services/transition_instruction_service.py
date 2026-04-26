@@ -56,7 +56,9 @@ async def generate_transition_instruction(
     try:
         context = _load_transition_context(client, request_id, instruction_type)
         commit_context = []
-        if instruction_type == "offboarding":
+        if instruction_type == "offboarding" and not _is_mock_documentation(
+            context["documentation"]
+        ):
             commit_context = await _fetch_commit_context(
                 github,
                 context["context_project"].get("github_repositories") or [],
@@ -144,6 +146,18 @@ def _validate_move_request_active(move_request: dict[str, Any]) -> None:
     ):
         return
     raise ValueError("Move request must be approved by both CTO and employee first.")
+
+
+def _is_mock_documentation(documentation: dict[str, Any]) -> bool:
+    source_snapshot = documentation.get("source_snapshot")
+    model_metadata = documentation.get("model_metadata")
+    return (
+        isinstance(source_snapshot, dict)
+        and source_snapshot.get("generated_from") == "mock"
+    ) or (
+        isinstance(model_metadata, dict)
+        and model_metadata.get("source") == "mock_documentation_seed"
+    )
 
 
 def _fallback_source_project(

@@ -247,9 +247,15 @@ Use `--employees`, `--projects`, `--move-requests`, `--attempts`, `--model`, `--
 python scripts/load_fixtures.py
 ```
 
-Reads `db-rest-api/fixtures/seed_data.json` and inserts in dependency order: `projects` -> `employees` -> `project_assignments` -> `move_requests`. Employee `current_projects` plus move-request `employee_name`, `from_project_name`, and `to_project_name` are resolved to numeric IDs using the rows just inserted. The whole load runs inside one transaction; failures roll back.
+Reads `db-rest-api/fixtures/seed_data.json` and inserts in dependency order: `projects` -> `employees` -> `project_assignments` -> `move_requests` -> mock `project_documentation` rows for non-Mixing Spoons projects. Employee `current_projects` plus move-request `employee_name`, `from_project_name`, and `to_project_name` are resolved to numeric IDs using the rows just inserted. The whole load runs inside one transaction; failures roll back.
 
 Use `--fixture PATH` to load a different file.
+
+To backfill mock documentation into an existing database without resetting data:
+
+```bash
+python scripts/seed_mock_documentation.py
+```
 
 ### Full reset + reload
 

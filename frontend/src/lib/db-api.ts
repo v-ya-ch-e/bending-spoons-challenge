@@ -98,6 +98,17 @@ export type ProjectDocumentationUpdateInput = Partial<
   >
 >
 
+export function isMockProjectDocumentation(
+  documentation?: ProjectDocumentation | null
+) {
+  const sourceSnapshot = documentation?.source_snapshot
+  const modelMetadata = documentation?.model_metadata
+  return (
+    sourceSnapshot?.generated_from === "mock" ||
+    modelMetadata?.source === "mock_documentation_seed"
+  )
+}
+
 export type MoveRequestStatus =
   | "pending"
   | "accepted"

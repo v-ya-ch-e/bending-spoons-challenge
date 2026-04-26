@@ -112,11 +112,12 @@ When editing the prompt, keep the hard requirements section authoritative. The p
 
 ### `load_fixtures.py`
 
-Reads the fixture JSON and inserts in dependency order: `projects` -> `employees` -> `project_assignments` -> `move_requests`.
+Reads the fixture JSON and inserts in dependency order: `projects` -> `employees` -> `project_assignments` -> `move_requests` -> mock `project_documentation` rows for non-Mixing Spoons projects.
 
 - Employee assignment names and move-request names are resolved to numeric IDs at insert time using maps built from `cursor.lastrowid` after each project/employee insert.
 - All inserts run in a single transaction; any failure rolls back.
 - Re-runs require `init_db.py --reset` first because `name`/`project_name` are unique columns.
+- `seed_mock_documentation.py` can backfill or refresh mock documentation rows in an existing database without resetting fixture data.
 
 ## Conventions
 
