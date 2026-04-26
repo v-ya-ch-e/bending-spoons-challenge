@@ -58,6 +58,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import {
   buildPreviewMovePlan,
+  formatMovementRoute,
   formatImpact,
   formatRequirement,
   formatRequestStatus,
@@ -121,6 +122,7 @@ const steps: Array<{
 ]
 
 const CUSTOM_POLICY_VALUE = "__custom__"
+const MAX_MATCHING_MOVES = 5
 const runningGenerationStages: GenerationStage[] = [
   "creating_policy",
   "running_matching",
@@ -237,12 +239,15 @@ export function CreateMatchingDialog({
       return "Select a matching policy."
     }
 
-    if (
-      step === "constraints" &&
-      formState.preferFewerMoves &&
-      Number(formState.maxMoves) < 1
-    ) {
-      return "Set the maximum move count."
+    if (step === "constraints" && formState.preferFewerMoves) {
+      const maxMoves = Number(formState.maxMoves)
+      if (
+        !Number.isInteger(maxMoves) ||
+        maxMoves < 1 ||
+        maxMoves > MAX_MATCHING_MOVES
+      ) {
+        return `Set the maximum move count between 1 and ${MAX_MATCHING_MOVES}.`
+      }
     }
 
     return null
@@ -735,7 +740,10 @@ function ConstraintsStep({
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
-                {[1, 2, 3, 4, 5].map((count) => (
+                {Array.from(
+                  { length: MAX_MATCHING_MOVES },
+                  (_, index) => index + 1
+                ).map((count) => (
                   <SelectItem key={count} value={String(count)}>
                     Max {count} {count === 1 ? "move" : "moves"}
                   </SelectItem>
@@ -985,8 +993,7 @@ function DraftPreviewAccordion({ plan }: { plan: MovePlan }) {
                       {movement.employee?.name ?? "Unknown employee"}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {movement.sourceProject?.project_name ?? "Bench"} to{" "}
-                      {movement.targetProject.project_name}
+                      {formatMovementRoute(movement)}
                     </p>
                   </div>
                   <PreviewStatusBadge>
@@ -1452,7 +1459,9 @@ function getCustomPolicyConfig(formState: FormState, basePolicy?: MatchingPolicy
     ...(basePolicy?.config ?? {}),
     allow_understaff_current_project: !formState.avoidBreakingMinimums,
     exclude_pending_move_requests: formState.excludeOpenMoveRequests,
-    max_moves: formState.preferFewerMoves ? Number(formState.maxMoves) : 5,
+    max_moves: formState.preferFewerMoves
+      ? Number(formState.maxMoves)
+      : MAX_MATCHING_MOVES,
   }
 }
 

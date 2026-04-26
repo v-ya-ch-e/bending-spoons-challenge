@@ -221,9 +221,12 @@ def _move_request_transition_started(move_request: dict[str, Any]) -> bool:
 
 
 def _instruction_types_for_move_request(move_request: dict[str, Any]) -> tuple[str, ...]:
-    if move_request.get("from_project_id") is None:
-        return ("onboarding",)
-    return ("onboarding", "offboarding")
+    instruction_types: list[str] = []
+    if move_request.get("to_project_id") is not None:
+        instruction_types.append("onboarding")
+    if move_request.get("from_project_id") is not None:
+        instruction_types.append("offboarding")
+    return tuple(instruction_types)
 
 
 @app.post("/projects/{project_id}/matching:run", response_model=MatchingRunResponse)

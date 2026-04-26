@@ -87,7 +87,7 @@ class Project(StrictBaseModel):
 class MoveRequest(StrictBaseModel):
     employee_name: str
     from_project_name: str | None
-    to_project_name: str
+    to_project_name: str | None
     reason: str
     expected_role: str
     current_project_impact: Literal["low", "medium", "high"]
@@ -128,7 +128,7 @@ Hard requirements:
 - move_requests approval fields must match the status: pending/clarification_requested use pending approvals; accepted has exactly one approved side; rejected has at least one rejected side; transition_started/completed have both sides approved.
 - Every employee.current_projects entry must match a project_name from projects.
 - Every employee.preferences entry must match a project_name from projects.
-- Every move_request.employee_name must match an employee name; from_project_name (if not null) and to_project_name must match a project_name.
+- Every move_request.employee_name must match an employee name; from_project_name (if not null) and to_project_name (if not null) must match a project_name.
 - A non-completed move request's from_project_name must be one of that employee's current_projects, and to_project_name must be different from from_project_name. A completed request should reflect the already-migrated assignment, so the employee should be assigned to to_project_name.
 - Every employee.github_username must be a unique, realistic mock GitHub username using only letters, numbers, and hyphens.
 - Vary roles, seniority, skill profiles, project mixes, and staffing gaps.
@@ -368,8 +368,8 @@ Move-request guidance:
 - Use only project names from the available projects list.
 - Cover all six status values: "pending", "accepted", "rejected", "clarification_requested", "transition_started", "completed".
 - Include cto_approval_status and employee_approval_status for every move request.
-- For each non-completed request, from_project_name must be one of the employee's current_projects. If current_projects is empty, from_project_name must be null. For completed requests, the employee's current_projects should include to_project_name because the migration has already happened.
-- to_project_name must be different from from_project_name.
+- For each non-completed request, from_project_name must be one of the employee's current_projects. If current_projects is empty, from_project_name must be null. For completed requests with a target, the employee's current_projects should include to_project_name because the migration has already happened.
+- to_project_name must be different from from_project_name when both are present.
 - Make reasons specific and grounded in the employee's skills, preferences, and the target project's needs.
 - Make some requests low impact because the source project is stable, and some medium/high impact because a key skill would leave."""
 
@@ -530,7 +530,11 @@ def validate_seed_data(
                 f"Move request references unknown from_project "
                 f"{request.from_project_name!r}"
             )
-        if request.to_project_name not in project_name_set:
+        if request.from_project_name is None and request.to_project_name is None:
+            errors.append(
+                f"Move request for {request.employee_name!r} has no source or target project"
+            )
+        if request.to_project_name is not None and request.to_project_name not in project_name_set:
             errors.append(
                 f"Move request references unknown to_project {request.to_project_name!r}"
             )
@@ -550,7 +554,10 @@ def validate_seed_data(
                 f"Move request for unassigned employee {request.employee_name!r} "
                 f"has from_project_name {request.from_project_name!r}"
             )
-        if request.from_project_name == request.to_project_name:
+        if (
+            request.to_project_name is not None
+            and request.from_project_name == request.to_project_name
+        ):
             errors.append(
                 f"Move request for {request.employee_name!r} targets the same project "
                 f"{request.to_project_name!r}"
@@ -558,6 +565,7 @@ def validate_seed_data(
         if (
             request.status == "completed"
             and request.employee_name in employee_name_set
+            and request.to_project_name is not None
             and request.to_project_name not in assigned_projects
         ):
             errors.append(

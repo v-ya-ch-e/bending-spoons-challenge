@@ -19,6 +19,7 @@ export type AppShellInitialData = {
   employees: Employee[]
   projectCount: number
   employeeCount: number
+  moveRequestCount: number
   matchingPlanCount: number
 }
 
@@ -168,21 +169,30 @@ async function loadRecentMatchingRunBundles(matchingRuns: MatchingRun[]) {
 }
 
 export async function loadAppShellInitialData(): Promise<AppShellInitialData | null> {
-  const [employeesResult, projectsResult, matchingPlanCountResult] = await Promise.allSettled([
+  const [
+    employeesResult,
+    projectsResult,
+    moveRequestsResult,
+    matchingPlanCountResult,
+  ] = await Promise.allSettled([
     listServerEmployees(),
     listServerProjects(),
+    listServerMoveRequests(),
     loadMatchingPlanCount(),
   ])
   const employees =
     employeesResult.status === "fulfilled" ? employeesResult.value : []
   const projects =
     projectsResult.status === "fulfilled" ? projectsResult.value : []
+  const moveRequests =
+    moveRequestsResult.status === "fulfilled" ? moveRequestsResult.value : []
   const matchingPlanCount =
     matchingPlanCountResult.status === "fulfilled" ? matchingPlanCountResult.value : 0
 
   if (
     employeesResult.status === "rejected" &&
     projectsResult.status === "rejected" &&
+    moveRequestsResult.status === "rejected" &&
     matchingPlanCountResult.status === "rejected"
   ) {
     return null
@@ -192,8 +202,17 @@ export async function loadAppShellInitialData(): Promise<AppShellInitialData | n
     employees,
     projectCount: projects.length,
     employeeCount: employees.length,
+    moveRequestCount: getCurrentMoveRequestCount(moveRequests),
     matchingPlanCount,
   }
+}
+
+function getCurrentMoveRequestCount(moveRequests: MoveRequest[]) {
+  return moveRequests.filter((request) =>
+    ["pending", "accepted", "clarification_requested", "transition_started"].includes(
+      request.status
+    )
+  ).length
 }
 
 export async function loadOverviewInitialData(): Promise<OverviewInitialData | null> {
